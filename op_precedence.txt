@@ -1,0 +1,15 @@
+Postfix () [] -> . ++ -- 
+Unary + - ! ~ * & sizeof (type) ++ -- Right
+Mul * / % 
+Additive + - 
+Shift << >>
+Relational > >= < <= 
+Equality == !=
+bitwiseAND &
+bitwiseXOR ^
+bitwiseOR |
+LogicalAND &&
+LogicalOR ||
+Conditional ?: Right
+Assignment = += -= *= /= %= >>= <<= &= ^= |= Right
+Comma ,  
