@@ -16,3 +16,4 @@
     #define sim_log_warn( ... )
     #define sim_log_error( fmt, ... ) {printf("[ERROR]:");printf(fmt,__VA_ARGS__);printf("\n"); std::exit(-1);}
 #endif
+

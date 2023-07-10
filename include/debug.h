@@ -38,3 +38,5 @@ static inline void init_logger() {
     sim_logger->flush_on(spdlog::level::err);
 
 }
+
+void init_debugger(std::shared_ptr<spdlog::logger>& logger);

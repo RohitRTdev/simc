@@ -31,7 +31,7 @@ if(CMAKE_BUILD_TYPE STREQUAL Debug)
     message(FATAL_ERROR "Wrong log level specified!")
   endif()
 
-  target_compile_definitions(simc_options INTERFACE LOG_LEVEL=${_LOG_LEVEL})
+  target_compile_definitions(simc_options INTERFACE LOG_LEVEL=${_LOG_LEVEL} ${CMAKE_CXX_COMPILER_ID})
 endif()
 
 set(INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
@@ -56,7 +56,13 @@ subdirlist(SUBDIRS ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 foreach(DIR ${SUBDIRS})
     FILE(GLOB srcs src/${DIR}/*.cpp)
-    add_executable(${DIR} ${srcs} src/entry.cpp)
+
+    if(DIR STREQUAL simcc)
+      add_subdirectory(src/simcc)
+    else()
+      add_executable(${DIR} ${srcs} src/entry.cpp)
+    endif()
+    
     target_link_libraries(${DIR} simc_options)
 endforeach()
 

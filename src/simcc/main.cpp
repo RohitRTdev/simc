@@ -5,6 +5,7 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/fmt/bin_to_hex.h>
 #include "debug-api.h"
+#include "compiler/code-gen.h"
 
 #define FILE_READ_CHUNK_SIZE 256
 
@@ -48,6 +49,7 @@ int app_start(int argc, char** argv) {
 
     if(argc <= 1) {
         sim_log_error("Please input atleast 1 file..");
+        return -1;
     }
 
     std::vector<std::string> files(argc-1);
@@ -57,6 +59,26 @@ int app_start(int argc, char** argv) {
     }
 
     auto file_info = read_file(files[0]);
+
+    std::unique_ptr<Ifunc_translation> unit = std::unique_ptr<Ifunc_translation>(create_function_translation_unit());
+
+    //a = a + b + 5; b = b + 10; my_bad = my_bad + b;
+    int var1 = unit->declare_local_variable("a", C_INT);
+    int var2 = unit->declare_local_variable("b", C_INT);
+    int res1 = unit->add_ii(var1, var2);
+    unit->add_rc(res1, 5);
+    int res2 = unit->add_ic(var2, 10);
+    int var3 = unit->declare_local_variable("my_bad", C_INT);
+    int res3 = unit->add_ii(var2, var3);
+    unit->assign_ir(var1, res1);
+    unit->assign_ir(var2, res2);
+    unit->assign_ir(var3, res3);
+
+    unit->generate_code();
+    auto code = unit->fetch_code();
+
+    sim_log_debug("Printing generated code...");
+    sim_log_debug("\n" + code);
 
     return 0;
 
