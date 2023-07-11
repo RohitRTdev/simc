@@ -31,7 +31,26 @@ if(CMAKE_BUILD_TYPE STREQUAL Debug)
     message(FATAL_ERROR "Wrong log level specified!")
   endif()
 
-  target_compile_definitions(simc_options INTERFACE LOG_LEVEL=${_LOG_LEVEL} ${CMAKE_CXX_COMPILER_ID})
+  target_compile_definitions(simc_options INTERFACE LOG_LEVEL=${_LOG_LEVEL})
+endif()
+
+message(STATUS "Compiler is ${CMAKE_CXX_COMPILER_ID}")
+target_compile_definitions(simc_options INTERFACE ${CMAKE_CXX_COMPILER_ID})
+
+set(COMPILER ${CMAKE_CXX_COMPILER_ID})
+
+if(${COMPILER} STREQUAL MSVC)
+  set(std_opt "/std:c++20") 
+elseif(${COMPILER} STREQUAL GNU OR ${COMPILER} STREQUAL Clang)
+  if(DEFINED CMAKE_CXX_COMPILER_VERSION AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_LESS 10)
+    set(std_opt "-std=c++2a")
+  else()
+    set(std_opt "-std=c++20")
+  endif()
+endif()
+
+if(DEFINED std_opt)
+  target_compile_options(simc_options INTERFACE ${std_opt})
 endif()
 
 set(INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
@@ -64,6 +83,7 @@ foreach(DIR ${SUBDIRS})
     endif()
     
     target_link_libraries(${DIR} simc_options)
+    target_compile_definitions(${DIR} PRIVATE MODULENAME=${DIR})
 endforeach()
 
 #If building in vs, this sets the startup project to simcc

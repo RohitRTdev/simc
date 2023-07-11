@@ -164,7 +164,7 @@ public:
 
     x64_func();
 //declaration
-    int declare_local_variable(const std::string& name, c_type type);
+    int declare_local_variable(const std::string& name, c_type type) override;
 
 //Assign variable
     void assign_ii(int var_id1, int var_id2) override; 
@@ -179,6 +179,8 @@ public:
     int add_rr(int exp_id1, int exp_id2) override;
     
     void generate_code() override;
+
+    ~x64_func() {}
 
 };
 
@@ -280,15 +282,15 @@ int x64_func::declare_local_variable(const std::string& name, c_type type) {
 }
 
 void x64_func::generate_code() {
-    std::string frame1 = INSTRUCTION("pushq %{}", "rbp"); 
-    std::string frame2 = INSTRUCTION("movq %{}, %{}", "rsp", "rbp");
+    std::string frame1 = INSTRUCTION("pushq %rbp"); 
+    std::string frame2 = INSTRUCTION("movq %rsp, %rbp");
 
     cur_offset = -ALIGN(cur_offset, 16);
     std::string frame3;
     if(cur_offset)
-        frame3 = INSTRUCTION("subq ${}, %{}", -cur_offset, "rsp"); 
+        frame3 = INSTRUCTION("subq ${}, %rsp", -cur_offset); 
 
-    std::string endframe = "\tleave\n\tret\n";
+    std::string endframe = INSTRUCTION("leave\n\tret");
 
     code = frame1 + frame2 + frame3 + code + endframe; 
 }

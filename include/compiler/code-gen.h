@@ -3,7 +3,7 @@
 #include <vector>
 #include <spdlog/fmt/bundled/core.h>
 
-#define INSTRUCTION( msg, ... ) fmt::format("\t" msg "\n", __VA_ARGS__)
+#define INSTRUCTION( msg, ... ) fmt::format("\t" msg "\n" __VA_OPT__(,) __VA_ARGS__)
 
 enum c_type {
     C_INT, 
@@ -46,6 +46,8 @@ public:
     virtual int add_rr(int exp_id1, int exp_id2) = 0;
 
     virtual void generate_code() = 0;
+
+    virtual ~Ifunc_translation() {};
 };
 
 class Itranslation : public Itrbase {
