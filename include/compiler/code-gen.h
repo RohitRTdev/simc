@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <spdlog/fmt/bundled/core.h>
 
 #define INSTRUCTION( msg, ... ) fmt::format("\t" msg "\n", __VA_ARGS__)
 
@@ -42,6 +43,7 @@ public:
     virtual int add_ic(int var_id, int constant) = 0;
     virtual int add_ri(int exp_id, int var_id) = 0;
     virtual int add_rc(int exp_id, int constant) = 0;
+    virtual int add_rr(int exp_id1, int exp_id2) = 0;
 
     virtual void generate_code() = 0;
 };

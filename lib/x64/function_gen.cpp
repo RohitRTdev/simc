@@ -1,9 +1,8 @@
 #include <list>
-#include <spdlog/fmt/fmt.h>
 #include "debug-api.h"
 #include "compiler/code-gen.h"
 
-#define ALIGN(val, align) ((((val)-1) & ~((align)-1))+align)
+#define ALIGN(val, align) (((abs(val)-1) & ~((align)-1))+align)
 
 static const char* regs_64[] = {"rax", "rbx", "rcx", "rdx", "rsi", "rdi"};
 static const char* regs_32[] = {"eax", "ebx", "ecx", "edx", "esi", "edi"};
@@ -36,6 +35,7 @@ struct c_var_x64 {
 
 struct c_var_x64_tmp {
     size_t id;
+    bool cached;
     int offset;    
 };
 
@@ -44,22 +44,23 @@ class x64_func : public Ifunc_translation {
     std::vector<c_var_x64> vars;
     std::list<c_var_x64_tmp> tmp;
     size_t reg_status_list[NUM_REGS];
+    bool reg_no_clobber_list[NUM_REGS];
     size_t new_id, var_id;
     int cur_offset;
 
     int advance_offset_32() {
-        cur_offset = ALIGN(cur_offset, 4) - 4;
+        cur_offset = -ALIGN(cur_offset, 4) - 4;
         return cur_offset;
     }
 
     int fetch_result(int id) {
         sim_log_debug("Fetching result location for exp_id:{}", id);
         for(auto var = tmp.begin(); var != tmp.end(); var++) {
-            if(var->id == id) {
+            if(var->id == id && var->cached) {
                 sim_log_debug("Found id in stack");
                 int reg = choose_free_reg(id);
                 add_inst_to_code(INSTRUCTION("movl {}(%rbp), %{}", var->offset, regs_32[reg]));
-                tmp.erase(var);
+                var->cached = false;
 
                 return reg;
             }
@@ -80,21 +81,48 @@ class x64_func : public Ifunc_translation {
     }
 
     int save_and_free_reg(int exp_id = 0) {
-        int offset = advance_offset_32();
-        tmp.push_back({reg_status_list[0], offset});
-        sim_log_debug("Freeing {} register to stack at offset:{}", regs_32[0], offset);
-
-        add_inst_to_code(INSTRUCTION("movl %{}, {}(%rbp)", regs_32[0], offset));
-
-        if(!exp_id) {
-            reg_status_list[0] = new_id++;
-            sim_log_debug("Allocating new exp_id:{} for register:{}", reg_status_list[0], regs_32[0]);
-        } else {
-            sim_log_debug("Using exp_id:{} for register:{}", exp_id, regs_32[0]);
-            reg_status_list[0] = exp_id;
+        
+        //First select a register not present in no_clobber_list
+        int reg = 0;
+        for(auto _reg: reg_no_clobber_list) {
+            if(!_reg) {
+                break;
+            }
+            reg++;
         }
 
-        return 0;   
+        int offset = 0;
+        bool found_existing_cache = false;
+        for(auto& loc: tmp) {
+            if(!loc.cached) {
+                sim_log_debug("Found existing free stack location with previous exp_id:{}", loc.id);
+                loc.cached = true;
+                loc.id = reg_status_list[reg];
+                offset = loc.offset;
+
+                found_existing_cache = true;
+                break;
+            }
+        }
+        if(!found_existing_cache) {
+            offset = advance_offset_32();
+            tmp.push_back({reg_status_list[reg], true, offset});
+
+        }
+        
+        sim_log_debug("Freeing {} register to stack at offset:{}", regs_32[reg], offset);
+
+        add_inst_to_code(INSTRUCTION("movl %{}, {}(%rbp)", regs_32[reg], offset));
+
+        if(!exp_id) {
+            reg_status_list[reg] = new_id++;
+            sim_log_debug("Allocating new exp_id:{} for register:{}", reg_status_list[reg], regs_32[reg]);
+        } else {
+            sim_log_debug("Using exp_id:{} for register:{}", exp_id, regs_32[reg]);
+            reg_status_list[reg] = exp_id;
+        }
+
+        return reg;   
     }
 
     int choose_free_reg(int exp_id = 0) {
@@ -148,6 +176,7 @@ public:
     int add_ic(int var_id, int constant) override; 
     int add_ri(int exp_id, int var_id) override; 
     int add_rc(int exp_id, int constant) override; 
+    int add_rr(int exp_id1, int exp_id2) override;
     
     void generate_code() override;
 
@@ -155,8 +184,11 @@ public:
 
 x64_func::x64_func(): new_id(1), cur_offset(0), var_id(0) {
     //0 indicates reg is free
-    for(auto& reg: reg_status_list) 
-        reg = 0;
+    for(size_t reg_idx = 0; reg_idx < NUM_REGS; reg_idx++) {
+        reg_status_list[reg_idx] = 0;
+        reg_no_clobber_list[reg_idx] = false;
+    }
+        
 }
 
 
@@ -214,7 +246,25 @@ int x64_func::add_rc(int exp_id, int constant) {
     return reg_status_list[reg];
 }
 
+int x64_func::add_rr(int exp_id1, int exp_id2) {
+    int reg1 = fetch_result(exp_id1);
+    reg_no_clobber_list[reg1] = true;
+    
+    int reg2 = fetch_result(exp_id2);
+    reg_no_clobber_list[reg2] = true;
 
+//When added to no_clobber list that register will not be freed up and used in case no registers are available
+    int reg3 = choose_free_reg();
+
+    add_inst_to_code(INSTRUCTION("movl %{}, %{}", regs_32[reg1], regs_32[reg3]));
+    add_inst_to_code(INSTRUCTION("addl %{}, %{}", regs_32[reg2], regs_32[reg3]));
+
+//Clear them as they can now be freed up
+    reg_no_clobber_list[reg1] = reg_no_clobber_list[reg2] = false;
+
+    return reg_status_list[reg3];
+
+}
 int x64_func::declare_local_variable(const std::string& name, c_type type) {
     c_var_x64 var;
 
@@ -233,7 +283,7 @@ void x64_func::generate_code() {
     std::string frame1 = INSTRUCTION("pushq %{}", "rbp"); 
     std::string frame2 = INSTRUCTION("movq %{}, %{}", "rsp", "rbp");
 
-    cur_offset = ALIGN(cur_offset, 16);
+    cur_offset = -ALIGN(cur_offset, 16);
     std::string frame3;
     if(cur_offset)
         frame3 = INSTRUCTION("subq ${}, %{}", -cur_offset, "rsp"); 

@@ -70,9 +70,14 @@ int app_start(int argc, char** argv) {
     int res2 = unit->add_ic(var2, 10);
     int var3 = unit->declare_local_variable("my_bad", C_INT);
     int res3 = unit->add_ii(var2, var3);
-    unit->assign_ir(var1, res1);
-    unit->assign_ir(var2, res2);
-    unit->assign_ir(var3, res3);
+    int res4 = unit->add_rr(res1, res2);
+    int res5 = unit->add_rr(res4, res3);
+    int res6 = unit->add_rr(res4, res5);
+    sim_log_debug("Adding res6 and res1");
+    int res7 = unit->add_rr(res6, res1);
+    int res8 = unit->add_rr(res3, res6);
+    int res9 = unit->add_rr(res1, res2);
+    unit->assign_ir(var3, res8);
 
     unit->generate_code();
     auto code = unit->fetch_code();
