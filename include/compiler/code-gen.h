@@ -1,7 +1,9 @@
 #pragma once
 #include <string>
 #include <vector>
-#include <spdlog/fmt/bundled/core.h>
+#include <spdlog/fmt/fmt.h>
+#include <iostream>
+#include "dll.h"
 
 #define INSTRUCTION( msg, ... ) fmt::format("\t" msg "\n" __VA_OPT__(,) __VA_ARGS__)
 
@@ -57,13 +59,4 @@ public:
 
 };
 
-//#ifdef MSVC 
-//    #ifdef BUILD_LIB
-//        __declspec(dllimport) Ifunc_translation* create_function_translation_unit(); 
-//    #else
-//        __declspec(dllexport) Ifunc_translation* create_function_translation_unit(); 
-//    #endif
-//#elif defined(GNU)
-//    #ifdef BUILD_LIB
-//#endif
-Ifunc_translation* create_function_translation_unit(); 
+DLL_ATTRIB Ifunc_translation* create_function_translation_unit(); 

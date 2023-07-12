@@ -8,7 +8,11 @@ endif()
 
 add_library(code-gen SHARED ${lib_srcs})
 target_link_libraries(code-gen simc_options)
+target_compile_definitions(code-gen PRIVATE BUILD_LIB)
 
+if(${COMPILER} STREQUAL GNU OR ${COMPILER} STREQUAL Clang)
+    target_compile_options(code-gen PRIVATE "-fvisibility=hidden")
+endif()
 
 FILE(GLOB mod_srcs *.cpp)
 add_executable(simcc ${mod_srcs} ${PROJECT_SOURCE_DIR}/src/entry.cpp)

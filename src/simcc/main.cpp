@@ -2,8 +2,6 @@
 #include <iostream>
 #include <vector>
 #include <memory>
-#include <spdlog/spdlog.h>
-#include <spdlog/fmt/bin_to_hex.h>
 #include "debug-api.h"
 #include "compiler/code-gen.h"
 
@@ -85,6 +83,7 @@ int app_start(int argc, char** argv) {
     sim_log_debug("Printing generated code...");
     sim_log_debug("\n" + code);
 
+    std::cout << code << std::endl;
     return 0;
 
 }

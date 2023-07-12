@@ -40,7 +40,7 @@ target_compile_definitions(simc_options INTERFACE ${CMAKE_CXX_COMPILER_ID})
 set(COMPILER ${CMAKE_CXX_COMPILER_ID})
 
 if(${COMPILER} STREQUAL MSVC)
-  set(std_opt "/std:c++20") 
+  set(std_opt "/std:c++20" "/Zc:preprocessor") 
 elseif(${COMPILER} STREQUAL GNU OR ${COMPILER} STREQUAL Clang)
   if(DEFINED CMAKE_CXX_COMPILER_VERSION AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_LESS 10)
     set(std_opt "-std=c++2a")
