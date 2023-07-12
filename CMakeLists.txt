@@ -83,7 +83,7 @@ foreach(DIR ${SUBDIRS})
     endif()
     
     target_link_libraries(${DIR} simc_options)
-    target_compile_definitions(${DIR} PRIVATE MODULENAME=${DIR})
+    target_compile_definitions(${DIR} PRIVATE MODULENAME="${DIR}")
 endforeach()
 
 #If building in vs, this sets the startup project to simcc
