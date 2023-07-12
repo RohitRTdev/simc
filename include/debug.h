@@ -5,7 +5,7 @@
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/sinks/stdout_sinks.h"
-
+#include "dll.h"
 #define LOGGER "sim-logger"
 
 std::shared_ptr<spdlog::logger> sim_logger;
@@ -38,3 +38,5 @@ static inline void init_logger() {
     sim_logger->flush_on(spdlog::level::err);
 
 }
+
+DLL_ATTRIB void init_debugger(std::shared_ptr<spdlog::logger>& logger);
