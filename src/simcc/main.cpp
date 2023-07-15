@@ -3,9 +3,24 @@
 #include <vector>
 #include <memory>
 #include "debug-api.h"
-#include "compiler/code-gen.h"
+#include "lib/code-gen.h"
+#include "compiler/token.h"
 
 #define FILE_READ_CHUNK_SIZE 256
+using file_info_type = std::pair<char*, size_t>;
+
+void start_compilation(const file_info_type& file_info_buf) {
+    
+    std::vector<uint8_t> input_file(file_info_buf.second);
+
+    size_t i = 0;
+    for(auto& el: input_file)
+        el = file_info_buf.first[i++];
+
+    lex(input_file);    
+    
+}
+
 
 void dump_buffer(const char* buf, size_t size) {
     for(size_t i = 0; i < size; i++) {
@@ -15,7 +30,7 @@ void dump_buffer(const char* buf, size_t size) {
     std::cout << std::endl;
 }
 
-std::pair<char*, size_t> read_file(const std::string& file_name) {
+file_info_type read_file(const std::string& file_name) {
     std::ifstream file_intf(file_name, std::ios::binary);
 
     char* f_buf = new char[FILE_READ_CHUNK_SIZE]; 
@@ -56,34 +71,12 @@ int app_start(int argc, char** argv) {
         sim_log_debug("File {}: {}", i+1, files[i]);
     }
 
-    auto file_info = read_file(files[0]);
+    for(auto& file: files) {
+        auto file_info_buf = read_file(file);
+        start_compilation(file_info_buf);
+    }
 
-    std::unique_ptr<Ifunc_translation> unit = std::unique_ptr<Ifunc_translation>(create_function_translation_unit());
-
-    //a = a + b + 5; b = b + 10; my_bad = my_bad + b;
-    int var1 = unit->declare_local_variable("a", C_INT);
-    int var2 = unit->declare_local_variable("b", C_INT);
-    int res1 = unit->add_ii(var1, var2);
-    unit->add_rc(res1, 5);
-    int res2 = unit->add_ic(var2, 10);
-    int var3 = unit->declare_local_variable("my_bad", C_INT);
-    int res3 = unit->add_ii(var2, var3);
-    int res4 = unit->add_rr(res1, res2);
-    int res5 = unit->add_rr(res4, res3);
-    int res6 = unit->add_rr(res4, res5);
-    sim_log_debug("Adding res6 and res1");
-    int res7 = unit->add_rr(res6, res1);
-    int res8 = unit->add_rr(res3, res6);
-    int res9 = unit->add_rr(res1, res2);
-    unit->assign_ir(var3, res8);
-
-    unit->generate_code();
-    auto code = unit->fetch_code();
-
-    sim_log_debug("Printing generated code...");
-    sim_log_debug("\n" + code);
-
-    std::cout << code << std::endl;
+    sim_log_debug("Compilation successful");    
     return 0;
 
 }

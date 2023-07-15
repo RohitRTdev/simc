@@ -2,9 +2,11 @@
 
 #include <iostream>
 #include <memory>
+#include <ctime>
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/sinks/stdout_sinks.h"
+#include "spdlog/fmt/chrono.h"
 #include "dll.h"
 #define LOGGER "sim-logger"
 
@@ -16,11 +18,21 @@ enum log_lvls {
     LOG_DEBUG
 };
 
+static std::string get_file_timestamp() {
+    std::time_t t = std::time(nullptr);
+
+    return fmt::format("{:%Y-%m-%d}.{:%H_%M_%S}", fmt::localtime(t), fmt::localtime(t));
+}
+
 //Create a logger which outputs to console and a file
 static inline void init_logger() {
+
+    std::string log_file_name = fmt::format("{}-{}.txt", LOGGER, get_file_timestamp());
+    const std::string log_file = fmt::format("{}/{}/{}", LOG_DIR, MODULENAME, log_file_name);
+
     std::vector<spdlog::sink_ptr> sinks;
     sinks.push_back(std::make_shared<spdlog::sinks::stdout_sink_st>());
-    sinks.push_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>(LOG_DIR"/sim-log", true));
+    sinks.push_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>(log_file, true));
 
     auto logger = std::make_shared<spdlog::logger>(LOGGER, std::begin(sinks), std::end(sinks));
 
