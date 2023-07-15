@@ -135,10 +135,6 @@ class x64_func : public Ifunc_translation {
         return save_and_free_reg(exp_id);
     }
 
-    void free_reg(int reg) {
-        reg_status_list[reg] = 0;
-    }
-
 
     int load_var_32(int var_id) {
         sim_log_debug("Loading var with var_id:{}", var_id);
@@ -159,6 +155,9 @@ public:
     void assign_ii(int var_id1, int var_id2) override; 
     void assign_ic(int var_id1, int constant) override; 
     void assign_ir(int var_id, int exp_id) override; 
+    void assign_to_mem_i(int exp_id, int var_id) override;
+    void assign_to_mem_r(int exp_id1, int exp_id2) override;
+    void assign_to_mem_c(int exp_id, int constant) override;
 
 //Addition operation
     int add_ii(int var_id1, int var_id2) override; 

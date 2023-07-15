@@ -76,6 +76,16 @@ int app_start(int argc, char** argv) {
         start_compilation(file_info_buf);
     }
 
+    sim_log_debug("Printing code...");
+    auto* unit = create_function_translation_unit();
+    int var1 = unit->declare_local_variable("john", C_INT);
+    int var2 = unit->declare_local_variable("gone", C_INT);
+    int exp1 = unit->add_ii(var1, var2);
+    unit->assign_to_mem_i(exp1, var2);
+    unit->generate_code();
+    auto code = unit->fetch_code();
+    std::cout << code << std::endl;
+
     sim_log_debug("Compilation successful");    
     return 0;
 

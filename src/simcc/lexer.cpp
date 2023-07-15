@@ -200,7 +200,7 @@ void lex(std::vector<uint8_t>& input) {
                 size_t digit = ch - '0';
                 num = num * 10 + digit;
             }
-            else if(isalpha(ch)) {
+            else if(isalpha(ch) || ch == '_') {
                 sim_log_error("Variable names are not supposed to start with a digit.");
             }
             else {
