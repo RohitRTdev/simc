@@ -52,7 +52,7 @@ public:
 
     virtual void generate_code() = 0;
 
-    virtual ~Ifunc_translation() {};
+    virtual ~Ifunc_translation() = default;
 };
 
 class Itranslation : public Itrbase {

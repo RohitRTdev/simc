@@ -1,5 +1,6 @@
 #include <vector>
 #include <list>
+#include <optional>
 #include "compiler/token.h"
 #include "compiler/token-ops.h"
 #include "debug-api.h"
@@ -39,16 +40,16 @@ const char* op_debug[] = { "CLB", "CRB", "LB", "RB", "LSB", "RSB",
 void print_token(const token& tok) {
     
     switch(tok.type) {
-        case KEYWORD:  sim_log_debug("type:KEYWORD keyword:{}", keywords_debug[tok.value.keyword]); break;
-        case IDENT: sim_log_debug("type:Identifier name:{}", tok.name); break;
-        case OPERATOR: sim_log_debug("type:Operator op:{}", op_debug[tok.value.op]); break;
+        case KEYWORD:  sim_log_debug("type:KEYWORD keyword:{}", keywords_debug[std::get<keyword_type>(tok.value)]); break;
+        case IDENT: sim_log_debug("type:Identifier name:{}", std::get<std::string>(tok.value)); break;
+        case OPERATOR: sim_log_debug("type:Operator op:{}", op_debug[std::get<operator_type>(tok.value)]); break;
         case CONSTANT: {
             if(tok.sub_type == TOK_INT)
-                sim_log_debug("type:INT_CONSTANT value:{}", tok.value.number);
+                sim_log_debug("type:INT_CONSTANT value:{}", std::get<size_t>(tok.value));
             else if(tok.sub_type == TOK_CHAR)
-                sim_log_debug("type:CHAR_CONSTANT value:{}", tok.value.character);
+                sim_log_debug("type:CHAR_CONSTANT value:{}", std::get<char>(tok.value));
             else
-                sim_log_debug("type:STRING_CONSTANT value:{}", tok.name);
+                sim_log_debug("type:STRING_CONSTANT value:{}", std::get<std::string>(tok.value));
             break;
         }
         case NEWLINE: sim_log_debug("type:NEWLINE"); break;
@@ -67,9 +68,9 @@ void print_token_list() {
 
 #endif
 
-static keyword_type fetch_keyword(const std::string& literal) {
+static std::optional<keyword_type> fetch_keyword(const std::string& literal) {
     
-    keyword_type keyword;
+    std::optional<keyword_type> keyword;
     if(literal == "int") {
         keyword = TYPE_INT;
     }
@@ -103,23 +104,23 @@ static keyword_type fetch_keyword(const std::string& literal) {
     else if(literal == "continue") {
         keyword = CONTINUE;
     }
-    else 
-        throw literal;
 
     return keyword;
 }
 
-static bool fetch_escape_character(char ch, char& es_ch) {
+static std::optional<char> fetch_escape_character(char ch) {
+    
+    std::optional<char> es_ch;
     switch (ch) {
-        case 't': es_ch = '\t'; return true;
-        case 'r': es_ch = '\r'; return true;
-        case 'n': es_ch = '\n'; return true;
-        case 'b': es_ch = '\b'; return true;
-        case '0': es_ch = '\0'; return true;
-        case 'a': es_ch = '\a';  return true;
+        case 't': es_ch = '\t'; break;
+        case 'r': es_ch = '\r'; break;
+        case 'n': es_ch = '\n'; break;
+        case 'b': es_ch = '\b'; break;
+        case '0': es_ch = '\0'; break;
+        case 'a': es_ch = '\a';
     }
     
-    return false;
+    return es_ch;
 }
 
 static inline bool is_extended_operator(operator_type type) {
@@ -139,9 +140,10 @@ static inline bool is_extended_operator(operator_type type) {
 }
 
 
-void lex(std::vector<uint8_t>& input) {
+void lex(const std::vector<char>& input) {
     lexer_states state = LEXER_START;
-    
+    tokens.clear();
+        
     operator_type prev_op;
     size_t num = 0, start_pos = 0, literal_count = 0;
     for(int i = 0; i < input.size(); i++) {
@@ -160,10 +162,10 @@ void lex(std::vector<uint8_t>& input) {
         }
 
         if (state == EXPECTING_ESCAPED_CHARACTER) {
-            char es_ch;
-            if (fetch_escape_character(ch, es_ch)) {
+            auto es_ch = fetch_escape_character(ch);
+            if (es_ch) {
                 sim_log_debug("Found escape character:{}", ch);
-                tokens.push_back(create_constant_token(es_ch));
+                tokens.push_back(create_constant_token(es_ch.value()));
                 state = EXPECTING_TICK;
             }
             else {
@@ -219,31 +221,30 @@ void lex(std::vector<uint8_t>& input) {
             else {
                 std::string literal(input.begin()+start_pos, input.begin()+start_pos+literal_count);
                 sim_log_debug("Identified literal:{} , literal_count:{}", literal, literal_count);
-                try {
-                    auto key_type = fetch_keyword(literal);
-                    if(key_type == IF) {
+                auto key_type = fetch_keyword(literal);
+
+                if(key_type) {
+                    if(key_type.value() == IF) {
                         //This checks if previous token is an "else" and then combines it with the present "if" to create an "else_if" token
                         if (tokens.size() != 0 && is_keyword_else(tokens.back())) {
                             key_type = ELSE_IF;
-                            tokens.back().value.keyword = key_type;
+                            std::get<keyword_type>(tokens.back().value) = key_type.value();
                         }
                         else
-                            tokens.push_back(create_keyword_token(key_type));
+                            tokens.push_back(create_keyword_token(key_type.value()));
                     }
                     else 
-                        tokens.push_back(create_keyword_token(key_type));
+                        tokens.push_back(create_keyword_token(key_type.value()));
                     
-                    sim_log_debug("Pushing keyword token type:{}", key_type);
+                    sim_log_debug("Pushing keyword token type:{}", key_type.value());
+                } 
+                else {
+                    sim_log_debug("Pushing identifier token:{}", literal);
+                    tokens.push_back(create_ident_token(literal));
                 }
-                catch(const std::string& identifier) {
-                    sim_log_debug("Pushing identifier token:{}", identifier);
-                    tokens.push_back(create_ident_token(identifier));
-                }
-
                 state = LEXER_START;
             }
         }
-
 
         if(state == EXTENDED_OPERATOR_TOKEN) {
             sim_log_debug("In state EXTENDED_OPERATOR_TOKEN.");

@@ -1,5 +1,7 @@
 #pragma once
+#include <vector>
 #include <string>
+#include <variant>
 
 enum token_type{
     KEYWORD,
@@ -68,16 +70,18 @@ enum operator_type {
 struct token {
     token_type type;
     token_sub_type sub_type;
-    
-    std::string name;
 
-    union {
-        size_t number;
-        char character;
-        operator_type op;
-        keyword_type keyword;
-    } value;
+    std::variant<size_t, char, std::string, operator_type, keyword_type> value;
+
+//    union {
+//        size_t number;
+//        char character;
+//        operator_type op;
+//        keyword_type keyword;
+//    } value;
 
 };
 
-void lex(std::vector<uint8_t>& input);
+extern std::vector<token> tokens;
+
+void lex(const std::vector<char>& input);

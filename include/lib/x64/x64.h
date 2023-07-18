@@ -137,7 +137,7 @@ class x64_func : public Ifunc_translation {
 
 
     int load_var_32(int var_id) {
-        sim_log_debug("Loading var with var_id:{}", var_id);
+        sim_log_debug("Loading var with var_id:{} -> name:\"{}\"", var_id, vars[var_id].var_info.name);
         int reg = choose_free_reg();
         int offset = vars[var_id].loc.offset;
         add_inst_to_code(INSTRUCTION("movl {}(%rbp), %{}", offset, regs_32[reg]));
@@ -167,7 +167,4 @@ public:
     int add_rr(int exp_id1, int exp_id2) override;
     
     void generate_code() override;
-
-    ~x64_func() {}
-
 };
