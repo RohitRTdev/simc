@@ -26,10 +26,10 @@ enum lexer_states {
 
 #ifdef SIMDEBUG
 
-const char* keywords_debug[] = { "INT", "CHAR", "VOID", "RETURN", "WHILE",
+std::vector<std::string> keywords_debug = { "INT", "CHAR", "VOID", "RETURN", "WHILE",
                                 "DO", "FOR", "IF", "ELSE_IF", "ELSE", "BREAK", "CONTINUE" };
 
-const char* op_debug[] = { "CLB", "CRB", "LB", "RB", "LSB", "RSB",
+std::vector<std::string> op_debug = { "CLB", "CRB", "LB", "RB", "LSB", "RSB",
     "POINTER_TO", "DOT", "INCREMENT", "DECREMENT", "NOT", "BIT_NOT",
     "AMPER", "SIZEOF", "MUL", "DIV", "MODULO",
     "PLUS", "MINUS", "SHIFT_LEFT", "SHIFT_RIGHT", "GT", 
@@ -236,7 +236,7 @@ void lex(const std::vector<char>& input) {
                     else 
                         tokens.push_back(create_keyword_token(key_type.value()));
                     
-                    sim_log_debug("Pushing keyword token type:{}", key_type.value());
+                    sim_log_debug("Pushing keyword token type:{}", keywords_debug[key_type.value()]);
                 } 
                 else {
                     sim_log_debug("Pushing identifier token:{}", literal);
@@ -291,7 +291,7 @@ void lex(const std::vector<char>& input) {
                 }
             }
             tokens.push_back(create_operator_token(op));
-            sim_log_debug("Found operator_type:{}", op);
+            sim_log_debug("Found operator_type:{}", op_debug[op]);
             state = LEXER_START;
             if (is_extended_operator(op))
                 continue;
@@ -359,7 +359,7 @@ void lex(const std::vector<char>& input) {
             }
 
             if(state == LEXER_START) {
-                sim_log_debug("Pushing operator_type:{}", op);
+                sim_log_debug("Pushing operator_type:{}", op_debug[op]);
                 tokens.push_back(create_operator_token(op));
             }
         }
@@ -370,7 +370,7 @@ void lex(const std::vector<char>& input) {
                 num = ch - '0';
                 state = EXPECTING_INTEGER_CONSTANT;
             }
-            else if(isalpha(ch)) {
+            else if(isalpha(ch) || ch == '_') {
                 sim_log_debug("Found ascii character.. Switching state to EXPECTING_STRING_LITERAL");
                 start_pos = i;
                 literal_count = 1;

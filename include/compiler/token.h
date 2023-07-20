@@ -72,16 +72,12 @@ struct token {
     token_sub_type sub_type;
 
     std::variant<size_t, char, std::string, operator_type, keyword_type> value;
-
-//    union {
-//        size_t number;
-//        char character;
-//        operator_type op;
-//        keyword_type keyword;
-//    } value;
-
 };
 
 extern std::vector<token> tokens;
 
-void lex(const std::vector<char>& input);
+#ifdef SIMDEBUG
+extern std::vector<std::string> keywords_debug;
+extern std::vector<std::string> op_debug;
+void print_token(const token&);
+#endif

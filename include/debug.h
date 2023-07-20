@@ -21,7 +21,7 @@ enum log_lvls {
 static std::string get_file_timestamp() {
     std::time_t t = std::time(nullptr);
 
-    return fmt::format("{:%Y-%m-%d}.{:%H_%M_%S}", fmt::localtime(t), fmt::localtime(t));
+    return fmt::format("{:%Y-%m-%d}-{:%H_%M_%S}", fmt::localtime(t), fmt::localtime(t));
 }
 
 //Create a logger which outputs to console and a file

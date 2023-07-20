@@ -1,8 +1,8 @@
 #include "lib/code-gen.h"
 #include "lib/x64/x64.h"
 
-const char* regs_64[] = {"rax", "rbx", "rcx", "rdx", "rsi", "rdi"};
-const char* regs_32[] = {"eax", "ebx", "ecx", "edx", "esi", "edi"};
+std::vector<std::string> regs_64 = {"rax", "rbx", "rcx", "rdx", "rsi", "rdi"};
+std::vector<std::string> regs_32 = {"eax", "ebx", "ecx", "edx", "esi", "edi"};
 
 x64_func::x64_func(): new_id(1), cur_offset(0), var_id(0) {
     //0 indicates reg is free

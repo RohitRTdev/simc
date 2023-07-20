@@ -8,8 +8,8 @@
 #define ALIGN(val, align) (((abs(val)-1) & ~((align)-1))+align)
 #define NUM_REGS 6
 
-extern const char* regs_64[];
-extern const char* regs_32[];
+extern std::vector<std::string> regs_64;
+extern std::vector<std::string> regs_32;
 
 struct c_var_x64 {
     c_var var_info;

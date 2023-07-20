@@ -66,3 +66,37 @@ static inline bool is_keyword_else(const token& tok) {
 static inline bool is_token_newline(const token& tok) {
     return tok.type == NEWLINE;
 }
+
+static inline bool is_token_identifier(const token& tok) {
+    return tok.type == IDENT;
+}
+
+static inline bool is_data_type(keyword_type type) {
+    switch(type) {
+        case TYPE_INT:
+        case TYPE_CHAR:
+        case TYPE_VOID: return true;
+    }
+
+    return false;
+}
+
+static inline bool is_token_data_type(const token& tok) {
+    return tok.type == KEYWORD && is_data_type(std::get<keyword_type>(tok.value));
+}
+
+static inline bool is_token_operator_comma(const token& tok) {
+    return tok.type == OPERATOR && std::get<operator_type>(tok.value) == COMMA;
+}
+
+static inline bool is_token_operator_lb(const token& tok) {
+    return tok.type == OPERATOR && std::get<operator_type>(tok.value) == LB;
+}
+
+static inline bool is_token_operator_sc(const token& tok) {
+    return tok.type == OPERATOR && std::get<operator_type>(tok.value) == SEMICOLON;
+}
+
+static inline bool is_token_operator_rb(const token& tok) {
+    return tok.type == OPERATOR && std::get<operator_type>(tok.value) == RB;
+}
