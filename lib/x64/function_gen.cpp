@@ -1,8 +1,8 @@
 #include "lib/code-gen.h"
 #include "lib/x64/x64.h"
 
-const char* regs_64[] = {"rax", "rbx", "rcx", "rdx", "rsi", "rdi"};
-const char* regs_32[] = {"eax", "ebx", "ecx", "edx", "esi", "edi"};
+std::vector<std::string> regs_64 = {"rax", "rbx", "rcx", "rdx", "rsi", "rdi"};
+std::vector<std::string> regs_32 = {"eax", "ebx", "ecx", "edx", "esi", "edi"};
 
 x64_func::x64_func(): new_id(1), cur_offset(0), var_id(0) {
     //0 indicates reg is free
@@ -18,7 +18,6 @@ void x64_func::assign_ii(int var_id1, int var_id2) {
     int offset = vars[var_id1].loc.offset;
 
     add_inst_to_code(INSTRUCTION("movl %{}, {}(%rbp)", regs_32[reg], offset));
-    free_reg(reg);
 }
 
 void x64_func::assign_ic(int var_id, int constant) {
@@ -32,7 +31,31 @@ void x64_func::assign_ir(int var_id, int exp_id) {
     int reg = fetch_result(exp_id);
 
     add_inst_to_code(INSTRUCTION("movl %{}, {}(%rbp)", regs_32[reg], offset));
-    free_reg(reg);
+}
+
+void x64_func::assign_to_mem_i(int exp_id, int var_id) {
+    int reg1 = fetch_result(exp_id);
+    reg_no_clobber_list[reg1] = true;
+    int reg2 = load_var_32(var_id);
+
+    add_inst_to_code(INSTRUCTION("movl %{}, (%{})", regs_32[reg2], regs_64[reg1])); 
+    reg_no_clobber_list[reg1] = false;
+
+}
+
+void x64_func::assign_to_mem_r(int exp_id1, int exp_id2) {
+    int reg1 = fetch_result(exp_id1);
+    reg_no_clobber_list[reg1] = true;
+    int reg2 = fetch_result(exp_id2);
+
+    add_inst_to_code(INSTRUCTION("movl %{}, (%{})", regs_32[reg2], regs_64[reg1])); 
+    reg_no_clobber_list[reg1] = false;
+
+}
+
+void x64_func::assign_to_mem_c(int exp_id, int constant) {
+    int reg = fetch_result(exp_id);
+    add_inst_to_code(INSTRUCTION("movl ${}, (%{})", constant, regs_64[reg]));
 }
 
 int x64_func::declare_local_variable(const std::string& name, c_type type) {

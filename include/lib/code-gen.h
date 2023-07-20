@@ -39,6 +39,9 @@ public:
     virtual void assign_ii(int var_id1, int var_id2) = 0;
     virtual void assign_ic(int var_id1, int constant) = 0;
     virtual void assign_ir(int var_id, int exp_id) = 0;
+    virtual void assign_to_mem_i(int exp_id, int var_id) = 0;
+    virtual void assign_to_mem_r(int exp_id1, int exp_id2) = 0;
+    virtual void assign_to_mem_c(int exp_id, int constant) = 0;
 
 //Addition operation
     virtual int add_ii(int var_id1, int var_id2) = 0;
@@ -49,7 +52,7 @@ public:
 
     virtual void generate_code() = 0;
 
-    virtual ~Ifunc_translation() {};
+    virtual ~Ifunc_translation() = default;
 };
 
 class Itranslation : public Itrbase {

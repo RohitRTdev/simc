@@ -8,8 +8,8 @@
 #define ALIGN(val, align) (((abs(val)-1) & ~((align)-1))+align)
 #define NUM_REGS 6
 
-extern const char* regs_64[];
-extern const char* regs_32[];
+extern std::vector<std::string> regs_64;
+extern std::vector<std::string> regs_32;
 
 struct c_var_x64 {
     c_var var_info;
@@ -135,13 +135,9 @@ class x64_func : public Ifunc_translation {
         return save_and_free_reg(exp_id);
     }
 
-    void free_reg(int reg) {
-        reg_status_list[reg] = 0;
-    }
-
 
     int load_var_32(int var_id) {
-        sim_log_debug("Loading var with var_id:{}", var_id);
+        sim_log_debug("Loading var with var_id:{} -> name:\"{}\"", var_id, vars[var_id].var_info.name);
         int reg = choose_free_reg();
         int offset = vars[var_id].loc.offset;
         add_inst_to_code(INSTRUCTION("movl {}(%rbp), %{}", offset, regs_32[reg]));
@@ -159,6 +155,9 @@ public:
     void assign_ii(int var_id1, int var_id2) override; 
     void assign_ic(int var_id1, int constant) override; 
     void assign_ir(int var_id, int exp_id) override; 
+    void assign_to_mem_i(int exp_id, int var_id) override;
+    void assign_to_mem_r(int exp_id1, int exp_id2) override;
+    void assign_to_mem_c(int exp_id, int constant) override;
 
 //Addition operation
     int add_ii(int var_id1, int var_id2) override; 
@@ -168,7 +167,4 @@ public:
     int add_rr(int exp_id1, int exp_id2) override;
     
     void generate_code() override;
-
-    ~x64_func() {}
-
 };
