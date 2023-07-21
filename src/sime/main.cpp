@@ -1,4 +1,3 @@
-#include <iostream>
 #include "debug-api.h"
 
 int app_start(int argc, char** argv) {

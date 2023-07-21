@@ -15,8 +15,6 @@ if(${COMPILER} STREQUAL GNU OR ${COMPILER} STREQUAL Clang)
 endif()
 
 FILE(GLOB mod_srcs_debug *.cpp)
-message(STATUS "Files are ${mod_srcs_debug}")
-message(STATUS "Replacement string is ${CMAKE_CURRENT_SOURCE_DIR}/ast-debug.cpp;")
 string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/ast-debug.cpp;" "" mod_srcs_rel "${mod_srcs_debug}")
 
 if(CMAKE_BUILD_TYPE STREQUAL Release)
@@ -24,7 +22,6 @@ if(CMAKE_BUILD_TYPE STREQUAL Release)
 else()
     set(mod_srcs ${mod_srcs_debug})
 endif()
-message(STATUS "Final files are ${mod_srcs}")
 
 add_executable(simcc ${mod_srcs} ${PROJECT_SOURCE_DIR}/src/entry.cpp)
 target_compile_definitions(simcc PRIVATE INITDEBUGGER)
