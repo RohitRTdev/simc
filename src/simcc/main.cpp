@@ -82,7 +82,7 @@ int app_start(int argc, char** argv) {
     //auto code = unit->fetch_code();
     //std::cout << code << std::endl;
 
-    sim_log_debug("Compilation successful");    
+    std::cout << "Compilation successful" << std::endl;    
     return 0;
 
 }

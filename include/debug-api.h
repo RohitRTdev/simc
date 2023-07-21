@@ -1,5 +1,8 @@
 #pragma once
 
+#include <iostream>
+#include "spdlog/fmt/fmt.h"
+
 #ifdef SIMDEBUG
     #include "spdlog/spdlog.h"
     extern std::shared_ptr<spdlog::logger> sim_logger;
@@ -14,6 +17,6 @@
     #define sim_log_info( ... )
     #define sim_log_debug( ... )
     #define sim_log_warn( ... )
-    #define sim_log_error( msg, ... ) {printf("[ERROR]:");printf(msg __VA_OPT__(,) __VA_ARGS__);printf("\n"); std::exit(-1);}
+    #define sim_log_error( msg, ... ) {std::cout << "[ERROR]:" << fmt::format(msg __VA_OPT__(,) __VA_ARGS__) << std::endl; std::exit(-1);}
 #endif
 

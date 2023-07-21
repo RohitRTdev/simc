@@ -2,7 +2,6 @@
 #include <list>
 #include <optional>
 #include "compiler/token.h"
-#include "compiler/token-ops.h"
 #include "debug-api.h"
 
 std::vector<token> tokens;  
@@ -36,33 +35,10 @@ std::vector<std::string> op_debug = { "CLB", "CRB", "LB", "RB", "LSB", "RSB",
     "LT", "EQUAL_EQUAL", "NOT_EQUAL", "BIT_XOR", "BIT_OR",
     "AND", "OR", "EQUAL", "COMMA", "SEMICOLON"};
 
-
-void print_token(const token& tok) {
-    
-    switch(tok.type) {
-        case KEYWORD:  sim_log_debug("type:KEYWORD keyword:{}", keywords_debug[std::get<keyword_type>(tok.value)]); break;
-        case IDENT: sim_log_debug("type:Identifier name:{}", std::get<std::string>(tok.value)); break;
-        case OPERATOR: sim_log_debug("type:Operator op:{}", op_debug[std::get<operator_type>(tok.value)]); break;
-        case CONSTANT: {
-            if(tok.sub_type == TOK_INT)
-                sim_log_debug("type:INT_CONSTANT value:{}", std::get<size_t>(tok.value));
-            else if(tok.sub_type == TOK_CHAR)
-                sim_log_debug("type:CHAR_CONSTANT value:{}", std::get<char>(tok.value));
-            else
-                sim_log_debug("type:STRING_CONSTANT value:{}", std::get<std::string>(tok.value));
-            break;
-        }
-        case NEWLINE: sim_log_debug("type:NEWLINE"); break;
-        default: sim_log_debug("Invalid token??");
-    }
-    
-}
-
-
 void print_token_list() {
     sim_log_debug("Printing tokens...");
     for(auto& tok: tokens) {
-        print_token(tok);
+        tok.print();
     }
 }
 
@@ -165,7 +141,7 @@ void lex(const std::vector<char>& input) {
             auto es_ch = fetch_escape_character(ch);
             if (es_ch) {
                 sim_log_debug("Found escape character:{}", ch);
-                tokens.push_back(create_constant_token(es_ch.value()));
+                tokens.push_back(token(CONSTANT, es_ch.value()));
                 state = EXPECTING_TICK;
             }
             else {
@@ -179,7 +155,7 @@ void lex(const std::vector<char>& input) {
                 state = EXPECTING_ESCAPED_CHARACTER;
             }
             else {
-                tokens.push_back(create_constant_token(ch));
+                tokens.push_back(token(CONSTANT, ch));
                 state = EXPECTING_TICK;
             }
         }
@@ -189,7 +165,7 @@ void lex(const std::vector<char>& input) {
             if(ch == '\"') {
                 std::string literal(input.begin()+start_pos+1, input.begin()+start_pos+literal_count+1);
                 sim_log_debug("Pushing string constant:{} with literal_count: {}", literal, literal_count);
-                tokens.push_back(create_constant_token(literal));
+                tokens.push_back(token(CONSTANT, literal));
                 state = LEXER_START;
                 continue;
             }
@@ -206,7 +182,7 @@ void lex(const std::vector<char>& input) {
                 sim_log_error("Variable names are not supposed to start with a digit.");
             }
             else {
-                tokens.push_back(create_constant_token(num));
+                tokens.push_back(token(CONSTANT, num));
                 sim_log_debug("Pushed integer token:{}", num);
                 state = LEXER_START;
             }
@@ -226,21 +202,21 @@ void lex(const std::vector<char>& input) {
                 if(key_type) {
                     if(key_type.value() == IF) {
                         //This checks if previous token is an "else" and then combines it with the present "if" to create an "else_if" token
-                        if (tokens.size() != 0 && is_keyword_else(tokens.back())) {
+                        if (tokens.size() != 0 && tokens.back().is_keyword_else()) {
                             key_type = ELSE_IF;
                             std::get<keyword_type>(tokens.back().value) = key_type.value();
                         }
                         else
-                            tokens.push_back(create_keyword_token(key_type.value()));
+                            tokens.push_back(token(KEYWORD, key_type.value()));
                     }
                     else 
-                        tokens.push_back(create_keyword_token(key_type.value()));
+                        tokens.push_back(token(KEYWORD, key_type.value()));
                     
                     sim_log_debug("Pushing keyword token type:{}", keywords_debug[key_type.value()]);
                 } 
                 else {
                     sim_log_debug("Pushing identifier token:{}", literal);
-                    tokens.push_back(create_ident_token(literal));
+                    tokens.push_back(token(IDENT, literal));
                 }
                 state = LEXER_START;
             }
@@ -290,7 +266,7 @@ void lex(const std::vector<char>& input) {
                     break;
                 }
             }
-            tokens.push_back(create_operator_token(op));
+            tokens.push_back(token(OPERATOR, op));
             sim_log_debug("Found operator_type:{}", op_debug[op]);
             state = LEXER_START;
             if (is_extended_operator(op))
@@ -360,7 +336,7 @@ void lex(const std::vector<char>& input) {
 
             if(state == LEXER_START) {
                 sim_log_debug("Pushing operator_type:{}", op_debug[op]);
-                tokens.push_back(create_operator_token(op));
+                tokens.push_back(token(OPERATOR, op));
             }
         }
 
@@ -403,9 +379,9 @@ void lex(const std::vector<char>& input) {
         if(state == LOOKAHEAD_FOR_NEWLINE) {
             if(ch == '\n' || ch == '\r') {
                 sim_log_debug("Found new delimiter token");
-                if(tokens.size() == 0 || !is_token_newline(tokens.back()))
-                    tokens.push_back(create_newline_token());
-            
+                if(tokens.size() == 0 || !tokens.back().is_newline())
+                    tokens.push_back(token(NEWLINE));
+
                 state = LEXER_START;
             }
             else
