@@ -67,11 +67,56 @@ enum operator_type {
     SEMICOLON
 };
 
+
 struct token {
+private:
     token_type type;
     token_sub_type sub_type;
 
+    bool is_data_type() const;
+
+public:
     std::variant<size_t, char, std::string, operator_type, keyword_type> value;
+
+    token(token_type type);
+
+    template<typename T>
+    token(token_type _type, const T& val) : type(_type) {
+        value = val;
+    }
+
+    token(token_type _type, const size_t& num) {
+        type = CONSTANT;
+        sub_type = TOK_INT;
+        value = num;
+    }
+
+    token(token_type _type, const std::string& val) {
+        type = _type;
+        if (_type == CONSTANT)
+            sub_type = TOK_STRING;
+        value = val;
+    }
+
+    token(token_type _type, const char& val) {
+        type = CONSTANT;
+        sub_type = TOK_CHAR;
+        value = val;
+    }
+
+    bool is_keyword_else() const;
+    bool is_newline() const;
+    bool is_identifier() const;
+    bool is_keyword_data_type() const;
+    bool is_operator_comma() const;
+    bool is_operator_lb() const;
+    bool is_operator_rb() const;
+    bool is_operator_sc() const;
+
+#ifdef SIMDEBUG
+    void print() const;
+#endif
+
 };
 
 extern std::vector<token> tokens;
@@ -79,5 +124,4 @@ extern std::vector<token> tokens;
 #ifdef SIMDEBUG
 extern std::vector<std::string> keywords_debug;
 extern std::vector<std::string> op_debug;
-void print_token(const token&);
 #endif

@@ -1,7 +1,6 @@
 #include <stack>
 #include "debug-api.h"
 #include "compiler/token.h"
-#include "compiler/token-ops.h"
 #include "compiler/ast.h"
 #include "compiler/ast-ops.h"
 
@@ -54,13 +53,13 @@ static void reduce_decl_list() {
     sim_log_debug("Reducing decl list");
     
     token* type = nullptr;
-    if(is_token_data_type(*token_stack.top()))
+    if(token_stack.top()->is_keyword_data_type())
         type = fetch_token_stack();
 
     auto decl_list = create_ast_decl_list(type);
     
     //Attach all decl's on top of stack to the created decl list
-    while(!parser_stack.empty() && is_ast_decl(parser_stack.top())) {
+    while(!parser_stack.empty() && parser_stack.top()->is_ast_decl()) {
         decl_list->attach_node(fetch_parser_stack());
     }
 
@@ -70,7 +69,7 @@ static void reduce_decl_list() {
 static void reduce_fn_arg() {
     sim_log_debug("Reducing fn arg");
     token* ident = nullptr;
-    if(is_token_identifier(*token_stack.top())) {
+    if(token_stack.top()->is_identifier()) {
         ident = fetch_token_stack();
     }
     token* type = fetch_token_stack();
@@ -81,7 +80,7 @@ static void reduce_fn_arg() {
 static void reduce_fn_arg_list() {
     sim_log_debug("Reducing fn_arg_list");
     auto fn_arg_list = create_ast_fn_arg_list();
-    while(!parser_stack.empty() && is_ast_fn_arg(parser_stack.top())) {
+    while(!parser_stack.empty() && parser_stack.top()->is_ast_fn_arg()) {
         fn_arg_list->attach_node(fetch_parser_stack());
     }
 
@@ -123,7 +122,7 @@ void parse() {
 
 
         if(state == EXPECT_FN_SC) {
-            if(is_token_operator_sc(*tok)) {
+            if(tok->is_operator_sc()) {
                 sim_log_debug("Found ';'. Reducing fn_decl");
                 reduce_fn_decl();
                 state = PARSER_START;
@@ -136,7 +135,7 @@ void parse() {
 
 
         if(state == EXPECT_FN_ARG_LIST) {
-            if(is_token_data_type(*tok)) {
+            if(tok->is_keyword_data_type()) {
                 sim_log_debug("Found data type. Expecting ident or ',' or ')'");
                 token_stack.push(tok);
                 state = EXPECT_FN_ARG_IDENT;
@@ -148,7 +147,7 @@ void parse() {
         }
 
         if(state == EXPECT_FN_COMMA) {
-            if(is_token_operator_comma(*tok)) {
+            if(tok->is_operator_comma()) {
                 sim_log_debug("Found ','. Expecting fn_arg_list");
                 state = EXPECT_FN_ARG_LIST;
             }
@@ -160,7 +159,7 @@ void parse() {
         }
 
         if(state == EXPECT_FN_ARG_IDENT) {
-            if(is_token_identifier(*tok)) {
+            if(tok->is_identifier()) {
                 sim_log_debug("Found identifier. Expecting ',' or ')'");
                 token_stack.push(tok);
             }
@@ -171,12 +170,12 @@ void parse() {
         }
 
         if(state == EXPECT_FN_ARG_LIST_START) {
-            if(is_token_data_type(*tok)) {
+            if(tok->is_keyword_data_type()) {
                 sim_log_debug("Found data type. Expecting ident or ',' or ')'");
                 state = EXPECT_FN_ARG_IDENT;
                 token_stack.push(tok);
             }
-            else if(is_token_operator_rb(*tok)) {
+            else if(tok->is_operator_rb()) {
                 //Empty function arg list
                 sim_log_debug("Found ')'(Empty function arg list). Expecting ';'");
                 parser_stack.push(create_ast_fn_arg_list());
@@ -185,7 +184,7 @@ void parse() {
         }
 
         if(state == EXPECT_FN_RB) {
-            if(is_token_operator_rb(*tok)) {
+            if(tok->is_operator_rb()) {
                 sim_log_debug("Found ')'. Reducing fn_arg_list");
                 state = EXPECT_FN_SC;
                 reduce_fn_arg_list();
@@ -196,7 +195,7 @@ void parse() {
         }
 
         if(state == EXPECT_FUNCTION_LB) {
-            if(is_token_operator_lb(*tok)) {
+            if(tok->is_operator_lb()) {
                 sim_log_debug("Found '('. Expecting fn_arg_list next or ')'");
                 state = EXPECT_FN_ARG_LIST_START;
                 state_stack.pop();
@@ -209,11 +208,11 @@ void parse() {
         }
 
         if(state == EXPECT_DECL_COMMA_OR_SC) {
-            if(is_token_operator_comma(*tok)) {
+            if(tok->is_operator_comma()) {
                 reduce_decl();
                 state = EXPECT_IDENT;
             }
-            else if(is_token_operator_sc(*tok)) {
+            else if(tok->is_operator_sc()) {
                 reduce_decl();
                 reduce_decl_list();
                 state = PARSER_START;
@@ -227,7 +226,7 @@ void parse() {
 
 
         if(state == EXPECT_IDENT) {
-            if(is_token_identifier(*tok)) {
+            if(tok->is_identifier()) {
                 if(state_stack.top() == PARSER_START)
                     state = EXPECT_FUNCTION_LB; 
                 else if(state_stack.top() == PARSER_DECL_LIST)
@@ -241,13 +240,13 @@ void parse() {
         }
 
         if(state == PARSER_START) {
-            if(is_token_data_type(*tok)) {
+            if(tok->is_keyword_data_type()) {
                 state = EXPECT_IDENT;
                 sim_log_debug("Pushing keyword token:{}", keywords_debug[std::get<keyword_type>(tok->value)]);
                 token_stack.push(tok);
                 state_stack.push(PARSER_START);
             }
-            else if(is_token_newline(*tok)) {
+            else if(tok->is_newline()) {
                 state = PARSER_START;
             }
             else {
@@ -260,7 +259,7 @@ void parse() {
 
     sim_log_debug("Printing ast");
 #ifdef SIMDEBUG
-    print_ast(prog);
+    prog->print();
 #endif
 
 }

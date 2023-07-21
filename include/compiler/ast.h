@@ -14,49 +14,60 @@ enum class AST_TYPE {
 };
 
 struct ast {
+private:
     AST_TYPE type;
+public:
     std::deque<std::unique_ptr<ast>> children;
+    ast(AST_TYPE _type); 
 
-    ast(AST_TYPE _type) : type(_type) 
-    {}
+    void attach_node(std::unique_ptr<ast> node); 
+    std::unique_ptr<ast> remove_node(); 
 
-    void attach_node(std::unique_ptr<ast> node) {
-        children.push_front(std::move(node));
-    }
+    bool is_ast_decl_list(); 
+    bool is_ast_decl(); 
+    bool is_ast_fn_arg();
 
-    std::unique_ptr<ast> remove_node() {
-        auto node = std::move(children.back());
-        children.pop_back();
-        return node;
-    }
+#ifdef SIMDEBUG
+    virtual void print();
+#endif 
 
     virtual ~ast() = default;
 };
 
 struct ast_decl_list: ast {
     const token* decl_type;
-    ast_decl_list(const token* type) : ast(AST_TYPE::DECL_LIST), decl_type(type) 
-    {}
+    ast_decl_list(const token* type); 
+
+#ifdef SIMDEBUG
+    void print() override;
+#endif
 };
 
 struct ast_decl : ast {
     const token* identifier;
-    ast_decl(const token* ident) : ast(AST_TYPE::DECL), identifier(ident) 
-    {}
+    ast_decl(const token* ident); 
+
+#ifdef SIMDEBUG
+    void print() override;
+#endif
 };
 
 struct ast_fn_decl : ast {
     const token* name;
     const token* ret_type;
-    ast_fn_decl(const token* ident, const token* type) : ast(AST_TYPE::FN_DECL), name(ident), ret_type(type)
-    {}
-};
+    ast_fn_decl(const token* ident, const token* type);
+
+#ifdef SIMDEBUG
+    void print() override;
+#endif
+}; 
 
 struct ast_fn_arg : ast {
     const token* decl_type;
     const token* name;
-    ast_fn_arg(const token* type, const token* ident) : ast(AST_TYPE::FN_ARG), name(ident), decl_type(type)
-    {}
-};
+    ast_fn_arg(const token* type, const token* ident); 
 
-void print_ast(const std::unique_ptr<ast>&);
+#ifdef SIMDEBUG
+    void print() override;
+#endif
+};

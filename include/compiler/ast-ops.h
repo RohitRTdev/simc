@@ -1,4 +1,5 @@
 #pragma once
+
 #include "compiler/ast.h"
 
 static inline std::unique_ptr<ast> create_ast_program() {
@@ -30,15 +31,3 @@ static inline std::unique_ptr<ast> create_ast_fn_arg(const token* type, const to
     ast* node = static_cast<ast*>(new ast_fn_arg(type, ident));
     return std::unique_ptr<ast>(node);
 }
-
-static inline bool is_ast_decl_list(const std::unique_ptr<ast>& node) {
-    return node->type == AST_TYPE::DECL_LIST;
-}
-
-static inline bool is_ast_decl(const std::unique_ptr<ast>& node) {
-    return node->type == AST_TYPE::DECL;
-} 
-
-static inline bool is_ast_fn_arg(const std::unique_ptr<ast>& node) {
-    return node->type == AST_TYPE::FN_ARG;
-} 
