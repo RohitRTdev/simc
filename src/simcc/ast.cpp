@@ -3,6 +3,9 @@
 ast::ast(AST_TYPE _type) : type(_type) 
 {}
 
+ast_token::ast_token(const token* _tok) : ast(AST_TYPE::TOKEN), tok(_tok)
+{}
+
 void ast::attach_node(std::unique_ptr<ast> node) {
     children.push_front(std::move(node));
 }
@@ -13,26 +16,27 @@ std::unique_ptr<ast> ast::remove_node() {
     return node;
 }
 
-ast_decl_list::ast_decl_list(const token* type) : ast(AST_TYPE::DECL_LIST), decl_type(type) 
-{}
-
-ast_decl::ast_decl(const token* ident) : ast(AST_TYPE::DECL), identifier(ident) 
-{}
-
-ast_fn_decl::ast_fn_decl(const token* ident, const token* type) : ast(AST_TYPE::FN_DECL), name(ident), ret_type(type)
-{}
-
-ast_fn_arg::ast_fn_arg(const token* type, const token* ident) : ast(AST_TYPE::FN_ARG), name(ident), decl_type(type)
-{}
-
-bool ast::is_ast_decl_list() {
+bool ast::is_decl_list() {
     return type == AST_TYPE::DECL_LIST;
 }
 
-bool ast::is_ast_decl() {
+bool ast::is_decl() {
     return type == AST_TYPE::DECL;
 } 
 
-bool ast::is_ast_fn_arg() {
+bool ast::is_fn_arg() {
     return type == AST_TYPE::FN_ARG;
 } 
+
+bool ast::is_stmt() {
+    switch(type) {
+        case AST_TYPE::RETURN:
+        case AST_TYPE::NULL_STMT: return true;
+    }
+
+    return false;
+}
+
+bool ast::is_token() {
+    return type == AST_TYPE::TOKEN;
+}

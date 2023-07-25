@@ -46,3 +46,23 @@ bool token::is_operator_sc() const {
 bool token::is_operator_rb() const {
     return type == OPERATOR && std::get<operator_type>(value) == RB;
 }
+
+bool token::is_operator_clb() const {
+    return type == OPERATOR && std::get<operator_type>(value) == CLB;
+}
+
+bool token::is_operator_crb() const {
+    return type == OPERATOR && std::get<operator_type>(value) == CRB;
+}
+
+bool token::is_keyword_return() const {
+    return type == KEYWORD && std::get<keyword_type>(value) == RETURN;
+}
+
+bool token::is_constant() const {
+    return type == CONSTANT;
+}
+
+bool token::is_operator_eq() const {
+    return type == OPERATOR && std::get<operator_type>(value) == EQUAL;
+}

@@ -1,4 +1,4 @@
-#include "common.h"
+#include "init/entry.h"
 
 //Common entry point for all modules
 int main(int argc, char** argv) {

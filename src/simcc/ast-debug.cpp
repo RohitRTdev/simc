@@ -29,34 +29,40 @@ void token::print() const {
     
 }
 
-void ast_fn_arg::print() {
-    AST_PRINT("Node: fn_arg");
-    decl_type->print();
-    if(name)
-        name->print();
+static void print_child_nodes(const std::deque<std::unique_ptr<ast>>& children) {
+    for(const auto& child: children)
+        child->print();
 }
 
-void ast_fn_decl::print() {
+void ast_token::print() {
+    tok->print();
+}
+
+void print_ast_fn_arg(const ast* node) {
+    AST_PRINT("Node: fn_arg");
+    level_space++;
+    print_child_nodes(node->children);
+    level_space--;
+}
+
+void print_ast_fn_decl(const ast* node) {
     AST_PRINT("Node: fn_decl");
-    ret_type->print();
-    name->print();
     level_space += level_increment;
-    children[0]->print();
+    print_child_nodes(node->children);
     level_space -= level_increment;
 }
 
-void ast_decl::print() {
+void print_ast_decl(const ast* node) {
     AST_PRINT("Node: decl");
-    identifier->print();
+    level_space++;
+    print_child_nodes(node->children);
+    level_space--;
 } 
 
-void ast_decl_list::print() {
-    AST_PRINT("Node: decl_list, num_nodes:{}", children.size());
-    decl_type->print();
+static void print_ast_decl_list(const ast* node) {
+    AST_PRINT("Node: decl_list, num_nodes:{}", node->children.size());
     level_space += level_increment;
-    for(const auto& child: children) {
-        child->print(); 
-    }
+    print_child_nodes(node->children);
     level_space -= level_increment;
 }
 
@@ -64,9 +70,7 @@ static void print_ast_fn_arg_list(const ast* node) {
     AST_PRINT("Node: fn_arg_list, num_nodes:{}", node->children.size());
     size_t number = 0;
     level_space += level_increment;
-    for(const auto& child: node->children) {
-        child->print();
-    }
+    print_child_nodes(node->children);
     level_space -= level_increment;
 }
 
@@ -74,16 +78,44 @@ static void print_ast_program(const ast* node) {
     AST_PRINT("Node: Program, num_nodes:{}", node->children.size());
     size_t number = 0;
     level_space += level_increment;
-    for(const auto& child: node->children) {
-        child->print();
-    }
+    print_child_nodes(node->children);
     level_space -= level_increment;
+}
+
+static void print_ast_return(const ast* node) {
+    AST_PRINT("Node: return statement");
+}
+
+static void print_ast_null_stmt(const ast* node) {
+    AST_PRINT("Node: Null statement");
+}
+
+static void print_ast_fn_def(const ast* node) {
+    AST_PRINT("Node: Fn definition");
+    level_space++;
+    print_child_nodes(node->children);
+    level_space--;
+}
+
+static void print_ast_stmt_list(const ast* node) {
+    AST_PRINT("Node: Stmt List, statements:{}", node->children.size());
+    level_space++;
+    print_child_nodes(node->children);
+    level_space--;
 }
 
 void ast::print() {
     switch(type) {
         case AST_TYPE::PROGRAM: print_ast_program(this); break;
         case AST_TYPE::FN_ARG_LIST: print_ast_fn_arg_list(this); break;
+        case AST_TYPE::DECL: print_ast_decl(this); break;
+        case AST_TYPE::DECL_LIST: print_ast_decl_list(this); break;
+        case AST_TYPE::FN_ARG: print_ast_fn_arg(this); break;
+        case AST_TYPE::FN_DECL: print_ast_fn_decl(this); break;
+        case AST_TYPE::RETURN: print_ast_return(this); break;
+        case AST_TYPE::NULL_STMT: print_ast_null_stmt(this); break;
+        case AST_TYPE::STMT_LIST: print_ast_stmt_list(this); break;
+        case AST_TYPE::FN_DEF: print_ast_fn_def(this); break;
     }
 }
 
