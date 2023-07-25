@@ -47,25 +47,22 @@ bool token::is_operator_rb() const {
     return type == OPERATOR && std::get<operator_type>(value) == RB;
 }
 
-#ifdef SIMDEBUG
-void token::print() const {
-    
-    switch(type) {
-        case KEYWORD:  sim_log_debug("type:KEYWORD keyword:{}", keywords_debug[std::get<keyword_type>(value)]); break;
-        case IDENT: sim_log_debug("type:Identifier name:{}", std::get<std::string>(value)); break;
-        case OPERATOR: sim_log_debug("type:Operator op:{}", op_debug[std::get<operator_type>(value)]); break;
-        case CONSTANT: {
-            if(sub_type == TOK_INT)
-                sim_log_debug("type:INT_CONSTANT value:{}", std::get<size_t>(value));
-            else if(sub_type == TOK_CHAR)
-                sim_log_debug("type:CHAR_CONSTANT value:{}", std::get<char>(value));
-            else
-                sim_log_debug("type:STRING_CONSTANT value:{}", std::get<std::string>(value));
-            break;
-        }
-        case NEWLINE: sim_log_debug("type:NEWLINE"); break;
-        default: sim_log_debug("Invalid token??");
-    }
-    
+bool token::is_operator_clb() const {
+    return type == OPERATOR && std::get<operator_type>(value) == CLB;
 }
-#endif
+
+bool token::is_operator_crb() const {
+    return type == OPERATOR && std::get<operator_type>(value) == CRB;
+}
+
+bool token::is_keyword_return() const {
+    return type == KEYWORD && std::get<keyword_type>(value) == RETURN;
+}
+
+bool token::is_constant() const {
+    return type == CONSTANT;
+}
+
+bool token::is_operator_eq() const {
+    return type == OPERATOR && std::get<operator_type>(value) == EQUAL;
+}

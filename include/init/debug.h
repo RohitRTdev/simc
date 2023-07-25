@@ -1,5 +1,7 @@
 #pragma once
 
+//This header is only included by entry.h
+
 #include <iostream>
 #include <memory>
 #include <ctime>
@@ -7,7 +9,7 @@
 #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/sinks/stdout_sinks.h"
 #include "spdlog/fmt/chrono.h"
-#include "dll.h"
+#include "lib/dll.h"
 #define LOGGER "sim-logger"
 
 std::shared_ptr<spdlog::logger> sim_logger;

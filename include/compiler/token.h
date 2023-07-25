@@ -112,6 +112,11 @@ public:
     bool is_operator_lb() const;
     bool is_operator_rb() const;
     bool is_operator_sc() const;
+    bool is_operator_clb() const; 
+    bool is_operator_crb() const;
+    bool is_operator_eq() const; 
+    bool is_keyword_return() const;
+    bool is_constant() const;
 
 #ifdef SIMDEBUG
     void print() const;

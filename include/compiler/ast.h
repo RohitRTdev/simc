@@ -5,12 +5,16 @@
 
 enum class AST_TYPE {
     PROGRAM,
+    TOKEN,
     DECL_LIST,
-    FUNCTION_DEF,
     DECL,
     FN_DECL,
     FN_ARG_LIST,
-    FN_ARG
+    FN_ARG,
+    FN_DEF,
+    STMT_LIST,
+    RETURN,
+    NULL_STMT
 };
 
 struct ast {
@@ -23,9 +27,11 @@ public:
     void attach_node(std::unique_ptr<ast> node); 
     std::unique_ptr<ast> remove_node(); 
 
-    bool is_ast_decl_list(); 
-    bool is_ast_decl(); 
-    bool is_ast_fn_arg();
+    bool is_decl_list(); 
+    bool is_decl(); 
+    bool is_fn_arg();
+    bool is_stmt();
+    bool is_token();
 
 #ifdef SIMDEBUG
     virtual void print();
@@ -34,38 +40,9 @@ public:
     virtual ~ast() = default;
 };
 
-struct ast_decl_list: ast {
-    const token* decl_type;
-    ast_decl_list(const token* type); 
-
-#ifdef SIMDEBUG
-    void print() override;
-#endif
-};
-
-struct ast_decl : ast {
-    const token* identifier;
-    ast_decl(const token* ident); 
-
-#ifdef SIMDEBUG
-    void print() override;
-#endif
-};
-
-struct ast_fn_decl : ast {
-    const token* name;
-    const token* ret_type;
-    ast_fn_decl(const token* ident, const token* type);
-
-#ifdef SIMDEBUG
-    void print() override;
-#endif
-}; 
-
-struct ast_fn_arg : ast {
-    const token* decl_type;
-    const token* name;
-    ast_fn_arg(const token* type, const token* ident); 
+struct ast_token: ast {
+    const token* tok;
+    ast_token(const token*);
 
 #ifdef SIMDEBUG
     void print() override;

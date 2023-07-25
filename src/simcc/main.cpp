@@ -8,14 +8,14 @@
 
 #define FILE_READ_CHUNK_SIZE 256
 
-void start_compilation(const std::vector<char>& file_input) {
+static void start_compilation(const std::vector<char>& file_input) {
     
     lex(file_input);    
     parse();
     
 }
 
-void dump_buffer(const std::vector<char>& buf) {
+static void dump_buffer(const std::vector<char>& buf) {
     for(auto ch: buf) {
         std::cout << ch;
     }

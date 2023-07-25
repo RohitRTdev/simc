@@ -1,6 +1,6 @@
 #include <spdlog/spdlog.h>
 #include <memory>
-#include "dll.h"
+#include "lib/dll.h"
 
 std::shared_ptr<spdlog::logger> sim_logger;
 
