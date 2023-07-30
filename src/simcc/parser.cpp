@@ -12,7 +12,7 @@ static void reduce_decl(state_machine* inst) {
     auto tok = inst->fetch_parser_stack();
 
     //This means that decl is assigned a variable
-    if(inst->parser_stack.top()->is_token() && static_cast<ast_token*>(inst->parser_stack.top().get())->tok->is_identifier()) {
+    if(inst->parser_stack.top()->is_token() && cast_to_ast_token(inst->parser_stack.top())->tok->is_identifier()) {
         inst->parser_stack.push(create_ast_decl(inst->fetch_parser_stack(), std::move(tok)));
     }
     else {
@@ -37,7 +37,7 @@ static void reduce_decl_list(state_machine* inst) {
 static void reduce_fn_arg(state_machine* inst) {
     sim_log_debug("Reducing fn arg");
     std::unique_ptr<ast> ident;
-    if(inst->parser_stack.top()->is_token() && static_cast<ast_token*>(inst->parser_stack.top().get())->tok->is_identifier()) {
+    if(inst->parser_stack.top()->is_token() && cast_to_ast_token(inst->parser_stack.top())->tok->is_identifier()) {
         ident = inst->fetch_parser_stack();
     }
 
@@ -67,7 +67,10 @@ static void reduce_fn_decl(state_machine* inst) {
 
 static void reduce_ret_stmt(state_machine* inst) {
     sim_log_debug("Reducing return statement");
-    inst->parser_stack.push(create_ast_ret());
+    auto ret = create_ast_ret();
+    if(inst->parser_stack.top()->is_expr())
+        ret->attach_node(inst->fetch_parser_stack());
+    inst->parser_stack.push(std::move(ret));
 }
 
 static void reduce_null_stmt(state_machine* inst) {
@@ -75,34 +78,42 @@ static void reduce_null_stmt(state_machine* inst) {
     inst->parser_stack.push(create_ast_null());
 }
 
+static void switch_after_reduce_stmt(state_machine* inst) {
+//This means we go back to expecting another statement or switch to the state before the statement started
+    switch(inst->state_stack.top()) {
+        case EXPECT_STMT_LIST:
+        case FN_DEF_REDUCE: inst->switch_state(EXPECT_STMT_LIST); break;
+        default: sim_log_error("Found statement in invalid context");
+    }
+}
+
 static void reduce_stmt(state_machine* inst) {
     switch(inst->state_stack.top()) {
-        case PARSER_STMT_RETURN: reduce_ret_stmt(inst); break;
+        case PARSER_STMT_RETURN: reduce_ret_stmt(inst); inst->state_stack.pop(); break;
+        case EXPECT_STMT_LIST:
+        case FN_DEF_REDUCE: {
+            if(inst->parser_stack.top()->is_expr()) {
+                auto expr = create_ast_expr_stmt();
+                expr->attach_node(inst->fetch_parser_stack());
+                inst->parser_stack.push(std::move(expr));
+            }
+            break;
+        }
     }
 
-    inst->state_stack.pop();
-
-    //This means we go back to expecting another statement or switch to the state before the statement started
-    if (inst->state_stack.top() == FN_DEF_REDUCE)
-        inst->switch_state(EXPECT_STMT_LIST);
-    else
-        inst->switch_state(inst->state_stack.top());
+    switch_after_reduce_stmt(inst);
 }
 
 static void reduce_null_stmt_sc(state_machine* inst) {
     reduce_null_stmt(inst);
-
-    if (inst->state_stack.top() == FN_DEF_REDUCE)
-        inst->switch_state(EXPECT_STMT_LIST);
-    else
-        inst->switch_state(inst->state_stack.top());
+    switch_after_reduce_stmt(inst);
 }
 
 static void reduce_stmt_list(state_machine* inst) {
     sim_log_debug("Reducing statement list");
 
     auto stmt_list = create_ast_stmt_list();
-    while(!(inst->parser_stack.top()->is_token() && static_cast<ast_token*>(inst->parser_stack.top().get())->tok->is_operator_clb())) {
+    while(!(inst->parser_stack.top()->is_token() && cast_to_ast_token(inst->parser_stack.top())->tok->is_operator_clb())) {
         stmt_list->attach_node(inst->fetch_parser_stack());
     }
 
@@ -119,14 +130,14 @@ static void reduce_stmt_list(state_machine* inst) {
             auto new_state = inst->state_stack.top();
 
             switch (new_state) {
-            case EXPECT_STMT_LIST:
-            case FN_DEF_REDUCE: inst->switch_state(EXPECT_STMT_LIST); break;
-            default: sim_log_error("Invalid use of '}'");
+                case EXPECT_STMT_LIST:
+                case FN_DEF_REDUCE: inst->switch_state(EXPECT_STMT_LIST); break;
+                default: sim_log_error("Invalid use of '}'");
             }
 
             break;
         }
-        case FN_DEF_REDUCE: inst->switch_state(pushed_state); break;
+        case FN_DEF_REDUCE: inst->switch_state(FN_DEF_REDUCE); inst->stop_token_fetch(); break;
         default: sim_log_error("Invalid use of '}'");
     }
 }
@@ -142,6 +153,184 @@ static void reduce_fn_def(state_machine* inst) {
 
     inst->parser_stack.push(std::move(fn_def));
 }
+
+static void reduce_expr(state_machine* inst, bool stop_at_lb = false, bool stop_at_comma = false) {
+    if(inst->parser_stack.empty() || !inst->parser_stack.top()->is_expr())
+        return;
+
+    sim_log_debug("Reducing expression");
+
+    auto reduced_expr = inst->fetch_parser_stack();
+
+    auto expr_eval = [&] {
+        if(inst->parser_stack.top()->is_expr()) {
+            return (stop_at_lb ? !is_ast_expr_lb(inst->parser_stack.top()) : true) && (stop_at_comma ? !is_ast_expr_comma(inst->parser_stack.top()) : true);
+        }
+        return false;
+    };
+
+    while(expr_eval()) {
+        auto op_expr = inst->fetch_parser_stack();
+        CRITICAL_ASSERT(is_ast_expr_operator(op_expr), "Non operator expression found after expression node");
+        
+        auto op = cast_to_ast_op(op_expr);
+        CRITICAL_ASSERT(!op->children.size(), "Found non operator expression node after expression node");
+        CRITICAL_ASSERT(!op->is_postfix, "Postfix operator found in unreduced state");
+        
+        if(op->is_unary) {
+            op_expr->attach_node(std::move(reduced_expr));
+        }
+        else {
+            auto left_expr = inst->fetch_parser_stack();
+            CRITICAL_ASSERT(left_expr->is_expr(), "Found non expression node in parser stack during binary op reduction");
+            op_expr->attach_node(std::move(reduced_expr));
+            op_expr->attach_node(std::move(left_expr));
+        }
+
+        reduced_expr = std::move(op_expr);
+    }
+
+    inst->parser_stack.push(std::move(reduced_expr));
+}
+
+static void reduce_expr_bop(state_machine* inst) {
+    sim_log_debug("Performing binary op reduction");
+    auto cur_op = create_ast_binary_op(inst->cur_token());
+    auto cur_op_ptr = cast_to_ast_op(cur_op);
+    CRITICAL_ASSERT(is_ast_expr_operator(cur_op), "Non operator expression found during binary op evaluation");
+    auto reduced_expr = inst->fetch_parser_stack();
+    
+    while(inst->parser_stack.top()->is_expr() && !is_ast_expr_comma(inst->parser_stack.top()) && !is_ast_expr_lb(inst->parser_stack.top())) {
+        auto expr = inst->fetch_parser_stack();
+        CRITICAL_ASSERT(is_ast_expr_operator(expr) && expr->children.size() == 0, "Unreduced expr operator found during binary op reduction"); 
+         
+        auto op = cast_to_ast_op(expr);
+        if(op->is_unary) {
+            expr->attach_node(std::move(reduced_expr));
+        }
+        else {
+            if(op->precedence > cur_op_ptr->precedence) {
+                auto left_expr = inst->fetch_parser_stack();
+                expr->attach_node(std::move(reduced_expr));
+                expr->attach_node(std::move(left_expr));
+            }
+            else if(op->precedence == cur_op_ptr->precedence) {
+                if(op->is_lr) {
+                    auto left_expr = inst->fetch_parser_stack();
+                    expr->attach_node(std::move(reduced_expr));
+                    expr->attach_node(std::move(left_expr));
+                }
+                else {
+                    inst->parser_stack.push(std::move(expr));
+                    inst->parser_stack.push(std::move(reduced_expr));
+                    inst->parser_stack.push(std::move(cur_op));
+                    break;
+                }
+            }
+            else {
+                //shift
+                inst->parser_stack.push(std::move(expr));
+                inst->parser_stack.push(std::move(reduced_expr));
+                inst->parser_stack.push(std::move(cur_op));
+                break;
+            }
+        }
+        reduced_expr = std::move(expr);
+    }
+    if(reduced_expr)
+        inst->parser_stack.push(std::move(reduced_expr));
+    
+    if(cur_op)
+        inst->parser_stack.push(std::move(cur_op));
+}
+
+static void reduce_expr_postfix(state_machine* inst) {
+    sim_log_debug("Reducing postfix expression");
+    auto cur_op = create_ast_postfix_op(inst->cur_token());
+    cur_op->attach_node(inst->fetch_parser_stack());
+    inst->parser_stack.push(std::move(cur_op));
+}
+
+static void reduce_expr_comma(state_machine* inst) {
+    
+    sim_log_debug("Performing comma reduction");
+    if(inst->state_stack.top() == FN_CALL_EXPR_REDUCE) {
+        reduce_expr(inst, true, true);
+    
+        //Shift comma
+        inst->parser_stack.push(create_ast_punctuator(inst->cur_token()));
+        inst->switch_state(EXPECT_EXPR_UOP_S);
+    }
+    else { 
+        sim_log_error("',' found outside of a function call expression.");
+    }
+}
+
+static void reduce_fn_call_expr(state_machine* inst) {
+    sim_log_debug("Performing fn call reduction");
+    reduce_expr(inst, true, true);
+
+    auto fn_call = create_ast_fn_call();
+    std::unique_ptr<ast> prev_expr;
+    while(!is_ast_expr_lb(inst->parser_stack.top())) {
+        auto expr = inst->fetch_parser_stack(); //Normal expression
+        if(is_ast_expr_comma(expr))
+            fn_call->attach_node(std::move(prev_expr));
+        
+        prev_expr = std::move(expr);
+    }
+
+    if(prev_expr)
+        fn_call->attach_node(std::move(prev_expr));
+
+    inst->parser_stack.pop(); //Remove '('
+    fn_call->attach_node(inst->fetch_parser_stack()); //Attach function designator
+
+    inst->parser_stack.push(std::move(fn_call));
+}
+
+static void reduce_expr_rb(state_machine* inst) {
+    switch(inst->state_stack.top()) {
+        case LB_EXPR_REDUCE: {
+            sim_log_debug("Performing lb reduction");
+            reduce_expr(inst, true, false);
+            if (is_ast_expr_lb(inst->parser_stack.top()))
+                sim_log_error("Found empty ()");
+
+            inst->switch_state(EXPECT_EXPR_POP);
+            auto reduced_expr = inst->fetch_parser_stack();
+            inst->parser_stack.pop(); //Remove '('
+            inst->parser_stack.push(std::move(reduced_expr));
+            inst->state_stack.pop();
+            break;
+        }
+        case FN_CALL_EXPR_REDUCE: reduce_fn_call_expr(inst); inst->state_stack.pop(); inst->switch_state(EXPECT_EXPR_POP); break;
+        case EXPR_CONDITION_REDUCE: sim_log_debug("Performing expr condition reduction"); reduce_expr(inst, false, false); inst->state_stack.pop(); inst->switch_state(EXPECT_STMT_LIST); break;
+        default: sim_log_error("Found ')' in invalid situation");
+    }
+}
+
+static void reduce_expr_empty_fn(state_machine* inst) {
+    if(inst->state_stack.top() == FN_CALL_EXPR_REDUCE && is_ast_expr_lb(inst->parser_stack.top())) {
+        inst->state_stack.pop();
+        inst->parser_stack.pop(); //Remove '('
+        auto fn_call = create_ast_fn_call();
+        fn_call->attach_node(inst->fetch_parser_stack());
+        inst->parser_stack.push(std::move(fn_call));
+    }
+    else 
+        sim_log_error("')' was expected as end of function call expression");
+}
+
+static void reduce_expr_stmt(state_machine* inst) {
+    switch(inst->state_stack.top()) {
+        case EXPECT_STMT_LIST: 
+        case FN_DEF_REDUCE:
+        case PARSER_STMT_RETURN: reduce_expr(inst, false, false); inst->switch_state(EXPECT_STMT_SC); inst->stop_token_fetch(); break;
+        default: sim_log_error("';' found after expression in invalid context");
+    }
+}
+
 
 static std::unique_ptr<ast> reduce_program(state_machine* inst) {
     //Attach all decl_list, fn def and fn decl to program node
@@ -179,14 +368,42 @@ static void parse_decl_list_init() {
 static void parse_stmt_list_init() {
 
     parser.define_state("EXPECT_STMT_LIST", EXPECT_STMT_LIST, &token::is_operator_clb, EXPECT_STMT_NEWLINE, true, nullptr, nullptr, EXPECT_STMT_LIST);
-    parser.define_special_state("EXPECT_STMT_NEWLINE", &token::is_newline, check_newline_valid, EXPECT_STMT);
-    parser.define_state("EXPECT_STMT", EXPECT_STMT_SC, &token::is_keyword_return, EXPECT_NULL_STMT_SC, false, nullptr, nullptr, PARSER_STMT_RETURN);
-    parser.define_special_state("EXPECT_STMT_SC", &token::is_operator_sc, reduce_stmt, EXPECT_CRB);
-    parser.define_special_state("EXPECT_NULL_STMT_SC", &token::is_operator_sc, reduce_null_stmt_sc, EXPECT_CRB);
-    parser.define_special_state("EXPECT_CRB", &token::is_operator_crb, reduce_stmt_list, PARSER_ERROR, "Expected '}' after statement list");
+    parser.define_special_state("EXPECT_STMT_NEWLINE", &token::is_newline, check_newline_valid, EXPECT_CRB);
+    parser.define_state("EXPECT_STMT", EXPECT_EXPR_UOP, &token::is_keyword_return, EXPECT_NULL_STMT_SC, false, nullptr, nullptr, PARSER_STMT_RETURN);
+    parser.define_special_state("EXPECT_STMT_SC", &token::is_operator_sc, reduce_stmt, PARSER_ERROR, 
+    "Expected statement list to end with }}");
+    parser.define_special_state("EXPECT_NULL_STMT_SC", &token::is_operator_sc, reduce_null_stmt_sc, EXPECT_EXPR_UOP);
+    parser.define_special_state("EXPECT_CRB", &token::is_operator_crb, reduce_stmt_list, EXPECT_STMT);
     
 }
 
+static void parse_expr_init() {
+
+    //At start of expression
+    parser.define_shift_state("EXPECT_EXPR_UOP", EXPECT_EXPR_UOP, &token::is_unary_operator, EXPECT_EXPR_VAR, create_ast_unary_op);
+    parser.define_shift_state("EXPECT_EXPR_VAR", EXPECT_EXPR_POP, &token::is_identifier, EXPECT_EXPR_CON, create_ast_expr_var);
+    parser.define_shift_state("EXPECT_EXPR_CON", EXPECT_EXPR_POP, &token::is_constant, EXPECT_EXPR_LB, create_ast_expr_con);
+    parser.define_shift_state("EXPECT_EXPR_LB", EXPECT_EXPR_UOP_S, &token::is_operator_lb, EXPECT_EXPR_RB, create_ast_punctuator, nullptr, LB_EXPR_REDUCE);
+    
+    //After an expression
+    parser.define_state("EXPECT_EXPR_POP", EXPECT_EXPR_POP, &token::is_postfix_operator, EXPECT_EXPR_BOP, false, reduce_expr_postfix);
+    parser.define_state("EXPECT_EXPR_BOP", EXPECT_EXPR_UOP_S, &token::is_binary_operator, EXPECT_EXPR_FN_LB, false, reduce_expr_bop); //reduce function for bop
+    parser.define_shift_state("EXPECT_EXPR_FN_LB", EXPECT_EXPR_UOP_S, &token::is_operator_lb, EXPECT_EXPR_RB, create_ast_punctuator, nullptr, FN_CALL_EXPR_REDUCE);
+    
+    //Terminal components in an expression
+    parser.define_special_state("EXPECT_EXPR_RB", &token::is_operator_rb, reduce_expr_rb, EXPECT_EXPR_COMMA); 
+    parser.define_special_state("EXPECT_EXPR_COMMA", &token::is_operator_comma, reduce_expr_comma, EXPECT_EXPR_SC); 
+    parser.define_special_state("EXPECT_EXPR_SC", &token::is_operator_sc, reduce_expr_stmt, PARSER_ERROR,  
+    "Expected expression to terminate with ')' or ',' or ';'");
+
+    //States that start an expression but appear after an existing expression
+    parser.define_shift_state("EXPECT_EXPR_UOP_S", EXPECT_EXPR_UOP_S, &token::is_unary_operator, EXPECT_EXPR_VAR_S, create_ast_unary_op);
+    parser.define_shift_state("EXPECT_EXPR_VAR_S", EXPECT_EXPR_POP, &token::is_identifier, EXPECT_EXPR_CON_S, create_ast_expr_var);
+    parser.define_shift_state("EXPECT_EXPR_CON_S", EXPECT_EXPR_POP, &token::is_constant, EXPECT_EXPR_LB_S, create_ast_expr_con);
+    parser.define_shift_state("EXPECT_EXPR_LB_S", EXPECT_EXPR_UOP_S, &token::is_operator_lb, EXPECT_EXPR_FN_RB_S, create_ast_punctuator, nullptr, LB_EXPR_REDUCE);
+    parser.define_state("EXPECT_EXPR_FN_RB_S", EXPECT_EXPR_POP, &token::is_operator_rb, PARSER_ERROR, false, reduce_expr_empty_fn, 
+    "Expected unary op, var, constant, '(' or ')' for start of expression");
+}
 
 void parse_init() {
 
@@ -208,11 +425,13 @@ void parse_init() {
         "Expected function signature to end with ')'");
     parser.define_state("EXPECT_SC", PARSER_START, &token::is_operator_sc, EXPECT_FN_CLB, false, reduce_fn_decl);
     parser.define_state("EXPECT_FN_CLB", EXPECT_STMT_LIST, &token::is_operator_clb, PARSER_ERROR, true, nullptr, 
-    "Expected function body to start with '{'", FN_DEF_REDUCE); 
-    parser.define_reduce_state("FN_DEF_REDUCE", PARSER_START, reduce_fn_def);
+    "Expected function body to start with {{", FN_DEF_REDUCE); 
+    parser.define_state("FN_DEF_REDUCE", PARSER_START, &token::is_operator_crb, PARSER_ERROR, false, reduce_fn_def, 
+        "Expected function definition to end with }}");
 
     parse_decl_list_init();
     parse_stmt_list_init();
+    parse_expr_init();
 }
 
 

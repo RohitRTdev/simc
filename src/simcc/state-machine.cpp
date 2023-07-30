@@ -13,7 +13,13 @@ void state_machine::set_token_stream(std::vector<token>& tok_stream) {
 token* state_machine::fetch_token() {
     return &(*token_stream)[token_idx++];
 }
-   
+
+const token* state_machine::cur_token() const {
+    CRITICAL_ASSERT(token_idx, "cur_token() called when token_idx is 0");
+    return &(*token_stream)[token_idx-1];
+} 
+
+
 std::unique_ptr<ast> state_machine::fetch_parser_stack() {
     auto node = std::move(parser_stack.top());
     parser_stack.pop();
@@ -43,8 +49,13 @@ void state_machine::define_state(const std::string& state_name, parser_states ne
 
 }
 
+void state_machine::define_shift_state(const std::string& state_name, parser_states next_state, state_machine::fptr pcheck, parser_states alt_state, sptr shiftfn, const char* error_string, parser_states push_state) {
+    define_state(state_name, next_state, pcheck, alt_state, true, nullptr, error_string, push_state);
+    state_path[num_states-1].shiftfn = shiftfn;
+}
+
 void state_machine::define_special_state(const std::string& state_name, state_machine::fptr pcheck, reducer special_reduce, parser_states alt_state, const char* error_string) {
-    define_state(state_name, PARSER_INVALID, pcheck, alt_state, false, special_reduce);
+    define_state(state_name, PARSER_INVALID, pcheck, alt_state, false, special_reduce, error_string);
     state_path[num_states - 1].is_special = true;
 }
 
@@ -86,7 +97,14 @@ void state_machine::start() {
     auto shifter = [&] {
         if ((tok->*(state_path[cur_state].pcheck))()) {
             sim_log_debug("Shifting token");
-            parser_stack.push(create_ast_token(tok));
+
+            if(state_path[cur_state].shiftfn) {
+                sim_log_debug("Calling special shift function");
+                parser_stack.push(state_path[cur_state].shiftfn(tok));
+            }
+            else
+                parser_stack.push(create_ast_token(tok));
+            
             mover();
         }
         else
@@ -139,8 +157,9 @@ void state_machine::start() {
             sim_log_debug("Fetching new token");
             tok = fetch_token();
         }
+#ifdef SIMDEBUG
         tok->print();
-
+#endif
         if (state_path[cur_state].pcheck) {
             push();
  

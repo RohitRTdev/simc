@@ -34,25 +34,53 @@ static void print_child_nodes(const std::deque<std::unique_ptr<ast>>& children) 
         child->print();
 }
 
+
+void ast_expr::print() {
+    const static std::vector<std::string> expr_type_debug = {"Variable", "Constant", "Operator", "Punctuator", "Function call"}; 
+    AST_PRINT("Expr node, type:{}", expr_type_debug[static_cast<int>(type)]);
+    if(tok)
+        tok->print();
+    level_space++;
+    print_child_nodes(children);
+    level_space--;
+}
+
+void ast_op::print() {
+    static const char* op_type[] = {"unary", "binary", "postfix"};
+    size_t op_index = is_postfix ? 2 : is_unary ? 0 : 1;
+    AST_PRINT("Expr {} operator", op_type[op_index]);
+    tok->print();
+    level_space++;
+    print_child_nodes(children);
+    level_space--;
+}
+
 void ast_token::print() {
     tok->print();
 }
 
-void print_ast_fn_arg(const ast* node) {
+static void print_ast_expr_stmt(const ast* node) {
+    AST_PRINT("Expr stmt");
+    level_space++;
+    print_child_nodes(node->children);
+    level_space--;
+}
+
+static void print_ast_fn_arg(const ast* node) {
     AST_PRINT("Node: fn_arg");
     level_space++;
     print_child_nodes(node->children);
     level_space--;
 }
 
-void print_ast_fn_decl(const ast* node) {
+static void print_ast_fn_decl(const ast* node) {
     AST_PRINT("Node: fn_decl");
     level_space += level_increment;
     print_child_nodes(node->children);
     level_space -= level_increment;
 }
 
-void print_ast_decl(const ast* node) {
+static void print_ast_decl(const ast* node) {
     AST_PRINT("Node: decl");
     level_space++;
     print_child_nodes(node->children);
@@ -84,6 +112,10 @@ static void print_ast_program(const ast* node) {
 
 static void print_ast_return(const ast* node) {
     AST_PRINT("Node: return statement");
+    level_space++;
+    if (node->children.size())
+        node->children[0]->print();
+    level_space--;
 }
 
 static void print_ast_null_stmt(const ast* node) {
@@ -116,6 +148,7 @@ void ast::print() {
         case AST_TYPE::NULL_STMT: print_ast_null_stmt(this); break;
         case AST_TYPE::STMT_LIST: print_ast_stmt_list(this); break;
         case AST_TYPE::FN_DEF: print_ast_fn_def(this); break;
+        case AST_TYPE::EXPR_STMT: print_ast_expr_stmt(this); break;
     }
 }
 

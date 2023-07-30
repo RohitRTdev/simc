@@ -17,3 +17,12 @@
 <stmt-list> ::= <stmt> <stmt-list> 
 
 <stmt> ::= <s_def> ";" | <decl_list> ";" | ";"
+
+<expr> ::= <expr> b_op <expr> |
+            u_op <expr>       |
+            <expr> p_op       |
+            "(" <expr> ")"    |
+            "[" <expr> "]"    |
+            <expr> "(" <expr_list>opt ")" |
+            <expr> "[" <expr> "]"         |
+            var | con

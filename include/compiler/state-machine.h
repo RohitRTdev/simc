@@ -44,10 +44,29 @@ enum parser_states {
     EXPECT_STMT_SC,
     EXPECT_NULL_STMT_SC,
     EXPECT_CRB,
+
+    //Expr
+    EXPECT_EXPR_UOP,
+    EXPECT_EXPR_VAR,
+    EXPECT_EXPR_CON,
+    EXPECT_EXPR_LB,
+    EXPECT_EXPR_POP,
+    EXPECT_EXPR_BOP,
+    EXPECT_EXPR_FN_LB,
+    EXPECT_EXPR_RB,
+    EXPECT_EXPR_COMMA,
+    EXPECT_EXPR_SC,
+    EXPECT_EXPR_UOP_S,
+    EXPECT_EXPR_VAR_S,
+    EXPECT_EXPR_CON_S,
+    EXPECT_EXPR_LB_S,
+    EXPECT_EXPR_FN_RB_S,
     
     //Notification states
     PARSER_STMT_RETURN,
-
+    LB_EXPR_REDUCE,
+    FN_CALL_EXPR_REDUCE,
+    EXPR_CONDITION_REDUCE,
     //misc
     PARSER_INVALID,
     PARSER_ERROR,   
@@ -63,6 +82,7 @@ class state_machine {
     bool advance_token;
     using fptr = bool (token::*)() const;
     using reducer = void (*)(state_machine*);
+    using sptr = std::unique_ptr<ast> (*)(const token*);
 
     struct _state {
         parser_states state;
@@ -76,6 +96,7 @@ class state_machine {
         std::string error_string;
         parser_states push_state;
         bool is_special;
+        sptr shiftfn;
     };
 
     std::vector<_state> state_path;
@@ -91,10 +112,11 @@ public:
 
     token* fetch_token(); 
     std::unique_ptr<ast> fetch_parser_stack(); 
-    
+    const token* cur_token() const; 
     void stop_token_fetch();
     void switch_state(const parser_states new_state);
     void define_state(const std::string& state_name, parser_states next_state, state_machine::fptr pcheck, parser_states alt_state, bool shift = false, reducer reduce_this = nullptr, const char* error_string = nullptr, parser_states push_state = PARSER_INVALID);
+    void define_shift_state(const std::string& state_name, parser_states next_state, state_machine::fptr pcheck, parser_states alt_state, sptr shiftfn, const char* error_string = nullptr, parser_states push_state = PARSER_INVALID);
     void define_special_state(const std::string& state_name, state_machine::fptr pcheck, reducer special_reduce, parser_states alt_state, const char* error_string = nullptr);
     void define_reduce_state(const std::string& state_name, parser_states next_state, reducer reduce_this); 
     void start();
