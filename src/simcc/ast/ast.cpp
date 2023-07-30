@@ -6,6 +6,9 @@ ast::ast(AST_TYPE _type) : type(_type)
 ast_token::ast_token(const token* _tok) : ast(AST_TYPE::TOKEN), tok(_tok)
 {}
 
+ast_token::ast_token(const token* _tok, bool is_expr) : ast(AST_TYPE::EXPR), tok(_tok)
+{}
+
 void ast::attach_node(std::unique_ptr<ast> node) {
     children.push_front(std::move(node));
 }
@@ -39,4 +42,8 @@ bool ast::is_stmt() {
 
 bool ast::is_token() {
     return type == AST_TYPE::TOKEN;
+}
+
+bool ast::is_expr() {
+    return type == AST_TYPE::EXPR;
 }

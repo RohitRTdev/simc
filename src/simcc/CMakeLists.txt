@@ -14,8 +14,8 @@ if(${COMPILER} STREQUAL GNU OR ${COMPILER} STREQUAL Clang)
     target_compile_options(code-gen PRIVATE "-fvisibility=hidden")
 endif()
 
-FILE(GLOB mod_srcs_debug *.cpp)
-string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/ast-debug.cpp;" "" mod_srcs_rel "${mod_srcs_debug}")
+FILE(GLOB mod_srcs_debug *.cpp */*.cpp)
+string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/ast/debug.cpp;" "" mod_srcs_rel "${mod_srcs_debug}")
 
 if(CMAKE_BUILD_TYPE STREQUAL Release)
     set(mod_srcs ${mod_srcs_rel})    

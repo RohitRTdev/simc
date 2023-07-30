@@ -66,3 +66,61 @@ bool token::is_constant() const {
 bool token::is_operator_eq() const {
     return type == OPERATOR && std::get<operator_type>(value) == EQUAL;
 }
+
+bool token::is_unary_operator() const {
+    if(type != OPERATOR)
+        return false;
+    
+    switch(std::get<operator_type>(value)) {
+        case PLUS:
+        case MINUS:
+        case AMPER:
+        case NOT:
+        case BIT_NOT:
+        case MUL:
+        case INCREMENT:
+        case DECREMENT: return true;
+    }
+
+    return false;
+}
+
+bool token::is_binary_operator() const {
+    if(type != OPERATOR)
+        return false;
+    
+    switch(std::get<operator_type>(value)) {
+        case PLUS:
+        case MINUS:
+        case AMPER:
+        case DIV:
+        case MODULO:
+        case SHIFT_LEFT:
+        case SHIFT_RIGHT:
+        case GT:
+        case LT:
+        case EQUAL_EQUAL:
+        case NOT_EQUAL:
+        case BIT_XOR:
+        case BIT_OR:
+        case AND:
+        case OR:
+        case EQUAL:
+        case MUL: return true;
+    }
+
+    return false;
+}
+
+bool token::is_postfix_operator() const {
+    if(type != OPERATOR)
+        return false;
+    
+    switch(std::get<operator_type>(value)) {
+        case INCREMENT:
+        case DECREMENT: return true;
+    }
+
+    return false;
+}
+

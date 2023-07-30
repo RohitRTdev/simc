@@ -39,6 +39,10 @@ static inline std::unique_ptr<ast> create_ast_ret() {
     return std::make_unique<ast>(AST_TYPE::RETURN);
 }
 
+static inline std::unique_ptr<ast> create_ast_expr_stmt() {
+    return std::make_unique<ast>(AST_TYPE::EXPR_STMT);
+}
+
 static inline std::unique_ptr<ast> create_ast_null() {
     return std::make_unique<ast>(AST_TYPE::NULL_STMT);
 }
@@ -54,4 +58,8 @@ static inline std::unique_ptr<ast> create_ast_stmt_list() {
 
 static inline std::unique_ptr<ast> create_ast_fn_def() {
     return std::make_unique<ast>(AST_TYPE::FN_DEF);
+}
+
+static inline const ast_token* cast_to_ast_token(const std::unique_ptr<ast>& node) {
+    return static_cast<ast_token*>(node.get());
 }

@@ -118,6 +118,10 @@ public:
     bool is_keyword_return() const;
     bool is_constant() const;
 
+    bool is_unary_operator() const; 
+    bool is_binary_operator() const; 
+    bool is_postfix_operator() const; 
+
 #ifdef SIMDEBUG
     void print() const;
 #endif
