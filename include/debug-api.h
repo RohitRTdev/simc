@@ -22,3 +22,4 @@
     #define CRITICAL_ASSERT( cond, msg, ... ) { if(!cond) {std::cout << "[CRITICAL_ERROR]:" << fmt::format(msg __VA_OPT__(,) __VA_ARGS__) << std::endl; std::exit(-2);}}
 #endif
 
+#define CRITICAL_ASSERT_NOW(msg, ... ) CRITICAL_ASSERT(false, msg, __VA_ARGS__)

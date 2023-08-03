@@ -76,7 +76,7 @@ private:
     bool is_data_type() const;
 
 public:
-    std::variant<size_t, char, std::string, operator_type, keyword_type> value;
+    std::variant<char, std::string, operator_type, keyword_type> value;
 
     token(token_type type);
 
@@ -85,17 +85,10 @@ public:
         value = val;
     }
 
-    token(token_type _type, const size_t& num) {
+    token(token_type _type, token_sub_type _sub_type, const std::string& num) {
         type = CONSTANT;
-        sub_type = TOK_INT;
+        sub_type = _sub_type;
         value = num;
-    }
-
-    token(token_type _type, const std::string& val) {
-        type = _type;
-        if (_type == CONSTANT)
-            sub_type = TOK_STRING;
-        value = val;
     }
 
     token(token_type _type, const char& val) {

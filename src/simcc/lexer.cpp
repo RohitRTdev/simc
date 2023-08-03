@@ -121,7 +121,7 @@ void lex(const std::vector<char>& input) {
     tokens.clear();
         
     operator_type prev_op;
-    size_t num = 0, start_pos = 0, literal_count = 0;
+    size_t start_pos = 0, literal_count = 0;
     for(int i = 0; i < input.size(); i++) {
         char ch = input[i];
         operator_type op;
@@ -165,7 +165,7 @@ void lex(const std::vector<char>& input) {
             if(ch == '\"') {
                 std::string literal(input.begin()+start_pos+1, input.begin()+start_pos+literal_count+1);
                 sim_log_debug("Pushing string constant:{} with literal_count: {}", literal, literal_count);
-                tokens.push_back(token(CONSTANT, literal));
+                tokens.push_back(token(CONSTANT, TOK_STRING, literal));
                 state = LEXER_START;
                 continue;
             }
@@ -175,15 +175,15 @@ void lex(const std::vector<char>& input) {
 
         if(state == EXPECTING_INTEGER_CONSTANT) {
             if(isdigit(ch)) {
-                size_t digit = ch - '0';
-                num = num * 10 + digit;
+                literal_count++;
             }
             else if(isalpha(ch) || ch == '_') {
                 sim_log_error("Variable names are not supposed to start with a digit.");
             }
             else {
-                tokens.push_back(token(CONSTANT, num));
-                sim_log_debug("Pushed integer token:{}", num);
+                std::string num_literal(input.begin()+start_pos, input.begin()+start_pos+literal_count);
+                tokens.push_back(token(CONSTANT, TOK_INT, num_literal));
+                sim_log_debug("Pushed integer token:{}", num_literal);
                 state = LEXER_START;
             }
 
@@ -343,7 +343,8 @@ void lex(const std::vector<char>& input) {
         if(state == LOOKAHEAD_FOR_CONSTANT) {
             if(isdigit(ch)) {
                 sim_log_debug("Found digit.. Switching state to EXPECTING_INTEGER_CONSTANT");
-                num = ch - '0';
+                start_pos = i;
+                literal_count = 1;
                 state = EXPECTING_INTEGER_CONSTANT;
             }
             else if(isalpha(ch) || ch == '_') {

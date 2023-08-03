@@ -16,7 +16,7 @@ void token::print() const {
         case OPERATOR: AST_PRINT("type:Operator op:{}", op_debug[std::get<operator_type>(value)]); break;
         case CONSTANT: {
             if(sub_type == TOK_INT)
-                AST_PRINT("type:INT_CONSTANT value:{}", std::get<size_t>(value));
+                AST_PRINT("type:INT_CONSTANT value:{}", std::get<std::string>(value));
             else if(sub_type == TOK_CHAR)
                 AST_PRINT("type:CHAR_CONSTANT value:{}", std::get<char>(value));
             else
