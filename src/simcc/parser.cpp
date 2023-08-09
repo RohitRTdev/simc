@@ -436,7 +436,7 @@ void parse_init() {
 
 
 
-void parse() {
+std::unique_ptr<ast> parse() {
     
     static bool init_complete = false;
 
@@ -446,9 +446,14 @@ void parse() {
     }
 
     parser.start();
+
     auto prog = reduce_program(&parser);
+    CRITICAL_ASSERT(parser.parser_stack.empty(), "Parser stack not empty after parse");
 
 #ifdef SIMDEBUG
+    sim_log_debug("Printing AST");
     prog->print();
-#endif 
+#endif
+
+    return prog;
 }

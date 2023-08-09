@@ -1,2 +1,9 @@
+#pragma once
+
+#include "compiler/ast.h"
+
 void lex(const std::vector<char>& input);
-void parse();
+std::unique_ptr<ast> parse();
+void eval(std::unique_ptr<ast>);
+
+extern std::string asm_code;

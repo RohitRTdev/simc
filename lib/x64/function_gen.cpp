@@ -91,5 +91,10 @@ void x64_func::generate_code() {
 
     std::string endframe = INSTRUCTION("leave\n\tret");
 
-    code = fn_name + ":\n" + frame1 + frame2 + frame3 + code + endframe; 
+    std::string frame;
+    if(code.size())
+        frame = frame1 + frame2 + frame3 + code + endframe;
+    else
+        frame = "\tnop\n\tret";
+    code = fn_name + ":\n" + frame; 
 }

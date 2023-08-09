@@ -8,11 +8,13 @@
 
 #define FILE_READ_CHUNK_SIZE 256
 
+std::string asm_code;
+
 static void start_compilation(const std::vector<char>& file_input) {
-    
+
     lex(file_input);    
-    parse();
-    
+    auto prog = parse();
+    eval(std::move(prog));
 }
 
 static void dump_buffer(const std::vector<char>& buf) {
@@ -53,8 +55,18 @@ std::vector<char> read_file(const std::string& file_name) {
     return f_buf;
 }
 
-int app_start(int argc, char** argv) {
+static void write_file(const std::string& name, std::string_view code) {
+    std::ofstream file_intf(name, std::ios::binary);
 
+    if(!file_intf.is_open()) {
+        sim_log_error("Could not create output file:{}", name);
+    }
+
+    file_intf.write(code.data(), code.size());
+}
+
+int app_start(int argc, char** argv) {
+    
     if(argc <= 1) {
         sim_log_error("Please input atleast 1 file..");
         return -1;
@@ -70,25 +82,10 @@ int app_start(int argc, char** argv) {
         auto file_info_buf = read_file(file);
         sim_log_debug("File size: {}", file_info_buf.size());
         start_compilation(file_info_buf);
+        write_file("out.s", asm_code);
     }
 
-    sim_log_debug("Printing code...");
-    auto unit = create_translation_unit();
-    int var1 = unit->declare_global_variable("john", C_INT);
-    int var2 = unit->declare_global_variable("gone", C_INT);
-    auto fn = unit->add_function("main");
-    int var1_fn = fn->fetch_global_var_int(var1);
-    int exp1 = fn->add_int_c(var1, "25");
-    int local_var = fn->declare_local_variable("a", C_INT);
-    fn->assign_global_var_int(var2, exp1);
-    fn->assign_global_var_int_c(var1, "5");
-    var1_fn = fn->fetch_global_var_int(var1);
-    fn->assign_var_int(local_var, var1_fn);
-    unit->generate_code();
-    auto code = unit->fetch_code();
-    std::cout << code << std::endl;
+    std::cout << "Compilation successful" << std::endl;  
 
-    std::cout << "Compilation successful" << std::endl;    
     return 0;
-
 }

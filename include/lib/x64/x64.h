@@ -41,10 +41,9 @@ public:
     Ifunc_translation* add_function(const std::string& name) override;
     void generate_code() override;
 
-    const std::string& fetch_global_variable(int id) const;
+    std::string_view fetch_global_variable(int id) const;
 
     ~x64_tu() override;
-
 };
 
 class x64_func : public Ifunc_translation {

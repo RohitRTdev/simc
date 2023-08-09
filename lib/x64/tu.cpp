@@ -4,7 +4,7 @@
 x64_tu::x64_tu() : global_var_id(0)
 {}
 
-const std::string& x64_tu::fetch_global_variable(int id) const {
+std::string_view x64_tu::fetch_global_variable(int id) const {
     return globals[id-1].name;
 }
 
@@ -50,17 +50,27 @@ void x64_tu::generate_code() {
         add_inst_to_code(fn_name_list);
     }
 
-
-    if(global_var_id) {
-        add_inst_to_code(".section .bss\n");
-    }
+    std::string bss_section = ".section .bss\n";
+    std::string data_section = ".section .data\n";
+    bool data_section_present = false, bss_section_present = false;
     
     for(const auto& var : globals) {
-        if(var.value.size())
-            add_inst_to_code(fmt::format("{}:\n\t.{} {}\n", var.name, global_type_names[var.type], var.value));
-        else 
-            add_inst_to_code(fmt::format("{}:\n\t.zero {}\n", var.name, global_type_sizes[var.type]));
+        if(var.value.size()) {
+            data_section.append(fmt::format("{}:\n\t.{} {}\n", var.name, global_type_names[var.type], var.value));
+            data_section_present = true;
+        }
+        else {
+            bss_section.append(fmt::format("\t.comm {}, {}\n", var.name, global_type_sizes[var.type]));
+            bss_section_present = true;
+        }
     }
+
+    if(data_section_present)
+        add_inst_to_code(data_section);
+   
+    if(bss_section_present)
+        add_inst_to_code(bss_section);
+
 
     if(fn_list.size()) {
         add_inst_to_code(".section .text\n");
@@ -79,6 +89,8 @@ Itranslation* create_translation_unit() {
 }
 
 x64_tu::~x64_tu() {
-    for(auto& [fn, var]: fn_list)
+    for(auto [fn, size]: fn_list) {
+        sim_log_debug("Deleting function instances");
         delete fn;
+    }
 }

@@ -29,13 +29,16 @@ public:
     void attach_node(std::unique_ptr<ast> node); 
     std::unique_ptr<ast> remove_node(); 
 
-    bool is_decl_list(); 
-    bool is_decl(); 
-    bool is_fn_arg();
-    bool is_stmt();
-    bool is_token();
-    bool is_expr(); 
-
+    bool is_decl_list() const; 
+    bool is_decl() const; 
+    bool is_fn_decl() const;
+    bool is_fn_arg() const;
+    bool is_stmt() const;
+    bool is_token() const;
+    bool is_expr() const; 
+    bool is_prog() const;
+    bool is_fn_def() const;
+    
 #ifdef SIMDEBUG
     virtual void print();
 #endif 
