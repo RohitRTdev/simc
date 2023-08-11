@@ -19,6 +19,7 @@
     #define sim_log_debug( ... )
     #define sim_log_warn( ... )
     #define sim_log_error( msg, ... ) {std::cout << "[ERROR]:" << fmt::format(msg __VA_OPT__(,) __VA_ARGS__) << std::endl; std::exit(-1);}
-    #define CRITICAL_ASSERT( cond, msg, ... ) { if(!cond) {std::cout << "[CRITICAL_ERROR]:" << fmt::format(msg __VA_OPT__(,) __VA_ARGS__) << std::endl; std::exit(-2);}}
+    #define CRITICAL_ASSERT( cond, msg, ... ) { if(!(cond)) {std::cout << "[CRITICAL_ERROR]:" << fmt::format(msg __VA_OPT__(,) __VA_ARGS__) << std::endl; std::exit(-2);}}
 #endif
 
+#define CRITICAL_ASSERT_NOW(msg, ... ) CRITICAL_ASSERT(false, msg, __VA_ARGS__)

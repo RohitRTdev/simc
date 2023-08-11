@@ -1,19 +1,23 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <variant>
 #include "spdlog/fmt/fmt.h"
 #include "lib/dll.h"
 
-#define INSTRUCTION( msg, ... ) fmt::format("\t" msg "\n" __VA_OPT__(,) __VA_ARGS__)
+#define LINE(msg) msg "\n"
+#define INSTRUCTION( msg, ... ) fmt::format("\t" LINE(msg) __VA_OPT__(,) __VA_ARGS__)
 
 enum c_type {
     C_INT, 
-    C_CHAR
+    C_CHAR,
+    C_LONGINT
 };
 
 struct c_var {
     std::string name;
     c_type type;
+    std::string value;
 };
 
 class Itrbase {
@@ -33,21 +37,26 @@ class Ifunc_translation : public Itrbase {
 public:
 //Declaration
     virtual int declare_local_variable(const std::string& name, c_type type) = 0;
+    virtual void free_result(int exp_id) = 0;
 
 //Assign variable
-    virtual void assign_ii(int var_id1, int var_id2) = 0;
-    virtual void assign_ic(int var_id1, int constant) = 0;
-    virtual void assign_ir(int var_id, int exp_id) = 0;
-    virtual void assign_to_mem_i(int exp_id, int var_id) = 0;
-    virtual void assign_to_mem_r(int exp_id1, int exp_id2) = 0;
-    virtual void assign_to_mem_c(int exp_id, int constant) = 0;
+    virtual void assign_var_int(int var_id, int id) = 0; 
+    virtual void assign_var_int_c(int var_id, std::string_view constant) = 0; 
+    virtual void assign_to_mem_int(int id1, int id2) = 0;
+    virtual void assign_to_mem_int_c(int id, std::string_view constant) = 0;
+    virtual int fetch_global_var_int(int id) = 0;
+    virtual void assign_global_var_int(int id, int expr_id) = 0;
+    virtual void assign_global_var_int_c(int id, std::string_view constant) = 0;
 
 //Addition operation
-    virtual int add_ii(int var_id1, int var_id2) = 0;
-    virtual int add_ic(int var_id, int constant) = 0;
-    virtual int add_ri(int exp_id, int var_id) = 0;
-    virtual int add_rc(int exp_id, int constant) = 0;
-    virtual int add_rr(int exp_id1, int exp_id2) = 0;
+    virtual int add_int(int id1, int id2) = 0; 
+    virtual int add_int_c(int id, std::string_view constant) = 0; 
+
+//Branch operation
+    virtual int create_label() = 0;
+    virtual void add_label(int label_id) = 0;
+    virtual void branch_return(int exp_id) = 0;
+    virtual void fn_return(int exp_id) = 0;
 
     virtual void generate_code() = 0;
 
@@ -55,10 +64,13 @@ public:
 };
 
 class Itranslation : public Itrbase {
-    std::string body;
 public:
-    virtual Ifunc_translation* add_function(std::string name, const std::vector<c_var>& decl_list, c_type ret_type);
+    virtual Ifunc_translation* add_function(const std::string& name) = 0;
+    virtual int declare_global_variable(const std::string& name, c_type type) = 0;
+    virtual int declare_global_variable(const std::string& name, c_type type, std::string_view constant) = 0;
+    virtual void generate_code() = 0;
 
+    virtual ~Itranslation() = default;
 };
 
-DLL_ATTRIB Ifunc_translation* create_function_translation_unit(); 
+DLL_ATTRIB Itranslation* create_translation_unit(); 

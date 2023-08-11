@@ -1,9 +1,9 @@
 
 int board, way;
 
-void mymy; int gaga, gugu;
-char this_should_work, great = 'a', fair, mare;
+int mymy; int gaga, gugu;
+int this_should_work, great = 101, fair, mare;
 
-void fn();
-int code_fn(int, int b);
-char test(char, char, int a, int, int, char, int _);
+int fn() {}
+int code_fn(int a, int b) {}
+int test(int, int a, int, int, int _);
