@@ -38,6 +38,9 @@ public:
     bool is_expr() const; 
     bool is_prog() const;
     bool is_fn_def() const;
+    bool is_null_stmt() const;
+    bool is_ret_stmt() const;
+    bool is_stmt_list() const;
     
 #ifdef SIMDEBUG
     virtual void print();

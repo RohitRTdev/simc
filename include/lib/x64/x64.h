@@ -12,6 +12,16 @@
 extern std::vector<std::string> regs_64;
 extern std::vector<std::string> regs_32;
 
+enum registers {
+    RAX,
+    RBX,
+    RCX,
+    RDX,
+    RSI,
+    RDI
+};
+
+
 struct c_expr_x64 {
     bool is_var; //A variable is always loaded into a mem location, but can also be present in a register
     bool is_local; //Tells if it is local or global variable
@@ -31,7 +41,6 @@ class x64_tu : public Itranslation {
     std::vector<c_var> globals;
     std::vector<std::pair<x64_func*, size_t>>  fn_list;
     size_t global_var_id;
-
 public:
     
     x64_tu();
@@ -56,6 +65,8 @@ class x64_func : public Ifunc_translation {
     int cur_offset;
     x64_tu* parent;
     const std::string fn_name; 
+    static int new_label_id;
+    int ret_label_id;
 
     int advance_offset_32() {
         cur_offset = -ALIGN(cur_offset, 4) - 4;
@@ -109,37 +120,7 @@ class x64_func : public Ifunc_translation {
             reg++;
         }
 
-        int offset = 0;
-        bool found_existing_cache = false;
-        for(auto& loc: id_list) {
-            if(loc.is_var && loc.id == reg_status_list[reg]) {
-                found_existing_cache = true;
-                break;
-            }
-            else if(!loc.is_var && !loc.cached) {
-                sim_log_debug("Found existing free stack location with previous exp_id:{}", loc.id);
-                loc.cached = true;
-                loc.id = reg_status_list[reg];
-                offset = loc.loc.offset;
-
-                found_existing_cache = true;
-                break;
-            }
-        }
-        if(!found_existing_cache) {
-            offset = advance_offset_32();
-            c_expr_x64 tmp;
-            tmp.id = reg_status_list[reg];
-            tmp.cached = true;
-            tmp.loc.offset = offset;
-            tmp.is_var = false;
-
-            id_list.push_back(tmp);
-        }
-        
-        sim_log_debug("Freeing {} register to stack at offset:{}", regs_32[reg], offset);
-
-        add_inst_to_code(INSTRUCTION("movl %{}, {}(%rbp)", regs_32[reg], offset));
+        flush_register(static_cast<registers>(reg));
 
         if(!exp_id) {
             reg_status_list[reg] = new_id++;
@@ -192,12 +173,88 @@ class x64_func : public Ifunc_translation {
         CRITICAL_ASSERT_NOW("fetch_var() called with incorrect var_id");
     }
 
+    void flush_register(enum registers reg_idx) {
+        
+        int offset = 0;
+        bool found_existing_cache = false;
+        for(auto& loc: id_list) {
+            if(loc.is_var && loc.id == reg_status_list[reg_idx]) {
+                found_existing_cache = true;
+                break;
+            }
+            else if(!loc.is_var && !loc.cached) {
+                sim_log_debug("Found existing free stack location with previous exp_id:{}", loc.id);
+                loc.cached = true;
+                loc.id = reg_status_list[reg_idx];
+                offset = loc.loc.offset;
+                found_existing_cache = true;
+                break;
+            }
+        }
+
+        if(!found_existing_cache) {
+            c_expr_x64 tmp{};
+            tmp.cached = true;
+            tmp.id = reg_status_list[reg_idx];
+            offset = tmp.loc.offset = advance_offset_32();
+            tmp.is_var = false;
+
+            reg_status_list[reg_idx] = 0;
+            id_list.push_back(tmp);
+
+        }
+        
+        sim_log_debug("Freeing {} register to stack at offset:{}", regs_32[reg_idx], offset);
+
+        add_inst_to_code(INSTRUCTION("movl %{}, {}(%rbp)", regs_32[reg_idx], offset));
+
+        free_reg(reg_idx);
+    }
+
+    void transfer_to_reg(enum registers reg_idx, int exp_id) {
+        
+        if(reg_status_list[reg_idx] == exp_id)
+            return;
+        
+        if(reg_status_list[reg_idx]) {
+            flush_register(reg_idx);
+        }
+
+        for(int i = 0; i < NUM_REGS; i++) {
+            if(reg_status_list[i] == exp_id) {
+                if(i != reg_idx) {
+                    reg_status_list[reg_idx] = exp_id;
+                    free_reg(static_cast<registers>(i));
+                    add_inst_to_code(INSTRUCTION("movl %{}, %{}", regs_32[i], regs_32[reg_idx]));
+                    return;
+                }
+            }
+        }
+
+        for(auto& loc: id_list) {
+            if(loc.id == exp_id) {
+                if(!loc.is_var) {
+                    loc.cached = false;
+                }
+                reg_status_list[reg_idx] = exp_id;
+                add_inst_to_code(INSTRUCTION("movl {}(%rbp), %{}", loc.loc.offset, regs_32[reg_idx]));
+                return;
+            }
+        }
+
+        CRITICAL_ASSERT_NOW("transfer_to_reg() couldn't find exp_id in id_list or reg_status_list");
+    }
+
+    void free_reg(enum registers reg_idx) {
+        reg_status_list[reg_idx] = 0;
+    }
 
 public:
 
     x64_func(const std::string& name, x64_tu* parent, size_t id_allowed);
 //declaration
     int declare_local_variable(const std::string& name, c_type type) override;
+    void free_result(int exp_id) override;
 
 //Assign variable
     void assign_var_int(int var_id1, int var_id2) override; 
@@ -211,7 +268,13 @@ public:
 //Addition operation
     int add_int(int id1, int id2) override; 
     int add_int_c(int id, std::string_view constant) override; 
-    
+
+//Branch operation
+    int create_label() override;
+    void add_label(int label_id) override;
+    void branch_return(int exp_id) override;
+    void fn_return(int exp_id) override;
+
     void generate_code() override;
 
     std::string fetch_fn_name() const {

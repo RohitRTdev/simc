@@ -40,6 +40,10 @@ bool ast::is_stmt() const {
     return false;
 }
 
+bool ast::is_stmt_list() const {
+    return type == AST_TYPE::STMT_LIST;
+}
+
 bool ast::is_token() const {
     return type == AST_TYPE::TOKEN;
 }
@@ -58,4 +62,12 @@ bool ast::is_fn_decl() const {
 
 bool ast::is_fn_def() const {
     return type == AST_TYPE::FN_DEF;
+}
+
+bool ast::is_null_stmt() const {
+    return type == AST_TYPE::NULL_STMT;
+}
+
+bool ast::is_ret_stmt() const {
+    return type == AST_TYPE::RETURN;
 }

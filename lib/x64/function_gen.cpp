@@ -4,8 +4,10 @@
 std::vector<std::string> regs_64 = {"rax", "rbx", "rcx", "rdx", "rsi", "rdi"};
 std::vector<std::string> regs_32 = {"eax", "ebx", "ecx", "edx", "esi", "edi"};
 
+int x64_func::new_label_id = 0;
+
 x64_func::x64_func(const std::string& name, x64_tu* _parent, size_t ids): new_id(1), cur_offset(0), 
-fn_name(name), parent(_parent), threshold_id(ids) {
+fn_name(name), parent(_parent), threshold_id(ids), ret_label_id(0) {
     //0 indicates reg is free
     for(size_t reg_idx = 0; reg_idx < NUM_REGS; reg_idx++) {
         reg_status_list[reg_idx] = 0;
@@ -80,6 +82,26 @@ int x64_func::declare_local_variable(const std::string& name, c_type type) {
     return var.id;
 }
 
+void x64_func::free_result(int exp_id) {
+    sim_log_debug("Freeing expr_id:{}", exp_id);
+    for(auto& reg: reg_status_list) {
+        if(reg == exp_id) {
+            reg = 0;
+            break;
+        }
+    }
+
+    for(auto& loc: id_list) {
+        if(loc.id == exp_id) {
+            if(!loc.cached) {
+                sim_log_debug("exp_id:{} already freed up in stack location", exp_id);
+            }
+            loc.is_var = loc.cached = false;
+            break;
+        }
+    }
+}
+
 void x64_func::generate_code() {
     std::string frame1 = INSTRUCTION("pushq %rbp"); 
     std::string frame2 = INSTRUCTION("movq %rsp, %rbp");
@@ -90,6 +112,9 @@ void x64_func::generate_code() {
         frame3 = INSTRUCTION("subq ${}, %rsp", -cur_offset); 
 
     std::string endframe = INSTRUCTION("leave\n\tret");
+
+    if(ret_label_id)
+        endframe = fmt::format(LINE(".L{}:"), ret_label_id) + endframe;
 
     std::string frame;
     if(code.size())

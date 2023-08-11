@@ -108,9 +108,10 @@ public:
     bool is_operator_clb() const; 
     bool is_operator_crb() const;
     bool is_operator_eq() const; 
+    bool is_operator_plus() const;
     bool is_keyword_return() const;
     bool is_constant() const;
-
+    bool is_integer_constant() const;
     bool is_unary_operator() const; 
     bool is_binary_operator() const; 
     bool is_postfix_operator() const; 

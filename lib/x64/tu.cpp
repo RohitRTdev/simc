@@ -40,27 +40,18 @@ void x64_tu::generate_code() {
     static const char* global_type_names[] = {"long", "byte", "quad"};
     static const char* global_type_sizes[] = {"4", "1", "8"};
     
-    if(fn_list.size()) {
-        std::string fn_name_list = ".global ";
-        for(int i = 0; i < fn_list.size() - 1; i++)
-            fn_name_list += fn_list[i].first->fetch_fn_name() + ", ";
-        
-        fn_name_list += fn_list[fn_list.size()-1].first->fetch_fn_name() + "\n";
-
-        add_inst_to_code(fn_name_list);
-    }
-
-    std::string bss_section = ".section .bss\n";
-    std::string data_section = ".section .data\n";
+    std::string bss_section = LINE(".section .bss");
+    std::string data_section = LINE(".section .data");
     bool data_section_present = false, bss_section_present = false;
     
     for(const auto& var : globals) {
         if(var.value.size()) {
-            data_section.append(fmt::format("{}:\n\t.{} {}\n", var.name, global_type_names[var.type], var.value));
+            data_section.append(fmt::format(LINE(".global {}"), var.name));
+            data_section.append(fmt::format(LINE("{}:\n\t.{} {}"), var.name, global_type_names[var.type], var.value));
             data_section_present = true;
         }
         else {
-            bss_section.append(fmt::format("\t.comm {}, {}\n", var.name, global_type_sizes[var.type]));
+            bss_section.append(INSTRUCTION(".comm {}, {}", var.name, global_type_sizes[var.type]));
             bss_section_present = true;
         }
     }
@@ -73,12 +64,13 @@ void x64_tu::generate_code() {
 
 
     if(fn_list.size()) {
-        add_inst_to_code(".section .text\n");
+        add_inst_to_code(LINE(".section .text"));
     }
     for(auto& [fn, var] : fn_list) {
         fn->generate_code();
+        add_inst_to_code(fmt::format(LINE(".global {}"), fn->fetch_fn_name()));
         add_inst_to_code(fn->fetch_code());
-        add_inst_to_code("\n");
+        add_inst_to_code(LINE());
     }
 }
 

@@ -87,7 +87,7 @@ bool ast_expr::is_var() const {
 }
 
 bool ast_expr::is_con() const {
-    return type == EXPR_TYPE::VAR;
+    return type == EXPR_TYPE::CON;
 }
 
 bool ast_expr::is_operator() const {

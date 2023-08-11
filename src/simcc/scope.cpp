@@ -5,6 +5,10 @@
 scope::scope(scope* _parent) : parent(_parent)
 {}
 
+scope* scope::fetch_parent_scope() {
+    return parent;
+}
+
 void scope::redefine_symbol_check(std::string_view symbol) {
     for(const auto& var: variables) {
         if(var.var.name == symbol) {
@@ -20,14 +24,15 @@ void scope::redefine_symbol_check(std::string_view symbol) {
 }
 
 
-int scope::fetch_var_id(std::string_view symbol) {
+var_info& scope::fetch_var_info(std::string_view symbol) {
     
     scope* search_scope = this;
     sim_log_debug("Searching for symbol:{}", symbol);
     while(search_scope) {
-        for(const auto& var: search_scope->variables) {
+        for(auto& var: search_scope->variables) {
             if(var.var.name == symbol) {
-                return var.var_id;
+                sim_log_debug("Found var_id:{} for symbol:{}", var.var_id, var.var.name);
+                return var;
             }
 
         }
@@ -36,31 +41,30 @@ int scope::fetch_var_id(std::string_view symbol) {
         search_scope = search_scope->parent;
     }
 
-    CRITICAL_ASSERT_NOW("fetch_var_id() called with invalid symbol name:{}", symbol);
-    return 0;
+    sim_log_error("Variable:{} seems to be undefined", symbol);
 }
 
-void scope::add_variable(int id, std::string_view name, c_type type) {
+void scope::add_variable(int id, std::string_view name, c_type type, bool is_global) {
     redefine_symbol_check(name);
-    scope::var_info var{};
+    var_info var{};
     var.var.name = name;
     var.var.type = type;
-
     var.var_id = id;
+    var.is_global = is_global;
 
     sim_log_debug("Declaring variable:{} of type:{}", name, type);
 
     variables.push_back(var); 
 }
 
-void scope::add_variable(int id, std::string_view name, c_type type, std::string_view value) {
-    add_variable(id, name, type);
+void scope::add_variable(int id, std::string_view name, c_type type, std::string_view value, bool is_global) {
+    add_variable(id, name, type, is_global);
     variables[variables.size()-1].var.value = value;
 }
 
 void scope::add_function(const token* name, const token* type, const std::vector<c_type>& arg_list) {
     redefine_symbol_check(std::get<std::string>(name->value));
-    scope::fn_info fn{false, type, name, arg_list};
+    fn_info fn{false, type, name, arg_list};
 
     sim_log_debug("Declaring function:{}", std::get<std::string>(name->value));
     functions.push_back(fn);

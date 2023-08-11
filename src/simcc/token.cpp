@@ -63,6 +63,10 @@ bool token::is_constant() const {
     return type == CONSTANT;
 }
 
+bool token::is_integer_constant() const {
+    return is_constant() && sub_type == TOK_INT;
+}
+
 bool token::is_operator_eq() const {
     return type == OPERATOR && std::get<operator_type>(value) == EQUAL;
 }
@@ -124,3 +128,6 @@ bool token::is_postfix_operator() const {
     return false;
 }
 
+bool token::is_operator_plus() const {
+    return type == OPERATOR && std::get<operator_type>(value) == PLUS;
+}
