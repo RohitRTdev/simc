@@ -41,7 +41,7 @@ public:
     bool is_null_stmt() const;
     bool is_ret_stmt() const;
     bool is_stmt_list() const;
-    
+    bool is_expr_stmt() const;
 #ifdef SIMDEBUG
     virtual void print();
 #endif 

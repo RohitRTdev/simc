@@ -40,6 +40,10 @@ static expr_result eval_expr(std::unique_ptr<ast> expr, Ifunc_translation* fn) {
     };
 
     auto pop_res_stack = [&] {
+        
+        if(res_stack.empty())
+            return expr_result{};
+        
         auto _val = res_stack.top();
         res_stack.pop();
         return _val;
@@ -137,7 +141,7 @@ static expr_result eval_expr(std::unique_ptr<ast> expr, Ifunc_translation* fn) {
 
                     if(is_assignable_context())
                         res_stack.push(res2);
-                    else {
+                    else if(!context_stack.empty()) {
                         int local_id = fn->fetch_global_var_int(res2.global_id);
                         expr_result tmp{};
                         tmp.eval_type = C_INT;
@@ -198,9 +202,18 @@ static expr_result eval_expr(std::unique_ptr<ast> expr, Ifunc_translation* fn) {
         }
     }
 
-
     return pop_res_stack();
 }
+
+static void eval_expr_stmt(std::unique_ptr<ast> cur_stmt, Ifunc_translation* fn) {
+
+    auto res = eval_expr(std::move(cur_stmt->children[0]), fn);
+
+    if(res.expr_id)
+        fn->free_result(res.expr_id);
+
+}
+
 
 static void eval_ret_stmt(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation* fn, bool is_branch = false) {
     if(!cur_stmt_list->children.size()) {
@@ -243,6 +256,9 @@ static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation
         }
         else if(stmt->is_ret_stmt()) {
             eval_ret_stmt(std::move(stmt), fn);
+        }
+        else if(stmt->is_expr_stmt()) {
+            eval_expr_stmt(std::move(stmt), fn);
         }
         else if(stmt->is_null_stmt())
             continue;

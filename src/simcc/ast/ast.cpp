@@ -71,3 +71,8 @@ bool ast::is_null_stmt() const {
 bool ast::is_ret_stmt() const {
     return type == AST_TYPE::RETURN;
 }
+
+bool ast::is_expr_stmt() const {
+    return type == AST_TYPE::EXPR_STMT;
+}
+
