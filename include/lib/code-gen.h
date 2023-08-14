@@ -40,13 +40,13 @@ public:
     virtual void free_result(int exp_id) = 0;
 
 //Assign variable
-    virtual void assign_var_int(int var_id, int id) = 0; 
-    virtual void assign_var_int_c(int var_id, std::string_view constant) = 0; 
+    virtual int assign_var_int(int var_id, int id) = 0; 
+    virtual int assign_var_int_c(int var_id, std::string_view constant) = 0; 
     virtual void assign_to_mem_int(int id1, int id2) = 0;
     virtual void assign_to_mem_int_c(int id, std::string_view constant) = 0;
     virtual int fetch_global_var_int(int id) = 0;
-    virtual void assign_global_var_int(int id, int expr_id) = 0;
-    virtual void assign_global_var_int_c(int id, std::string_view constant) = 0;
+    virtual int assign_global_var_int(int id, int expr_id) = 0;
+    virtual int assign_global_var_int_c(int id, std::string_view constant) = 0;
 
 //Addition operation
     virtual int add_int(int id1, int id2) = 0; 

@@ -16,17 +16,21 @@ fn_name(name), parent(_parent), threshold_id(ids), ret_label_id(0) {
         
 }
 
-void x64_func::assign_var_int(int var_id, int id) {
+int x64_func::assign_var_int(int var_id, int id) {
     int offset = fetch_var(var_id).loc.offset;
     int reg = fetch_result(id);
 
     add_inst_to_code(INSTRUCTION("movl %{}, {}(%rbp)", regs_32[reg], offset));
+
+    return var_id;
 }
 
-void x64_func::assign_var_int_c(int var_id, std::string_view constant) {
+int x64_func::assign_var_int_c(int var_id, std::string_view constant) {
     
     int offset = fetch_var(var_id).loc.offset;
     add_inst_to_code(INSTRUCTION("movl ${}, {}(%rbp)", constant, offset));
+
+    return var_id;
 }
 
 void x64_func::assign_to_mem_int(int id1, int id2) {
@@ -54,17 +58,21 @@ int x64_func::fetch_global_var_int(int id) {
     return reg_status_list[reg];
 }
 
-void x64_func::assign_global_var_int(int id, int expr_id) {
+int x64_func::assign_global_var_int(int id, int expr_id) {
     CRITICAL_ASSERT(id <= threshold_id, "Global var id:{} exceeds threshold:{}", id, threshold_id);
     
     int reg = fetch_result(expr_id);
     add_inst_to_code(INSTRUCTION("movl %{}, {}(%rip)", regs_32[reg], parent->fetch_global_variable(id)));
+
+    return id;
 }
 
-void x64_func::assign_global_var_int_c(int id, std::string_view constant) {
+int x64_func::assign_global_var_int_c(int id, std::string_view constant) {
     CRITICAL_ASSERT(id <= threshold_id, "Global var id:{} exceeds threshold:{}", id, threshold_id);
 
     add_inst_to_code(INSTRUCTION("movl ${}, {}(%rip)", constant, parent->fetch_global_variable(id)));
+
+    return id;
 }
 
 int x64_func::declare_local_variable(const std::string& name, c_type type) {
@@ -92,11 +100,11 @@ void x64_func::free_result(int exp_id) {
     }
 
     for(auto& loc: id_list) {
-        if(loc.id == exp_id) {
+        if(loc.id == exp_id && !loc.is_var) {
             if(!loc.cached) {
                 sim_log_debug("exp_id:{} already freed up in stack location", exp_id);
             }
-            loc.is_var = loc.cached = false;
+            loc.cached = false;
             break;
         }
     }

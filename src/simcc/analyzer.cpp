@@ -13,11 +13,21 @@ struct expr_result {
     bool is_lvalue;
     const token* constant;
     const token* variable;
+    bool is_global;
+    int global_id;
 };
 
 static expr_result eval_expr(std::unique_ptr<ast> expr, Ifunc_translation* fn) {
     std::stack<expr_result> res_stack;
     std::stack<std::unique_ptr<ast>> op_stack;
+
+
+    enum eval_context {
+        NORMAL,
+        ASSIGNABLE
+    };
+
+    std::stack<eval_context> context_stack;
 
     auto opt_release_stack = [&] {
         if(op_stack.empty()) {
@@ -35,6 +45,15 @@ static expr_result eval_expr(std::unique_ptr<ast> expr, Ifunc_translation* fn) {
         return _val;
     };
 
+    auto is_assignable_context = [&] {
+        return !context_stack.empty() && context_stack.top() == ASSIGNABLE;
+    };
+
+    auto pop_context_stack = [&] {
+        if(!context_stack.empty())
+            context_stack.pop();
+    };
+
     sim_log_debug("Evaluating expression");
     while(!op_stack.empty() || expr) {
         auto _expr = cast_to_ast_expr(expr);
@@ -43,7 +62,10 @@ static expr_result eval_expr(std::unique_ptr<ast> expr, Ifunc_translation* fn) {
 #endif
         if(_expr->is_con()) {
             CRITICAL_ASSERT(_expr->tok->is_integer_constant(), "Only integer constants supported now");
-            expr_result tmp{C_INT, 0, false, _expr->tok, nullptr};
+            expr_result tmp{};
+            tmp.eval_type = C_INT;
+            tmp.is_lvalue = false;
+            tmp.constant = _expr->tok;
 
             res_stack.push(tmp);
             opt_release_stack();
@@ -52,60 +74,127 @@ static expr_result eval_expr(std::unique_ptr<ast> expr, Ifunc_translation* fn) {
             auto& var = current_scope->fetch_var_info(std::get<std::string>(_expr->tok->value));
             CRITICAL_ASSERT(var.var.type == C_INT, "Only integer type variables supported now");
 
-            int local_id = var.var_id;
+            expr_result tmp{};
+            tmp.eval_type = C_INT;
+            tmp.expr_id = var.var_id;
+            tmp.is_lvalue = true;
+            tmp.variable = _expr->tok;
+
             if(var.is_global) {
-                local_id = fn->fetch_global_var_int(var.var_id);
+                if(!is_assignable_context())
+                    tmp.expr_id = fn->fetch_global_var_int(var.var_id);
+                tmp.global_id = var.var_id;
+                tmp.is_global = true;
             }
 
-            expr_result tmp{C_INT, local_id, true, nullptr, _expr->tok};
             res_stack.push(tmp);
-
             opt_release_stack();
         }
         else if(_expr->is_operator()) {
             auto _op = cast_to_ast_op(expr);
-            CRITICAL_ASSERT(!_op->is_unary && _op->tok->is_operator_plus(), "Only binary '+' operator supported in expression right now");
+            CRITICAL_ASSERT(!_op->is_unary, "Only binary '+' and '=' operators supported in expression right now");
 
 
             if(!expr->children.size()) {
-                auto res1 = pop_res_stack();
-                auto res2 = pop_res_stack();
+                //Right now we assume it to be binary operator
+                auto res1 = pop_res_stack(); //right child
+                auto res2 = pop_res_stack(); //left child
 
                 int res_id = 0;
 
+                context_stack.pop(); //Pop both context values
+                context_stack.pop();
+
                 CRITICAL_ASSERT(!(res1.constant && res2.constant), "Both operands being constants is not supported right now");
+
+                auto fn_bin_c = &Ifunc_translation::add_int_c;
+                auto fn_bin_norm = &Ifunc_translation::add_int;
+                auto op_type = std::get<operator_type>(_op->tok->value); 
+                switch(op_type) {
+                    case PLUS: fn_bin_c = &Ifunc_translation::add_int_c; fn_bin_norm = &Ifunc_translation::add_int; break;
+                    case EQUAL: break;
+                    default: CRITICAL_ASSERT_NOW("Only '+' and '=' operators supported right now");  
+                }
+
+                if(op_type == EQUAL) {
+                    fn_bin_c = res2.is_global ? &Ifunc_translation::assign_global_var_int_c : &Ifunc_translation::assign_var_int_c;
+                    fn_bin_norm = res2.is_global ? &Ifunc_translation::assign_global_var_int : &Ifunc_translation::assign_var_int; 
+                    if(!res2.is_lvalue) {
+                        sim_log_error("LHS of '=' should be lvalue expression");
+                    }
+                    int lhs_id = res2.expr_id;
+                    if(res2.is_global)
+                        lhs_id = res2.global_id;
+                        
+                    if(res1.constant) {
+                        std::string_view const_str = std::get<std::string>(res1.constant->value);
+                        (fn->*fn_bin_c)(lhs_id, const_str);
+                    }
+                    else {
+                        (fn->*fn_bin_norm)(lhs_id, res1.expr_id);
+                        fn->free_result(res1.expr_id);
+                    }
+
+                    if(is_assignable_context())
+                        res_stack.push(res2);
+                    else {
+                        int local_id = fn->fetch_global_var_int(res2.global_id);
+                        expr_result tmp{};
+                        tmp.eval_type = C_INT;
+                        tmp.global_id = res2.global_id;
+                        tmp.expr_id = local_id;
+                        tmp.is_lvalue = true;
+                        tmp.is_global = true;
+
+                        res_stack.push(tmp);
+                    }
+                    opt_release_stack();
+                    continue;
+                }
 
                 if(res1.constant || res2.constant) {
                     std::string_view const_str;
                     if(res1.constant) {
                         const_str = std::get<std::string>(res1.constant->value);
-                        res_id = fn->add_int_c(res2.expr_id, const_str);
+                        res_id = (fn->*fn_bin_c)(res2.expr_id, const_str);
                     }
                     else {
                         const_str = std::get<std::string>(res2.constant->value); 
-                        res_id = fn->add_int_c(res1.expr_id, const_str);
+                        res_id = (fn->*fn_bin_c)(res1.expr_id, const_str);
                     }
                 }
                 else {
-                    res_id = fn->add_int(res1.expr_id, res2.expr_id);
+                    res_id = (fn->*fn_bin_norm)(res1.expr_id, res2.expr_id);
                     fn->free_result(res1.expr_id);
                     fn->free_result(res2.expr_id);
                 }
 
-                expr_result res{C_INT, res_id, false, nullptr, nullptr};
+                expr_result res{};
+                res.eval_type = C_INT;
+                res.expr_id = res_id;
+                res.is_lvalue = false;
+        
                 res_stack.push(res);
-
                 opt_release_stack();
             }
             else {
                 auto child = std::move(expr->children.front());
                 expr->children.pop_front();
+                if(_op->tok->is_operator_eq()) {
+                    if(expr->children.size())
+                        context_stack.push(ASSIGNABLE); //Push ASSIGNABLE context for left child
+                    else
+                        context_stack.push(NORMAL); //Push normal for right child
+                }
+                else {
+                    context_stack.push(NORMAL);
+                }
                 op_stack.push(std::move(expr));
                 expr = std::move(child);
             }
         }
         else {
-            CRITICAL_ASSERT_NOW("Only binary '+' operator supported in expressions right now");
+            CRITICAL_ASSERT_NOW("Only binary '+' and '=' operators supported in expressions right now");
         }
     }
 
@@ -225,6 +314,9 @@ static void eval_fn_def(std::unique_ptr<ast> fn_def, std::shared_ptr<Itranslatio
 
     current_scope = new scope(current_scope);
     eval_stmt_list(std::move(fn_def->children[3]), fn_intf);
+    auto parent = current_scope->fetch_parent_scope();
+    delete current_scope;
+    current_scope = parent;
 }
 
 void eval(std::unique_ptr<ast> prog) {

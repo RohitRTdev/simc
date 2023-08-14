@@ -31,7 +31,6 @@ struct c_expr_x64 {
         int offset; //Gives us info on where var/tmp is loaded in memory(stack)
         size_t address; //Same, but for global memory
     }loc;
-
     std::optional<c_var> var_info; //This info is only used during debugging
 };
 
@@ -257,13 +256,13 @@ public:
     void free_result(int exp_id) override;
 
 //Assign variable
-    void assign_var_int(int var_id1, int var_id2) override; 
-    void assign_var_int_c(int var_id1, std::string_view constant) override; 
+    int assign_var_int(int var_id1, int var_id2) override; 
+    int assign_var_int_c(int var_id1, std::string_view constant) override; 
     void assign_to_mem_int(int exp_id, int var_id) override;
     void assign_to_mem_int_c(int exp_id1, std::string_view constant) override;
     int fetch_global_var_int(int id) override;
-    void assign_global_var_int(int id, int expr_id) override;
-    void assign_global_var_int_c(int id, std::string_view constant) override;
+    int assign_global_var_int(int id, int expr_id) override;
+    int assign_global_var_int_c(int id, std::string_view constant) override;
 
 //Addition operation
     int add_int(int id1, int id2) override; 
