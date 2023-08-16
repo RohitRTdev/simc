@@ -51,6 +51,9 @@ public:
 //Addition operation
     virtual int add_int(int id1, int id2) = 0; 
     virtual int add_int_c(int id, std::string_view constant) = 0; 
+    virtual int sub_int(int id1, int id2) = 0;
+    virtual int sub_int_c(int id, std::string_view constant) = 0;
+    virtual int sub_int_c(std::string_view constant, int id) = 0;
 
 //Branch operation
     virtual int create_label() = 0;

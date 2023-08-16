@@ -116,8 +116,9 @@ static expr_result eval_expr(std::unique_ptr<ast> expr, Ifunc_translation* fn) {
                 auto op_type = std::get<operator_type>(_op->tok->value); 
                 switch(op_type) {
                     case PLUS: fn_bin_c = &Ifunc_translation::add_int_c; fn_bin_norm = &Ifunc_translation::add_int; break;
+                    case MINUS: fn_bin_c = &Ifunc_translation::sub_int_c; fn_bin_norm = &Ifunc_translation::sub_int; break;
                     case EQUAL: break;
-                    default: CRITICAL_ASSERT_NOW("Only '+' and '=' operators supported right now");  
+                    default: CRITICAL_ASSERT_NOW("Only '+', '-' and '=' operators supported right now");  
                 }
 
                 if(op_type == EQUAL) {
@@ -164,7 +165,12 @@ static expr_result eval_expr(std::unique_ptr<ast> expr, Ifunc_translation* fn) {
                     }
                     else {
                         const_str = std::get<std::string>(res2.constant->value); 
-                        res_id = (fn->*fn_bin_c)(res1.expr_id, const_str);
+                        if(op_type == MINUS) {
+                            res_id = fn->sub_int_c(const_str, res1.expr_id);
+                            fn->free_result(res1.expr_id);
+                        }
+                        else
+                            res_id = (fn->*fn_bin_c)(res1.expr_id, const_str);
                     }
                 }
                 else {
@@ -198,7 +204,7 @@ static expr_result eval_expr(std::unique_ptr<ast> expr, Ifunc_translation* fn) {
             }
         }
         else {
-            CRITICAL_ASSERT_NOW("Only binary '+' and '=' operators supported in expressions right now");
+            CRITICAL_ASSERT_NOW("Function call operation not supported right now");
         }
     }
 

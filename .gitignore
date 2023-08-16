@@ -1,4 +1,5 @@
 .vscode/*
 build/*
 log/*
+gcc_tests/*
 TODO

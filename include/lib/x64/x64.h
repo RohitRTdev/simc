@@ -264,10 +264,13 @@ public:
     int assign_global_var_int(int id, int expr_id) override;
     int assign_global_var_int_c(int id, std::string_view constant) override;
 
-//Addition operation
+//Arithmetic operations
     int add_int(int id1, int id2) override; 
     int add_int_c(int id, std::string_view constant) override; 
-
+    int sub_int(int id1, int id2) override;
+    int sub_int_c(int id, std::string_view constant) override;
+    int sub_int_c(std::string_view constant, int id) override;
+    
 //Branch operation
     int create_label() override;
     void add_label(int label_id) override;

@@ -1,16 +1,16 @@
 
-int a = 2, b = 3;
+int a = 2, b = 10;
 int c = 5;
 
 
 int fn() {
-
-    a=a+1;
-    b=b+5;
-    return c=a=b+c+3;
+    b+1;
+    a=a-1;
+    b=5-b;
+    return (c=a+1)=b;
 }
 
-int main() {
+int main1() {
     a = a + 1 + b + c;
 
     return a;
