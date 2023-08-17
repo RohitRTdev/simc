@@ -1,5 +1,9 @@
 default_to(ARCH x64)
 
+if(ARCH STREQUAL x64)
+    set(ARCH_DEF ARCH_X64)
+endif()
+
 FILE(GLOB lib_srcs ${PROJECT_SOURCE_DIR}/lib/${ARCH}/*.cpp)
 
 if(CMAKE_BUILD_TYPE STREQUAL Debug)
@@ -9,6 +13,7 @@ endif()
 add_library(code-gen SHARED ${lib_srcs})
 target_link_libraries(code-gen simc_options)
 target_compile_definitions(code-gen PRIVATE BUILD_LIB)
+target_compile_definitions(code-gen PUBLIC ${ARCH_DEF})
 
 if(${COMPILER} STREQUAL GNU OR ${COMPILER} STREQUAL Clang)
     target_compile_options(code-gen PRIVATE "-fvisibility=hidden")

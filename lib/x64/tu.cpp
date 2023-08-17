@@ -4,8 +4,8 @@
 x64_tu::x64_tu() : global_var_id(0)
 {}
 
-std::string_view x64_tu::fetch_global_variable(int id) const {
-    return globals[id-1].name;
+const c_var& x64_tu::fetch_global_variable(int id) const {
+    return globals[id-1];
 }
 
 int x64_tu::declare_global_variable(const std::string& name, c_type type) {
@@ -37,8 +37,8 @@ Ifunc_translation* x64_tu::add_function(const std::string& name) {
 
 void x64_tu::generate_code() {
 
-    static const char* global_type_names[] = {"long", "byte", "quad"};
-    static const char* global_type_sizes[] = {"4", "1", "8"};
+    static const char* global_type_names[] = {"long", "byte", "quad", "word"};
+    static const char* global_type_sizes[] = {"4", "1", "8", "2"};
     
     std::string bss_section = LINE(".section .bss");
     std::string data_section = LINE(".section .data");
