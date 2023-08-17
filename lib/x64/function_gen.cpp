@@ -1,8 +1,12 @@
+#include <array>
 #include "lib/code-gen.h"
 #include "lib/x64/x64.h"
 
-std::vector<std::string> regs_64 = {"rax", "rbx", "rcx", "rdx", "rsi", "rdi"};
-std::vector<std::string> regs_32 = {"eax", "ebx", "ecx", "edx", "esi", "edi"};
+const std::vector<std::array<std::string, NUM_REGS>> regs = {{"rax", "rbx", "rcx", "rdx", "rsi", "rdi"},
+                                                            {"eax", "ebx", "ecx", "edx", "esi", "edi"},
+                                                            {"ax", "bx", "cx", "dx", "si", "di"},
+                                                            {"al", "bl", "cl", "dl", "sil", "dil"}};
+
 
 int x64_func::new_label_id = 0;
 
@@ -16,72 +20,104 @@ fn_name(name), parent(_parent), threshold_id(ids), ret_label_id(0) {
         
 }
 
-int x64_func::assign_var_int(int var_id, int id) {
-    int offset = fetch_var(var_id).loc.offset;
+int x64_func::assign_var(int var_id, int id) {
+    auto& var = fetch_var(var_id);
+    int offset = var.offset;
     int reg = fetch_result(id);
 
-    add_inst_to_code(INSTRUCTION("movl %{}, {}(%rbp)", regs_32[reg], offset));
+    CRITICAL_ASSERT(reg_type_list[reg] == var.var_info.value().type,
+    "var type of var_id:{} != expr_id:{} type", var_id, id);
 
-    return var_id;
+    auto type = reg_type_list[reg];
+
+    add_inst_to_code(INSTRUCTION("mov{} %{}, {}(%rbp)", inst_suffix[type], get_register_string(type, reg), offset));
+
+    return id;
 }
 
-int x64_func::assign_var_int_c(int var_id, std::string_view constant) {
+int x64_func::assign_var(int var_id, std::string_view constant) {
     
-    int offset = fetch_var(var_id).loc.offset;
-    add_inst_to_code(INSTRUCTION("movl ${}, {}(%rbp)", constant, offset));
+    auto& var = fetch_var(var_id);
+    auto type = var.var_info.value().type;
+    int offset = var.offset;
+    add_inst_to_code(INSTRUCTION("mov{} ${}, {}(%rbp)", inst_suffix[type], constant, offset));
 
     return var_id;
 }
 
-void x64_func::assign_to_mem_int(int id1, int id2) {
+int x64_func::assign_to_mem(int id1, int id2) {
     int reg1 = fetch_result(id1);
     reg_no_clobber_list[reg1] = true;
     int reg2 = fetch_result(id2);
 
-    add_inst_to_code(INSTRUCTION("movl %{}, (%{})", regs_32[reg2], regs_64[reg1])); 
+    auto type = reg_type_list[reg2];
+
+    CRITICAL_ASSERT(reg_type_list[reg1] != C_LONG,
+    "assign_to_mem called with expr_id:{} not of pointer type", id1);
+
+    add_inst_to_code(INSTRUCTION("mov{} %{}, (%{})", inst_suffix[type], 
+    get_register_string(type, reg2), regs[0][reg1])); 
     reg_no_clobber_list[reg1] = false;
 
+    return id2;
 }
 
-void x64_func::assign_to_mem_int_c(int id, std::string_view constant) {
+int x64_func::assign_to_mem(int id, std::string_view constant, c_type type) {
     int reg = fetch_result(id);
 
-    add_inst_to_code(INSTRUCTION("movl ${}, (%{})", constant, regs_64[reg])); 
+    CRITICAL_ASSERT(reg_type_list[reg] != C_LONG,
+    "assign_to_mem called with expr_id:{} not of pointer type", id);
+
+    add_inst_to_code(INSTRUCTION("mov{} ${}, (%{})", inst_suffix[type], constant, regs[0][reg])); 
+
+    return id;
 }
 
-int x64_func::fetch_global_var_int(int id) {
+int x64_func::fetch_global_var(int id) {
     CRITICAL_ASSERT(id <= threshold_id, "Global var id:{} exceeds threshold:{}", id, threshold_id);
 
-    int reg = choose_free_reg();
-    add_inst_to_code(INSTRUCTION("movl {}(%rip), %{}", parent->fetch_global_variable(id), regs_32[reg]));
+    auto& var = parent->fetch_global_variable(id);
+    auto type = var.type;
+
+    int reg = choose_free_reg(type, var.is_signed);
+    add_inst_to_code(INSTRUCTION("mov{} {}(%rip), %{}", inst_suffix[type], 
+    var.name, get_register_string(type, reg)));
 
     return reg_status_list[reg];
 }
 
-int x64_func::assign_global_var_int(int id, int expr_id) {
+int x64_func::assign_global_var(int id, int expr_id) {
     CRITICAL_ASSERT(id <= threshold_id, "Global var id:{} exceeds threshold:{}", id, threshold_id);
     
-    int reg = fetch_result(expr_id);
-    add_inst_to_code(INSTRUCTION("movl %{}, {}(%rip)", regs_32[reg], parent->fetch_global_variable(id)));
+    auto& var = parent->fetch_global_variable(id);
+    auto type = var.type;
 
-    return id;
+    int reg = fetch_result(expr_id);
+    add_inst_to_code(INSTRUCTION("mov{} %{}, {}(%rip)", inst_suffix[type], 
+    get_register_string(type, reg), var.name));
+
+    return reg_status_list[reg];
 }
 
-int x64_func::assign_global_var_int_c(int id, std::string_view constant) {
+int x64_func::assign_global_var(int id, std::string_view constant) {
     CRITICAL_ASSERT(id <= threshold_id, "Global var id:{} exceeds threshold:{}", id, threshold_id);
 
-    add_inst_to_code(INSTRUCTION("movl ${}, {}(%rip)", constant, parent->fetch_global_variable(id)));
+    auto& var = parent->fetch_global_variable(id);
+    auto type = var.type;
+
+    add_inst_to_code(INSTRUCTION("mov{} ${}, {}(%rip)", inst_suffix[type], 
+    constant, var.name));
 
     return id;
 }
 
-int x64_func::declare_local_variable(const std::string& name, c_type type) {
+int x64_func::declare_local_variable(const std::string& name, c_type type, bool is_signed) {
     c_expr_x64 var;
 
     sim_log_debug("Declaring variable {} of type {} at offset:{} with var_id:{}", name, type, cur_offset, new_id);
-    var.var_info = {name, type};
+    var.var_info = {name, type, is_signed};
     var.is_local = true;
-    var.loc.offset = advance_offset_32();
+    var.offset = advance_offset(type);
     var.is_var = true;
     var.id = new_id++;
     

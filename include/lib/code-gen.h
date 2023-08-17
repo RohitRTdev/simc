@@ -5,18 +5,29 @@
 #include "spdlog/fmt/fmt.h"
 #include "lib/dll.h"
 
+#ifdef ARCH_X64
+#include "lib/x64/x64_types.h"
+#else
+#error "Only x64 architecture currently supported"
+#endif
+
 #define LINE(msg) msg "\n"
 #define INSTRUCTION( msg, ... ) fmt::format("\t" LINE(msg) __VA_OPT__(,) __VA_ARGS__)
 
 enum c_type {
     C_INT, 
     C_CHAR,
-    C_LONGINT
+    C_LONG,
+    C_SHORT,
+    C_LONGLONG
 };
+
+#define NUM_TYPES 5
 
 struct c_var {
     std::string name;
     c_type type;
+    bool is_signed;
     std::string value;
 };
 
@@ -36,24 +47,24 @@ public:
 class Ifunc_translation : public Itrbase {
 public:
 //Declaration
-    virtual int declare_local_variable(const std::string& name, c_type type) = 0;
+    virtual int declare_local_variable(const std::string& name, c_type type, bool is_signed) = 0;
     virtual void free_result(int exp_id) = 0;
 
 //Assign variable
-    virtual int assign_var_int(int var_id, int id) = 0; 
-    virtual int assign_var_int_c(int var_id, std::string_view constant) = 0; 
-    virtual void assign_to_mem_int(int id1, int id2) = 0;
-    virtual void assign_to_mem_int_c(int id, std::string_view constant) = 0;
-    virtual int fetch_global_var_int(int id) = 0;
-    virtual int assign_global_var_int(int id, int expr_id) = 0;
-    virtual int assign_global_var_int_c(int id, std::string_view constant) = 0;
+    virtual int assign_var(int var_id, int id) = 0; 
+    virtual int assign_var(int var_id, std::string_view constant) = 0; 
+    virtual int assign_to_mem(int id1, int id2) = 0;
+    virtual int assign_to_mem(int id, std::string_view constant, c_type type) = 0;
+    virtual int fetch_global_var(int id) = 0;
+    virtual int assign_global_var(int id, int expr_id) = 0;
+    virtual int assign_global_var(int id, std::string_view constant) = 0;
 
 //Addition operation
-    virtual int add_int(int id1, int id2) = 0; 
-    virtual int add_int_c(int id, std::string_view constant) = 0; 
-    virtual int sub_int(int id1, int id2) = 0;
-    virtual int sub_int_c(int id, std::string_view constant) = 0;
-    virtual int sub_int_c(std::string_view constant, int id) = 0;
+    virtual int add(int id1, int id2) = 0; 
+    virtual int add(int id, std::string_view constant) = 0; 
+    virtual int sub(int id1, int id2) = 0;
+    virtual int sub(int id, std::string_view constant) = 0;
+    virtual int sub(std::string_view constant, int id) = 0;
 
 //Branch operation
     virtual int create_label() = 0;

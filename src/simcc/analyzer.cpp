@@ -76,17 +76,17 @@ static expr_result eval_expr(std::unique_ptr<ast> expr, Ifunc_translation* fn) {
         }
         else if(_expr->is_var()) {
             auto& var = current_scope->fetch_var_info(std::get<std::string>(_expr->tok->value));
-            CRITICAL_ASSERT(var.var.type == C_INT, "Only integer type variables supported now");
+            //CRITICAL_ASSERT(var.var.type == C_INT, "Only integer type variables supported now");
 
             expr_result tmp{};
-            tmp.eval_type = C_INT;
+            tmp.eval_type = var.var.type;
             tmp.expr_id = var.var_id;
             tmp.is_lvalue = true;
             tmp.variable = _expr->tok;
 
             if(var.is_global) {
                 if(!is_assignable_context())
-                    tmp.expr_id = fn->fetch_global_var_int(var.var_id);
+                    tmp.expr_id = fn->fetch_global_var(var.var_id);
                 tmp.global_id = var.var_id;
                 tmp.is_global = true;
             }
@@ -111,19 +111,29 @@ static expr_result eval_expr(std::unique_ptr<ast> expr, Ifunc_translation* fn) {
 
                 CRITICAL_ASSERT(!(res1.constant && res2.constant), "Both operands being constants is not supported right now");
 
-                auto fn_bin_c = &Ifunc_translation::add_int_c;
-                auto fn_bin_norm = &Ifunc_translation::add_int;
+                int (Ifunc_translation::*fn_bin_c)(int, std::string_view) = &Ifunc_translation::add;
+                int (Ifunc_translation::*fn_bin_norm)(int, int) = &Ifunc_translation::add;
                 auto op_type = std::get<operator_type>(_op->tok->value); 
                 switch(op_type) {
-                    case PLUS: fn_bin_c = &Ifunc_translation::add_int_c; fn_bin_norm = &Ifunc_translation::add_int; break;
-                    case MINUS: fn_bin_c = &Ifunc_translation::sub_int_c; fn_bin_norm = &Ifunc_translation::sub_int; break;
+                    case PLUS: fn_bin_c = &Ifunc_translation::add; fn_bin_norm = &Ifunc_translation::add; break;
+                    case MINUS: fn_bin_c = &Ifunc_translation::sub; fn_bin_norm = &Ifunc_translation::sub; break;
                     case EQUAL: break;
                     default: CRITICAL_ASSERT_NOW("Only '+', '-' and '=' operators supported right now");  
                 }
 
                 if(op_type == EQUAL) {
-                    fn_bin_c = res2.is_global ? &Ifunc_translation::assign_global_var_int_c : &Ifunc_translation::assign_var_int_c;
-                    fn_bin_norm = res2.is_global ? &Ifunc_translation::assign_global_var_int : &Ifunc_translation::assign_var_int; 
+                    int (Ifunc_translation::*fn_bin_c)(int, std::string_view);
+                    int (Ifunc_translation::*fn_bin_norm)(int, int);
+                    
+                    if(res2.is_global) {
+                        fn_bin_c = &Ifunc_translation::assign_global_var;
+                        fn_bin_norm = &Ifunc_translation::assign_global_var; 
+                    }
+                    else {
+                        fn_bin_c = &Ifunc_translation::assign_var; 
+                        fn_bin_norm = &Ifunc_translation::assign_var; 
+                    }
+
                     if(!res2.is_lvalue) {
                         sim_log_error("LHS of '=' should be lvalue expression");
                     }
@@ -143,12 +153,12 @@ static expr_result eval_expr(std::unique_ptr<ast> expr, Ifunc_translation* fn) {
                     if(is_assignable_context())
                         res_stack.push(res2);
                     else if(!context_stack.empty()) {
-                        int local_id = fn->fetch_global_var_int(res2.global_id);
+                        int local_id = fn->fetch_global_var(res2.global_id);
                         expr_result tmp{};
-                        tmp.eval_type = C_INT;
+                        tmp.eval_type = res1.eval_type;
                         tmp.global_id = res2.global_id;
                         tmp.expr_id = local_id;
-                        tmp.is_lvalue = true;
+                        tmp.is_lvalue = false;
                         tmp.is_global = true;
 
                         res_stack.push(tmp);
@@ -166,8 +176,7 @@ static expr_result eval_expr(std::unique_ptr<ast> expr, Ifunc_translation* fn) {
                     else {
                         const_str = std::get<std::string>(res2.constant->value); 
                         if(op_type == MINUS) {
-                            res_id = fn->sub_int_c(const_str, res1.expr_id);
-                            fn->free_result(res1.expr_id);
+                            res_id = fn->sub(const_str, res1.expr_id);
                         }
                         else
                             res_id = (fn->*fn_bin_c)(res1.expr_id, const_str);
@@ -175,12 +184,10 @@ static expr_result eval_expr(std::unique_ptr<ast> expr, Ifunc_translation* fn) {
                 }
                 else {
                     res_id = (fn->*fn_bin_norm)(res1.expr_id, res2.expr_id);
-                    fn->free_result(res1.expr_id);
-                    fn->free_result(res2.expr_id);
                 }
 
                 expr_result res{};
-                res.eval_type = C_INT;
+                res.eval_type = res1.eval_type;
                 res.expr_id = res_id;
                 res.is_lvalue = false;
         
