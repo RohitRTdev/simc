@@ -49,7 +49,7 @@ static inline void init_logger() {
     }
 
     sim_logger->set_level(log_lvl);
-    sim_logger->flush_on(spdlog::level::err);
+    sim_logger->flush_on(log_lvl);
 
 }
 

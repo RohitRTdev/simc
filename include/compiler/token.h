@@ -21,6 +21,17 @@ enum keyword_type {
     TYPE_INT,
     TYPE_CHAR,
     TYPE_VOID,
+    TYPE_LONGLONG,
+    TYPE_LONG,
+    TYPE_SHORT,
+    TYPE_UNSIGNED,
+    TYPE_SIGNED,
+    TYPE_CONST,
+    TYPE_VOLATILE,
+    TYPE_AUTO,
+    TYPE_REGISTER,
+    TYPE_EXTERN,
+    TYPE_STATIC,
     RETURN,
     WHILE,
     DO,
@@ -77,9 +88,7 @@ private:
 
 public:
     std::variant<char, std::string, operator_type, keyword_type> value;
-
-    token(token_type type);
-
+    
     template<typename T>
     token(token_type _type, const T& val) : type(_type) {
         value = val;
@@ -98,9 +107,15 @@ public:
     }
 
     bool is_keyword_else() const;
-    bool is_newline() const;
-    bool is_identifier() const;
+    bool is_keyword_return() const;
     bool is_keyword_data_type() const;
+    bool is_keyword_long() const;
+    bool is_keyword_auto() const;
+    bool is_keyword_extern() const;
+    bool is_keyword_static() const;
+    bool is_keyword_register() const;
+    bool is_keyword_const() const;
+    bool is_keyword_volatile() const;
     bool is_operator_comma() const;
     bool is_operator_lb() const;
     bool is_operator_rb() const;
@@ -109,7 +124,7 @@ public:
     bool is_operator_crb() const;
     bool is_operator_eq() const; 
     bool is_operator_plus() const;
-    bool is_keyword_return() const;
+    bool is_identifier() const;
     bool is_constant() const;
     bool is_integer_constant() const;
     bool is_unary_operator() const; 

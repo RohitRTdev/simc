@@ -10,7 +10,6 @@
 enum parser_states {
     //Common
     PARSER_START = 0,
-    EXPECT_NEWLINE,
     EXPECT_IDENT,
 
     //Fn arg
@@ -37,7 +36,6 @@ enum parser_states {
 
     //Fn body
     EXPECT_STMT_LIST,
-    EXPECT_STMT_NEWLINE,
 
     //Stmt list
     EXPECT_STMT,

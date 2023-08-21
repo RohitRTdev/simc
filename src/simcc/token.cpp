@@ -1,15 +1,8 @@
 #include "compiler/token.h"
 #include "debug-api.h"
 
-token::token(token_type _type) : type(_type) {
-}
-
 bool token::is_keyword_else() const {
     return type == KEYWORD && std::get<keyword_type>(value) == ELSE;
-}
-
-bool token::is_newline() const {
-    return type == NEWLINE;
 }
 
 bool token::is_identifier() const {
@@ -130,4 +123,32 @@ bool token::is_postfix_operator() const {
 
 bool token::is_operator_plus() const {
     return type == OPERATOR && std::get<operator_type>(value) == PLUS;
+}
+
+bool token::is_keyword_long() const {
+    return type == KEYWORD && std::get<keyword_type>(value) == TYPE_LONG;
+}
+
+bool token::is_keyword_const() const {
+    return type == KEYWORD && std::get<keyword_type>(value) == TYPE_CONST;
+}
+
+bool token::is_keyword_volatile() const {
+    return type == KEYWORD && std::get<keyword_type>(value) == TYPE_VOLATILE;
+}
+
+bool token::is_keyword_auto() const {
+    return type == KEYWORD && std::get<keyword_type>(value) == TYPE_AUTO;
+}
+
+bool token::is_keyword_register() const {
+    return type == KEYWORD && std::get<keyword_type>(value) == TYPE_REGISTER;
+}
+
+bool token::is_keyword_extern() const {
+    return type == KEYWORD && std::get<keyword_type>(value) == TYPE_EXTERN;
+}
+
+bool token::is_keyword_static() const {
+    return type == KEYWORD && std::get<keyword_type>(value) == TYPE_STATIC;
 }

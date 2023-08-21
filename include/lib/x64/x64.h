@@ -211,10 +211,10 @@ class x64_func : public Ifunc_translation {
         }
     }
 
-    void type_mismatch_check(int id1, int id2) {
-            CRITICAL_ASSERT((reg_type_list[id1] == reg_type_list[id2])
-            && (sign_list[id1] == sign_list[id2]), 
-            "type mismatch occured between exp_id:{} and exp_id:{}", id1, id2);
+    void type_mismatch_check(int reg1, int reg2) {
+            CRITICAL_ASSERT((reg_type_list[reg1] == reg_type_list[reg2])
+            && (sign_list[reg1] == sign_list[reg2]), 
+            "type mismatch occured between exp_id:{} and exp_id:{} of type:{} and type:{}", reg_status_list[reg1], reg_status_list[reg2], reg_type_list[reg1], reg_type_list[reg2]);
     }
 
     void flush_register(enum registers reg_idx) {
@@ -312,12 +312,13 @@ class x64_func : public Ifunc_translation {
     }
 
     ops binary_op_fetch(int id1, int id2) {
-        type_mismatch_check(id1, id2);
 
         int reg1 = fetch_result(id1);
         reg_no_clobber_list[reg1] = true;
         int reg2 = fetch_result(id2);
         reg_no_clobber_list[reg2] = true;
+      
+        type_mismatch_check(reg1, reg2);
 
         auto type = reg_type_list[reg1];
         int reg = choose_free_reg(type, sign_list[reg1]);
