@@ -22,7 +22,15 @@
             u_op <expr>       |
             <expr> p_op       |
             "(" <expr> ")"    |
-            "[" <expr> "]"    |
             <expr> "(" <expr_list>opt ")" |
             <expr> "[" <expr> "]"         |
+            <expr> "," <expr>             |
             var | con
+
+
+<declaration> = <base_type> <declarator>
+
+<base_type> = <storage_specifier> <type_specifier> <type_qualifier> (any order)
+
+<storage_specifier> = auto | register | static | extern
+<type_specifier> = char | int | long | short | long long

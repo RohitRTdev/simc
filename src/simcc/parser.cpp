@@ -331,7 +331,6 @@ static void reduce_expr_stmt(state_machine* inst) {
     }
 }
 
-
 static std::unique_ptr<ast> reduce_program(state_machine* inst) {
     //Attach all decl_list, fn def and fn decl to program node
     auto prog = create_ast_program();
@@ -340,15 +339,6 @@ static std::unique_ptr<ast> reduce_program(state_machine* inst) {
     }
 
     return prog;
-}
-
-static void check_newline_valid(state_machine* inst) {
-    switch (inst->state_stack.top()) {
-        case EXPECT_STMT_LIST:
-        case FN_DEF_REDUCE: inst->switch_state(EXPECT_STMT_LIST); break;
-        default:
-            sim_log_error("Invalid placement of newline");
-    }
 }
 
 static void parse_decl_list_init() {
@@ -367,8 +357,7 @@ static void parse_decl_list_init() {
 
 static void parse_stmt_list_init() {
 
-    parser.define_state("EXPECT_STMT_LIST", EXPECT_STMT_LIST, &token::is_operator_clb, EXPECT_STMT_NEWLINE, true, nullptr, nullptr, EXPECT_STMT_LIST);
-    parser.define_special_state("EXPECT_STMT_NEWLINE", &token::is_newline, check_newline_valid, EXPECT_CRB);
+    parser.define_state("EXPECT_STMT_LIST", EXPECT_STMT_LIST, &token::is_operator_clb, EXPECT_CRB, true, nullptr, nullptr, EXPECT_STMT_LIST);
     parser.define_state("EXPECT_STMT", EXPECT_EXPR_UOP, &token::is_keyword_return, EXPECT_NULL_STMT_SC, false, nullptr, nullptr, PARSER_STMT_RETURN);
     parser.define_special_state("EXPECT_STMT_SC", &token::is_operator_sc, reduce_stmt, PARSER_ERROR, 
     "Expected statement list to end with }}");
@@ -409,9 +398,8 @@ void parse_init() {
 
     parser.set_token_stream(tokens);
 
-    parser.define_state("PARSER_START", EXPECT_IDENT, &token::is_keyword_data_type, EXPECT_NEWLINE, true);
-    parser.define_state("EXPECT_NEWLINE", PARSER_START, &token::is_newline, PARSER_ERROR,
-        false, nullptr, "Expected translation unit to start with newline or data_type");
+    parser.define_state("PARSER_START", EXPECT_IDENT, &token::is_keyword_data_type, PARSER_ERROR, true, nullptr,
+    "Expected translation unit to start with newline or data_type");
     parser.define_state("EXPECT_IDENT", EXPECT_LB, &token::is_identifier, PARSER_ERROR, true, nullptr,
         "Expected an identifier after a data type");
     parser.define_state("EXPECT_LB", EXPECT_FN_ARG_LIST_START, &token::is_operator_lb, EXPECT_DECL_COMMA);

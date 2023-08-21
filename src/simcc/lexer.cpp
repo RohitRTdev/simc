@@ -14,7 +14,6 @@ enum lexer_states {
     EXPECTING_STRING_LITERAL,
     EXPECTING_STRING_CONSTANT,
     LOOKAHEAD_FOR_STRING_CONSTANT,
-    LOOKAHEAD_FOR_NEWLINE,
     LOOKAHEAD_FOR_WHITE_SPACE,
     LOOKAHEAD_FOR_TICK,
     EXPECTING_CHARACTER,
@@ -25,8 +24,9 @@ enum lexer_states {
 
 #ifdef SIMDEBUG
 
-std::vector<std::string> keywords_debug = { "INT", "CHAR", "VOID", "RETURN", "WHILE",
-                                "DO", "FOR", "IF", "ELSE_IF", "ELSE", "BREAK", "CONTINUE" };
+std::vector<std::string> keywords_debug = { "INT", "CHAR", "VOID", "LONGLONG", "LONG", "SHORT", "UNSIGNED", "SIGNED", 
+"CONST", "VOLATILE", "AUTO", "REGISTER", "EXTERN", "STATIC",
+"RETURN", "WHILE", "DO", "FOR", "IF", "ELSE_IF", "ELSE", "BREAK", "CONTINUE" };
 
 std::vector<std::string> op_debug = { "CLB", "CRB", "LB", "RB", "LSB", "RSB",
     "POINTER_TO", "DOT", "INCREMENT", "DECREMENT", "NOT", "BIT_NOT",
@@ -55,6 +55,18 @@ static std::optional<keyword_type> fetch_keyword(const std::string& literal) {
     }
     else if(literal == "void") {
         keyword = TYPE_VOID;
+    }
+    else if(literal == "long") {
+        keyword = TYPE_LONG;
+    }
+    else if(literal == "short") {
+        keyword = TYPE_SHORT;
+    }
+    else if(literal == "unsigned") {
+        keyword = TYPE_UNSIGNED;
+    }
+    else if(literal == "signed") {
+        keyword = TYPE_SIGNED;
     }
     else if(literal == "return") {
         keyword = RETURN;
@@ -204,6 +216,15 @@ void lex(const std::vector<char>& input) {
                         //This checks if previous token is an "else" and then combines it with the present "if" to create an "else_if" token
                         if (tokens.size() != 0 && tokens.back().is_keyword_else()) {
                             key_type = ELSE_IF;
+                            std::get<keyword_type>(tokens.back().value) = key_type.value();
+                        }
+                        else
+                            tokens.push_back(token(KEYWORD, key_type.value()));
+                    }
+                    else if(key_type.value() == TYPE_LONG) {
+                        //This check if previous token is "long" and combines the current "long" with it to create "long long"
+                        if (tokens.size() != 0 && tokens.back().is_keyword_long()) {
+                            key_type = TYPE_LONGLONG;
                             std::get<keyword_type>(tokens.back().value) = key_type.value();
                         }
                         else
@@ -374,24 +395,12 @@ void lex(const std::vector<char>& input) {
                 state = EXPECTING_STRING_CONSTANT;
             }
             else
-                state = LOOKAHEAD_FOR_NEWLINE;
-        }
-
-        if(state == LOOKAHEAD_FOR_NEWLINE) {
-            if(ch == '\n' || ch == '\r') {
-                sim_log_debug("Found new delimiter token");
-                if(tokens.size() == 0 || !tokens.back().is_newline())
-                    tokens.push_back(token(NEWLINE));
-
-                state = LEXER_START;
-            }
-            else
                 state = LOOKAHEAD_FOR_WHITE_SPACE;
         }
 
         if (state == LOOKAHEAD_FOR_WHITE_SPACE) {
             
-            if (ch == ' ' || ch == '\t')
+            if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r')
                 state = LEXER_START;
             else
                 state = LEXER_INVALID_TOKEN;
