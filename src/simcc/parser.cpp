@@ -392,6 +392,7 @@ static void reduce_decl_comma(state_machine* inst) {
             inst->switch_state(EXPECT_STOR_SPEC);
             break;
         }
+        case base_reduction_context::INTERNAL:
         case base_reduction_context::EXTERNAL: inst->switch_state(EXPECT_DECL_POINTER); break;
     }
 
@@ -453,7 +454,7 @@ static void reduce_decl_rb(state_machine* inst) {
             reduce_decl_comma(inst);
             reduce_param_list(inst);
             inst->state_stack.pop();
-            inst->switch_state(EXPECT_DECL_RB);
+            inst->switch_state(EXPECT_DECL_LSB);
             break;
         }
         default: sim_log_error("')' found in invalid context within a declarator");
@@ -472,7 +473,7 @@ static void reduce_array_specifier_list(state_machine* inst) {
     auto arr_spec = create_ast_array_spec(cast_to_ast_token(arr_constant)->tok);
 
     if(inst->parser_stack.top()->is_array_specifier_list()) {
-        inst->parser_stack.top()->attach_node(std::move(arr_spec));
+        inst->parser_stack.top()->attach_back(std::move(arr_spec));
     }
     else {
         auto list = create_ast_array_spec_list();
@@ -512,7 +513,7 @@ static void reduce_pointer_list(state_machine* inst) {
 
     auto ptr_spec = create_ast_ptr_spec(pointer, const_qual, vol_qual);
     if(inst->parser_stack.top()->is_pointer_list()) {
-        inst->parser_stack.top()->attach_node(std::move(ptr_spec));
+        inst->parser_stack.top()->attach_back(std::move(ptr_spec));
     }
     else {
         auto ptr_list = create_ast_ptr_list();
@@ -554,8 +555,17 @@ static void reduce_decl_list(state_machine* inst) {
 
     inst->parser_stack.push(std::move(decl_list));
 
-    inst->switch_state(EXPECT_STOR_SPEC);
-
+    switch(reduce_helper.base_reduce_context(inst)) {
+        case base_reduction_context::EXTERNAL: inst->switch_state(EXPECT_STOR_SPEC); break;
+        case base_reduction_context::INTERNAL: {
+            auto decl_list = inst->fetch_parser_stack();
+            auto decl_stmt = create_ast_decl_stmt();
+            decl_stmt->attach_node(std::move(decl_list));
+            inst->parser_stack.push(std::move(decl_stmt));
+ 
+            inst->switch_state(EXPECT_STMT_CRB); break;
+        }
+    }
 }
 
 static void reduce_base_type(state_machine* inst) {
@@ -686,6 +696,13 @@ static void reduce_fn_decl(state_machine* inst) {
         }
     }
 
+    auto& decl_list = inst->parser_stack.top();
+
+    if(decl_list->children.size() != 2 || reduce_helper.is_abstract(decl_list->children[1]) || 
+    decl_list->children[1]->children.size() < 1 || !decl_list->children[1]->children[0]->is_param_list()) {
+        sim_log_error("Invalid function declaration");
+    }
+
     inst->parser_stack.push(create_ast_token(inst->cur_token()));
     inst->state_stack.push(FN_DEF_REDUCE);
     inst->switch_state(EXPECT_STMT_LIST);
@@ -722,8 +739,11 @@ static void parse_stmt_list() {
     parser.define_special_state("EXPECT_STMT_SC", &token::is_operator_sc, reduce_stmt, PARSER_ERROR, 
     "Expected statement list to end with }}");
     parser.define_special_state("EXPECT_NULL_STMT_SC", &token::is_operator_sc, reduce_null_stmt_sc, EXPECT_EXPR_UOP);
-    parser.define_special_state("EXPECT_STMT_CRB", &token::is_operator_crb, reduce_stmt_list, EXPECT_STMT);
-    
+    parser.define_special_state("EXPECT_STMT_CRB", &token::is_operator_crb, reduce_stmt_list, BASE_TYPE_CHECK_STMT);
+
+    parser.define_state("BASE_TYPE_CHECK_STMT", EXPECT_STOR_SPEC, &token::is_storage_specifier, BASE_TYPE_CHECK_STMT_1, true);
+    parser.define_state("BASE_TYPE_CHECK_STMT_1", EXPECT_STOR_SPEC, &token::is_data_type, BASE_TYPE_CHECK_STMT_2, true);
+    parser.define_state("BASE_TYPE_CHECK_STMT_2", EXPECT_STOR_SPEC, &token::is_type_qualifier, EXPECT_STMT, true);
 }
 
 static void parse_expr() {

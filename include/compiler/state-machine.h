@@ -46,6 +46,9 @@ enum parser_states {
     EXPECT_STMT_SC,
     EXPECT_NULL_STMT_SC,
     EXPECT_STMT_CRB,
+    BASE_TYPE_CHECK_STMT,
+    BASE_TYPE_CHECK_STMT_1,
+    BASE_TYPE_CHECK_STMT_2,
 
     //Expr
     EXPECT_EXPR_UOP,

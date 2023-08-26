@@ -2,7 +2,8 @@
 #include "compiler/ast-ops.h"
 #include "debug-api.h"
 
-state_machine::state_machine(): cur_state(EXPECT_STOR_SPEC), token_stream(nullptr), advance_token(true), token_idx(0), num_states(0){
+state_machine::state_machine(): cur_state(EXPECT_STOR_SPEC), token_stream(nullptr), advance_token(true), 
+token_idx(0), num_states(0) {
 
 }
 
@@ -82,7 +83,6 @@ void state_machine::start() {
 
     auto mover = [&] {
         cur_state = state_path[cur_state].next_state;
-        //sim_log_debug("Moving to state:{}", state_path[cur_state].name);
         advance_token = true;
     };
 
@@ -113,17 +113,18 @@ void state_machine::start() {
 
     auto reduce = [&] {
         if ((tok->*(state_path[cur_state].pcheck))()) {
-            state_path[cur_state].reduce_this(this);
+            auto prev_state = cur_state;
             mover();
+            state_path[prev_state].reduce_this(this);
         }
         else
             alternator();
     };
 
     auto move_and_reduce = [&] {
-        state_path[cur_state].reduce_this(this);
+        auto prev_state = cur_state;
         cur_state = state_path[cur_state].next_state;
-        //sim_log_debug("Moving to state:{}", state_path[cur_state].name);
+        state_path[prev_state].reduce_this(this);
         advance_token = false;
     };
 

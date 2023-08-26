@@ -18,6 +18,7 @@ enum class AST_TYPE {
     STMT_LIST,
     EXPR_STMT,
     NULL_STMT,
+    DECL_STMT,  
     RETURN,
     TOKEN,
     EXPR
@@ -48,6 +49,7 @@ public:
     bool is_fn_def() const;
     bool is_null_stmt() const;
     bool is_ret_stmt() const;
+    bool is_decl_stmt() const;
     bool is_stmt_list() const;
     bool is_expr_stmt() const;
     bool is_pointer_list() const;

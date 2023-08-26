@@ -22,6 +22,11 @@ static inline std::unique_ptr<ast> create_ast_decl_list() {
 static inline std::unique_ptr<ast> create_ast_array_spec_list() {
     return std::make_unique<ast>(AST_TYPE::ARRAY_SPEC_LIST);
 }
+
+static inline std::unique_ptr<ast> create_ast_decl_stmt() {
+    return std::make_unique<ast>(AST_TYPE::DECL_STMT);
+}
+
 static inline std::unique_ptr<ast> create_ast_ret() {
     return std::make_unique<ast>(AST_TYPE::RETURN);
 }

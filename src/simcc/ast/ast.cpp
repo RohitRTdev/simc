@@ -52,7 +52,8 @@ bool ast::is_decl() const {
 bool ast::is_stmt() const {
     switch(type) {
         case AST_TYPE::RETURN:
-        case AST_TYPE::NULL_STMT: return true;
+        case AST_TYPE::NULL_STMT: 
+        case AST_TYPE::DECL_STMT: return true;
     }
 
     return false;
@@ -88,6 +89,10 @@ bool ast::is_ret_stmt() const {
 
 bool ast::is_expr_stmt() const {
     return type == AST_TYPE::EXPR_STMT;
+}
+
+bool ast::is_decl_stmt() const {
+    return type == AST_TYPE::DECL_STMT;
 }
 
 bool ast::is_pointer_list() const {
