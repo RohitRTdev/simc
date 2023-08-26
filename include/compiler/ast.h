@@ -6,21 +6,21 @@
 
 enum class AST_TYPE {
     PROGRAM,
-    TOKEN,
-    EXPR,
-    DECL_LIST,
-    PARAM_LIST,
     BASE_TYPE,
-    PTR_SPEC,
-    PTR_LIST,
+    DECL_LIST,
     DECL,
-    ARRAY_SPEC,
+    PTR_LIST,
+    PTR_SPEC,
     ARRAY_SPEC_LIST,
+    ARRAY_SPEC,
+    PARAM_LIST,
     FN_DEF,
     STMT_LIST,
-    RETURN,
     EXPR_STMT,
-    NULL_STMT
+    NULL_STMT,
+    RETURN,
+    TOKEN,
+    EXPR
 };
 
 struct ast {

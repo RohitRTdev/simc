@@ -28,6 +28,8 @@ enum parser_states {
     EXPECT_DECL_RB,
     EXPECT_DECL_COMMA,
     EXPECT_DECL_SC,
+    EXPECT_DECL_CLB,
+    EXPECT_DECL_CRB,
 
     //Pointer list
     EXPECT_POINTER_CONST,
@@ -38,14 +40,12 @@ enum parser_states {
     EXPECT_ARRAY_CONSTANT,
     EXPECT_DECL_RSB,
 
-    //Fn body
-    EXPECT_STMT_LIST,
-
     //Stmt list
+    EXPECT_STMT_LIST,
     EXPECT_STMT,
     EXPECT_STMT_SC,
     EXPECT_NULL_STMT_SC,
-    EXPECT_CRB,
+    EXPECT_STMT_CRB,
 
     //Expr
     EXPECT_EXPR_UOP,
@@ -65,7 +65,8 @@ enum parser_states {
     EXPECT_EXPR_FN_RB_S,
     
     //Notification states
-    PARSER_STMT_RETURN,
+    RETURN_STMT_REDUCE,
+    STMT_LIST_REDUCE,
     LB_EXPR_REDUCE,
     FN_CALL_EXPR_REDUCE,
     EXPR_CONDITION_REDUCE,

@@ -25,7 +25,7 @@ static void reduce_null_stmt(state_machine* inst) {
 static void switch_after_reduce_stmt(state_machine* inst) {
 //This means we go back to expecting another statement or switch to the state before the statement started
     switch(inst->state_stack.top()) {
-        case EXPECT_STMT_LIST:
+        case STMT_LIST_REDUCE:
         case FN_DEF_REDUCE: inst->switch_state(EXPECT_STMT_LIST); break;
         default: sim_log_error("Found statement in invalid context");
     }
@@ -33,8 +33,8 @@ static void switch_after_reduce_stmt(state_machine* inst) {
 
 static void reduce_stmt(state_machine* inst) {
     switch(inst->state_stack.top()) {
-        case PARSER_STMT_RETURN: reduce_ret_stmt(inst); inst->state_stack.pop(); break;
-        case EXPECT_STMT_LIST:
+        case RETURN_STMT_REDUCE: reduce_ret_stmt(inst); inst->state_stack.pop(); break;
+        case STMT_LIST_REDUCE:
         case FN_DEF_REDUCE: {
             if(inst->parser_stack.top()->is_expr()) {
                 auto expr = create_ast_expr_stmt();
@@ -70,18 +70,18 @@ static void reduce_stmt_list(state_machine* inst) {
     inst->state_stack.pop();
 
     switch (pushed_state) {
-        case EXPECT_STMT_LIST: {
+        case STMT_LIST_REDUCE: {
             auto new_state = inst->state_stack.top();
 
             switch (new_state) {
-                case EXPECT_STMT_LIST:
+                case STMT_LIST_REDUCE:
                 case FN_DEF_REDUCE: inst->switch_state(EXPECT_STMT_LIST); break;
                 default: sim_log_error("Invalid use of '}'");
             }
 
             break;
         }
-        case FN_DEF_REDUCE: inst->switch_state(FN_DEF_REDUCE); inst->stop_token_fetch(); break;
+        case FN_DEF_REDUCE: inst->state_stack.push(FN_DEF_REDUCE); inst->switch_state(EXPECT_DECL_CRB); inst->stop_token_fetch(); break;
         default: sim_log_error("Invalid use of '}'");
     }
 }
@@ -256,9 +256,9 @@ static void reduce_expr_empty_fn(state_machine* inst) {
 
 static void reduce_expr_stmt(state_machine* inst) {
     switch(inst->state_stack.top()) {
-        case EXPECT_STMT_LIST: 
+        case STMT_LIST_REDUCE: 
         case FN_DEF_REDUCE:
-        case PARSER_STMT_RETURN: reduce_expr(inst, false, false); inst->switch_state(EXPECT_STMT_SC); inst->stop_token_fetch(); break;
+        case RETURN_STMT_REDUCE: reduce_expr(inst, false, false); inst->switch_state(EXPECT_STMT_SC); inst->stop_token_fetch(); break;
         default: sim_log_error("';' found after expression in invalid context");
     }
 }
@@ -653,6 +653,11 @@ static void reduce_base_type(state_machine* inst) {
         sim_log_error("Expected declaration to start with a declaration specifier");
     }
 
+    if(reduce_helper.base_reduce_context(inst) == base_reduction_context::PARAM_LIST &&
+    storage_spec && !storage_spec->is_keyword_register()) {
+        sim_log_error("Only register storage specifier allowed in parameter type list");
+    }
+
     if(!int_modifier && !core_type && !sign_qual) {
         sim_log_error("type specifier must be mentioned in type");
     }
@@ -664,6 +669,40 @@ static void reduce_base_type(state_machine* inst) {
     auto type_spec = int_modifier ? int_modifier : core_type;
 
     inst->parser_stack.push(create_ast_base_type(storage_spec, type_spec, sign_qual, const_qual, vol_qual));
+}
+
+static void reduce_fn_decl(state_machine* inst) {
+    sim_log_debug("Reducing fn declaration");
+    reduce_decl_list(inst);
+
+    switch(reduce_helper.base_reduce_context(inst)) {
+        case base_reduction_context::DECL_LB:
+        case base_reduction_context::PARAM_LIST: {
+            sim_log_error("'(' seems to be unterminated");
+            break;
+        }
+        case base_reduction_context::INTERNAL: {
+            sim_log_error("Function cannot be defined within another function");
+        }
+    }
+
+    inst->parser_stack.push(create_ast_token(inst->cur_token()));
+    inst->state_stack.push(FN_DEF_REDUCE);
+    inst->switch_state(EXPECT_STMT_LIST);
+}
+
+static void reduce_fn_def(state_machine* inst) {
+    auto fn = create_ast_fn_def();
+    
+    if(!inst->state_stack.size() || inst->state_stack.top() != FN_DEF_REDUCE) {
+        sim_log_error("}} found without accompanying {{");
+    }
+
+    fn->attach_node(inst->fetch_parser_stack()); //stmt list
+    fn->attach_node(inst->fetch_parser_stack()); //fn decl
+
+    inst->parser_stack.push(std::move(fn));
+    inst->state_stack.pop();
 }
 
 static std::unique_ptr<ast> reduce_program(state_machine* inst) {
@@ -678,12 +717,12 @@ static std::unique_ptr<ast> reduce_program(state_machine* inst) {
 
 static void parse_stmt_list() {
 
-    parser.define_state("EXPECT_STMT_LIST", EXPECT_STMT_LIST, &token::is_operator_clb, EXPECT_CRB, true, nullptr, nullptr, EXPECT_STMT_LIST);
-    parser.define_state("EXPECT_STMT", EXPECT_EXPR_UOP, &token::is_keyword_return, EXPECT_NULL_STMT_SC, false, nullptr, nullptr, PARSER_STMT_RETURN);
+    parser.define_state("EXPECT_STMT_LIST", EXPECT_STMT_LIST, &token::is_operator_clb, EXPECT_STMT_CRB, true, nullptr, nullptr, EXPECT_STMT_LIST);
+    parser.define_state("EXPECT_STMT", EXPECT_EXPR_UOP, &token::is_keyword_return, EXPECT_NULL_STMT_SC, false, nullptr, nullptr, RETURN_STMT_REDUCE);
     parser.define_special_state("EXPECT_STMT_SC", &token::is_operator_sc, reduce_stmt, PARSER_ERROR, 
     "Expected statement list to end with }}");
     parser.define_special_state("EXPECT_NULL_STMT_SC", &token::is_operator_sc, reduce_null_stmt_sc, EXPECT_EXPR_UOP);
-    parser.define_special_state("EXPECT_CRB", &token::is_operator_crb, reduce_stmt_list, EXPECT_STMT);
+    parser.define_special_state("EXPECT_STMT_CRB", &token::is_operator_crb, reduce_stmt_list, EXPECT_STMT);
     
 }
 
@@ -741,8 +780,13 @@ static void parse_declaration() {
     parser.define_state("EXPECT_FN_RB", EXPECT_DECL_LSB, &token::is_operator_rb, EXPECT_STOR_SPEC, false, reduce_empty_param_list);
     parser.define_state("EXPECT_DECL_RB", EXPECT_DECL_LSB, &token::is_operator_rb, EXPECT_DECL_COMMA, false, reduce_decl_rb);
     parser.define_special_state("EXPECT_DECL_COMMA", &token::is_operator_comma, reduce_decl_comma, EXPECT_DECL_SC);
-    parser.define_special_state("EXPECT_DECL_SC", &token::is_operator_sc, reduce_decl_list, PARSER_ERROR,
+    parser.define_special_state("EXPECT_DECL_SC", &token::is_operator_sc, reduce_decl_list, EXPECT_DECL_CLB);
+    
+    //Function definition
+    parser.define_special_state("EXPECT_DECL_CLB", &token::is_operator_clb, reduce_fn_decl, PARSER_ERROR, 
     "Expected declaration to end with ';'");
+    parser.define_state("EXPECT_DECL_CRB", EXPECT_STOR_SPEC, &token::is_operator_crb, PARSER_ERROR, false, reduce_fn_def, 
+    "Expected function definition to end with }}");
 
     //Pointer states
     parser.define_state("EXPECT_POINTER_CONST", EXPECT_POINTER_VOLATILE, &token::is_keyword_const, EXPECT_POINTER_VOLATILE, true);
@@ -755,6 +799,7 @@ static void parse_declaration() {
     parser.define_state("EXPECT_DECL_RSB", EXPECT_DECL_LSB, &token::is_operator_rsb, PARSER_ERROR, false, reduce_array_specifier_list,
     "Expected array specifier to close with ']'");
 
+
 }
 
 void parse_init() {
@@ -762,8 +807,8 @@ void parse_init() {
     parser.set_token_stream(tokens);
 
     parse_declaration();
-//    parse_stmt_list();
-//    parse_expr();
+    parse_stmt_list();
+    parse_expr();
 }
 
 std::unique_ptr<ast> parse() {

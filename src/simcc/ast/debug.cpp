@@ -109,6 +109,7 @@ void ast::print() {
         case AST_TYPE::PTR_LIST: print_ast_list("Node: ptr list"); break;
         case AST_TYPE::ARRAY_SPEC_LIST: print_ast_list("Node: array list"); break;
         case AST_TYPE::PARAM_LIST: print_ast_list("Node: param list"); break;
+        case AST_TYPE::FN_DEF: print_ast_list("Node: fn def"); break;
     }
 }
 
