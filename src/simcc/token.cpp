@@ -9,19 +9,50 @@ bool token::is_identifier() const {
     return type == IDENT;
 }
 
-bool token::is_data_type() const {
+bool token::is_keyword_data_type() const {
     keyword_type type = std::get<keyword_type>(value);
     switch(type) {
         case TYPE_INT:
         case TYPE_CHAR:
-        case TYPE_VOID: return true;
+        case TYPE_VOID:
+        case TYPE_LONG: 
+        case TYPE_LONGLONG:
+        case TYPE_SHORT:
+        case TYPE_SIGNED:
+        case TYPE_UNSIGNED: return true;     
     }
 
     return false;
 }
 
-bool token::is_keyword_data_type() const {
-    return type == KEYWORD && is_data_type();
+bool token::is_type_qualifier() const {
+    if(type != KEYWORD)
+        return false;
+
+    switch(std::get<keyword_type>(value)) {
+        case TYPE_CONST:
+        case TYPE_VOLATILE: return true;
+    }
+
+    return false;
+}
+
+bool token::is_storage_specifier() const {
+    if(type != KEYWORD)
+        return false;
+    
+    switch(std::get<keyword_type>(value)) {
+        case TYPE_AUTO:
+        case TYPE_REGISTER:
+        case TYPE_EXTERN:
+        case TYPE_STATIC: return true;
+    }
+
+    return false;
+}
+
+bool token::is_data_type() const {
+    return type == KEYWORD && is_keyword_data_type();
 }
 
 bool token::is_operator_comma() const {
@@ -46,6 +77,14 @@ bool token::is_operator_clb() const {
 
 bool token::is_operator_crb() const {
     return type == OPERATOR && std::get<operator_type>(value) == CRB;
+}
+
+bool token::is_operator_lsb() const {
+    return type == OPERATOR && std::get<operator_type>(value) == LSB;
+}
+
+bool token::is_operator_rsb() const {
+    return type == OPERATOR && std::get<operator_type>(value) == RSB;
 }
 
 bool token::is_keyword_return() const {
@@ -125,6 +164,10 @@ bool token::is_operator_plus() const {
     return type == OPERATOR && std::get<operator_type>(value) == PLUS;
 }
 
+bool token::is_operator_star() const {
+    return type == OPERATOR && std::get<operator_type>(value) == MUL;
+}
+
 bool token::is_keyword_long() const {
     return type == KEYWORD && std::get<keyword_type>(value) == TYPE_LONG;
 }
@@ -151,4 +194,20 @@ bool token::is_keyword_extern() const {
 
 bool token::is_keyword_static() const {
     return type == KEYWORD && std::get<keyword_type>(value) == TYPE_STATIC;
+}
+
+bool token::is_keyword_signed() const {
+    return type == KEYWORD && std::get<keyword_type>(value) == TYPE_SIGNED;
+}
+
+bool token::is_keyword_unsigned() const {
+    return type == KEYWORD && std::get<keyword_type>(value) == TYPE_UNSIGNED;
+}
+
+bool token::is_keyword_char() const {
+    return type == KEYWORD && std::get<keyword_type>(value) == TYPE_CHAR;
+}
+
+bool token::is_keyword_void() const {
+    return type == KEYWORD && std::get<keyword_type>(value) == TYPE_VOID;
 }

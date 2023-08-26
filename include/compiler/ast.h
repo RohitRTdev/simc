@@ -2,16 +2,20 @@
 #include <deque>
 #include <memory>
 #include "compiler/token.h"
+#include "compiler/type.h"
 
 enum class AST_TYPE {
     PROGRAM,
     TOKEN,
     EXPR,
     DECL_LIST,
+    PARAM_LIST,
+    BASE_TYPE,
+    PTR_SPEC,
+    PTR_LIST,
     DECL,
-    FN_DECL,
-    FN_ARG_LIST,
-    FN_ARG,
+    ARRAY_SPEC,
+    ARRAY_SPEC_LIST,
     FN_DEF,
     STMT_LIST,
     RETURN,
@@ -22,17 +26,21 @@ enum class AST_TYPE {
 struct ast {
 private:
     AST_TYPE type;
+
+#ifdef SIMDEBUG
+    void print_ast_list(std::string_view msg);
+#endif
+
 public:
     std::deque<std::unique_ptr<ast>> children;
     ast(AST_TYPE _type); 
 
     void attach_node(std::unique_ptr<ast> node); 
+    void attach_back(std::unique_ptr<ast> node); 
     std::unique_ptr<ast> remove_node(); 
 
     bool is_decl_list() const; 
     bool is_decl() const; 
-    bool is_fn_decl() const;
-    bool is_fn_arg() const;
     bool is_stmt() const;
     bool is_token() const;
     bool is_expr() const; 
@@ -42,11 +50,55 @@ public:
     bool is_ret_stmt() const;
     bool is_stmt_list() const;
     bool is_expr_stmt() const;
+    bool is_pointer_list() const;
+    bool is_array_specifier_list() const;
+    bool is_base_type() const;
+    bool is_param_list() const;
+
 #ifdef SIMDEBUG
     virtual void print();
 #endif 
 
     virtual ~ast() = default;
+};
+
+struct ast_base_type: ast {
+    decl_spec base_type;
+
+    ast_base_type(const token*, const token*, const token*, const token*, const token*);
+
+#ifdef SIMDEBUG
+    void print() override;
+#endif
+};
+
+struct ast_ptr_spec : ast {
+    const token* pointer, *const_qual, *vol_qual;
+    ast_ptr_spec(const token* , const token* , const token* );
+
+#ifdef SIMDEBUG
+    void print() override;
+#endif
+
+};
+
+struct ast_array_spec : ast {
+    const token* constant;
+    ast_array_spec(const token*);
+
+#ifdef SIMDEBUG
+    void print() override;
+#endif
+
+};
+
+struct ast_decl : ast {
+    const token* ident;
+    ast_decl(const token*);
+
+#ifdef SIMDEBUG
+    void print() override;
+#endif
 };
 
 struct ast_token: ast {

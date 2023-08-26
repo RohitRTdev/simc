@@ -14,25 +14,29 @@ c_type decl_spec::fetch_type_spec() const {
 }
 
 bool decl_spec::is_const() const {
-    return const_qual->is_keyword_const();
+    return const_qual && const_qual->is_keyword_const();
 }
 
 bool decl_spec::is_volatile() const {
-    return vol_qual->is_keyword_volatile();
+    return vol_qual && vol_qual->is_keyword_volatile();
 }
 
 bool decl_spec::is_stor_auto() const {
-    return storage_spec->is_keyword_auto();
+    return storage_spec && storage_spec->is_keyword_auto();
 }
 
 bool decl_spec::is_stor_extern() const {
-    return storage_spec->is_keyword_extern();
+    return storage_spec && storage_spec->is_keyword_extern();
 }
 
 bool decl_spec::is_stor_register() const {
-    return storage_spec->is_keyword_register();
+    return storage_spec && storage_spec->is_keyword_register();
 }
 
 bool decl_spec::is_stor_static() const {
-    return storage_spec->is_keyword_static();
+    return storage_spec && storage_spec->is_keyword_static();
+}
+
+bool decl_spec::is_signed() const {
+    return sign_qual && sign_qual->is_keyword_signed();
 }

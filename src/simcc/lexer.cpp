@@ -68,6 +68,24 @@ static std::optional<keyword_type> fetch_keyword(const std::string& literal) {
     else if(literal == "signed") {
         keyword = TYPE_SIGNED;
     }
+    else if(literal == "const") {
+        keyword = TYPE_CONST;
+    }
+    else if(literal == "volatile") {
+        keyword = TYPE_VOLATILE;
+    }
+    else if(literal == "static") {
+        keyword = TYPE_STATIC;
+    }
+    else if(literal == "auto") {
+        keyword = TYPE_AUTO;
+    }
+    else if(literal == "extern") {
+        keyword = TYPE_EXTERN;
+    }
+    else if(literal == "register") {
+        keyword = TYPE_REGISTER;
+    }
     else if(literal == "return") {
         keyword = RETURN;
     }

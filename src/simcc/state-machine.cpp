@@ -2,7 +2,7 @@
 #include "compiler/ast-ops.h"
 #include "debug-api.h"
 
-state_machine::state_machine(): cur_state(PARSER_START), token_stream(nullptr), advance_token(true), token_idx(0), num_states(0){
+state_machine::state_machine(): cur_state(EXPECT_STOR_SPEC), token_stream(nullptr), advance_token(true), token_idx(0), num_states(0){
 
 }
 
@@ -72,7 +72,7 @@ void state_machine::start() {
     auto alternator = [&] {
         if (!state_path[cur_state].fail_to_error) {
             cur_state = state_path[cur_state].alt_state;
-            sim_log_debug("Moving to alternate state:{}", state_path[cur_state].name);
+            //sim_log_debug("Moving to alternate state:{}", state_path[cur_state].name);
             advance_token = false;
         }
         else {
@@ -82,7 +82,7 @@ void state_machine::start() {
 
     auto mover = [&] {
         cur_state = state_path[cur_state].next_state;
-        sim_log_debug("Moving to state:{}", state_path[cur_state].name);
+        //sim_log_debug("Moving to state:{}", state_path[cur_state].name);
         advance_token = true;
     };
 
@@ -123,7 +123,7 @@ void state_machine::start() {
     auto move_and_reduce = [&] {
         state_path[cur_state].reduce_this(this);
         cur_state = state_path[cur_state].next_state;
-        sim_log_debug("Moving to state:{}", state_path[cur_state].name);
+        //sim_log_debug("Moving to state:{}", state_path[cur_state].name);
         advance_token = false;
     };
 
@@ -147,7 +147,7 @@ void state_machine::start() {
             alternator();
     };
 
-    cur_state = PARSER_START;
+    cur_state = EXPECT_STOR_SPEC;
     advance_token = true;
     token_idx = 0;
 

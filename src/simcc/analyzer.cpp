@@ -284,34 +284,6 @@ static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation
 
 
 static void eval_gdecl_list(std::unique_ptr<ast> decl_list, std::shared_ptr<Itranslation> tu) {
-    
-    auto type = std::move(decl_list->children[0]);
-    c_type _type;
-    switch(std::get<keyword_type>(cast_to_ast_token(type)->tok->value)) {
-        case TYPE_INT: _type = C_INT; break;
-        default: sim_log_error("Types other than int not supported right now");
-    }
-
-    for(int i = 1; i < decl_list->children.size(); i++) {
-        auto decl = std::move(decl_list->children[i]);
-        auto ident = std::move(decl->children[0]);
-        auto& name = std::get<std::string>(cast_to_ast_token(ident)->tok->value);
-
-        if(decl->children.size() > 1) {
-            auto value = std::move(decl->children[1]);
-            auto& val = std::get<std::string>(cast_to_ast_token(value)->tok->value);
-
-            int id = tu->declare_global_variable(name, _type, val);
-
-            current_scope->add_variable(id, name, _type, val, true);
-        } 
-        else {
-            int id = tu->declare_global_variable(name, _type);
-
-            current_scope->add_variable(id, name, _type, true);
-        }
-    }
-
 }
 
 static void setup_fn_decl(std::unique_ptr<ast> ret_type, std::unique_ptr<ast> name, std::unique_ptr<ast> arg_list, std::shared_ptr<Itranslation> tu) {
@@ -352,24 +324,18 @@ void eval(std::unique_ptr<ast> prog) {
     sim_log_debug("Starting evaluator...");
     CRITICAL_ASSERT(prog->is_prog(), "eval() called with non program node");
 
-    current_scope = new scope();
-    auto tu = std::shared_ptr<Itranslation>(create_translation_unit());
+    //current_scope = new scope();
+    //auto tu = std::shared_ptr<Itranslation>(create_translation_unit());
 
-    for(auto& child: prog->children) {
-        if(child->is_decl_list()) {
-            eval_gdecl_list(std::move(child), tu);
-        }
-        else if(child->is_fn_decl()) {
-            eval_fn_decl(std::move(child), tu);
-        }
-        else if(child->is_fn_def()) {
-            eval_fn_def(std::move(child), tu);
-        }
-        else {
-            CRITICAL_ASSERT_NOW("Invalid ast node found as child of program node");
-        }
-    }
+    //for(auto& child: prog->children) {
+    //    if(child->is_decl_list()) {
+    //        eval_gdecl_list(std::move(child), tu);
+    //    }
+    //    else {
+    //        CRITICAL_ASSERT_NOW("Invalid ast node found as child of program node");
+    //    }
+    //}
 
-    tu->generate_code();
-    asm_code = tu->fetch_code();
+    //tu->generate_code();
+    //asm_code = tu->fetch_code();
 }

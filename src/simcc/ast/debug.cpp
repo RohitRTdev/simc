@@ -3,7 +3,7 @@
 #include "compiler/token.h"
 #include "compiler/ast.h"
 
-#define AST_PRINT( msg, ... ) (sim_log_debug(std::string(level_space, ' ') + msg __VA_OPT__(,) __VA_ARGS__))
+#define AST_PRINT( msg, ... ) (sim_log_debug(std::string(level_space, ' ') + std::string(msg) __VA_OPT__(,) __VA_ARGS__))
 
 const size_t level_increment = 2;
 size_t level_space = 0; 
@@ -23,7 +23,6 @@ void token::print() const {
                 AST_PRINT("type:STRING_CONSTANT value:{}", std::get<std::string>(value));
             break;
         }
-        case NEWLINE: AST_PRINT("type:NEWLINE"); break;
         default: AST_PRINT("Invalid token??");
     }
     
@@ -34,12 +33,17 @@ static void print_child_nodes(const std::deque<std::unique_ptr<ast>>& children) 
         child->print();
 }
 
+static void print_tokens(std::vector<const token*> args) {
+    for(const auto& arg : args) {
+        if(arg)
+            arg->print();
+    }
+}
 
 void ast_expr::print() {
     const static std::vector<std::string> expr_type_debug = {"Variable", "Constant", "Operator", "Punctuator", "Function call"}; 
     AST_PRINT("Expr node, type:{}", expr_type_debug[static_cast<int>(type)]);
-    if(tok)
-        tok->print();
+    print_tokens({tok});
     level_space++;
     print_child_nodes(children);
     level_space--;
@@ -59,96 +63,52 @@ void ast_token::print() {
     tok->print();
 }
 
-static void print_ast_expr_stmt(const ast* node) {
-    AST_PRINT("Expr stmt");
-    level_space++;
-    print_child_nodes(node->children);
-    level_space--;
-}
-
-static void print_ast_fn_arg(const ast* node) {
-    AST_PRINT("Node: fn_arg");
-    level_space++;
-    print_child_nodes(node->children);
-    level_space--;
-}
-
-static void print_ast_fn_decl(const ast* node) {
-    AST_PRINT("Node: fn_decl");
-    level_space += level_increment;
-    print_child_nodes(node->children);
-    level_space -= level_increment;
-}
-
-static void print_ast_decl(const ast* node) {
+void ast_decl::print() {
     AST_PRINT("Node: decl");
+    print_tokens({ ident });
     level_space++;
-    print_child_nodes(node->children);
+    print_child_nodes(children);
     level_space--;
 } 
 
-static void print_ast_decl_list(const ast* node) {
-    AST_PRINT("Node: decl_list, num_nodes:{}", node->children.size());
-    level_space += level_increment;
-    print_child_nodes(node->children);
-    level_space -= level_increment;
+void ast_base_type::print() {
+    AST_PRINT("Node: base type");
+    
+    print_tokens({base_type.storage_spec, base_type.type_spec, base_type.sign_qual,
+    base_type.const_qual, base_type.vol_qual});
+
 }
 
-static void print_ast_fn_arg_list(const ast* node) {
-    AST_PRINT("Node: fn_arg_list, num_nodes:{}", node->children.size());
-    size_t number = 0;
-    level_space += level_increment;
-    print_child_nodes(node->children);
-    level_space -= level_increment;
+void ast_ptr_spec::print() {
+    AST_PRINT("Node: ptr specifier");
+
+    print_tokens({pointer, const_qual, vol_qual});
 }
 
-static void print_ast_program(const ast* node) {
-    AST_PRINT("Node: Program, num_nodes:{}", node->children.size());
-    size_t number = 0;
-    level_space += level_increment;
-    print_child_nodes(node->children);
-    level_space -= level_increment;
+void ast_array_spec::print() {
+    AST_PRINT("Node: array specifier");
+
+    constant->print();
 }
 
-static void print_ast_return(const ast* node) {
-    AST_PRINT("Node: return statement");
+void ast::print_ast_list(std::string_view msg) {
+    AST_PRINT(msg);
     level_space++;
-    if (node->children.size())
-        node->children[0]->print();
-    level_space--;
-}
-
-static void print_ast_null_stmt(const ast* node) {
-    AST_PRINT("Node: Null statement");
-}
-
-static void print_ast_fn_def(const ast* node) {
-    AST_PRINT("Node: Fn definition");
-    level_space++;
-    print_child_nodes(node->children);
-    level_space--;
-}
-
-static void print_ast_stmt_list(const ast* node) {
-    AST_PRINT("Node: Stmt List, statements:{}", node->children.size());
-    level_space++;
-    print_child_nodes(node->children);
+    print_child_nodes(children);
     level_space--;
 }
 
 void ast::print() {
     switch(type) {
-        case AST_TYPE::PROGRAM: print_ast_program(this); break;
-        case AST_TYPE::FN_ARG_LIST: print_ast_fn_arg_list(this); break;
-        case AST_TYPE::DECL: print_ast_decl(this); break;
-        case AST_TYPE::DECL_LIST: print_ast_decl_list(this); break;
-        case AST_TYPE::FN_ARG: print_ast_fn_arg(this); break;
-        case AST_TYPE::FN_DECL: print_ast_fn_decl(this); break;
-        case AST_TYPE::RETURN: print_ast_return(this); break;
-        case AST_TYPE::NULL_STMT: print_ast_null_stmt(this); break;
-        case AST_TYPE::STMT_LIST: print_ast_stmt_list(this); break;
-        case AST_TYPE::FN_DEF: print_ast_fn_def(this); break;
-        case AST_TYPE::EXPR_STMT: print_ast_expr_stmt(this); break;
+        case AST_TYPE::PROGRAM: print_ast_list(fmt::format("Node: Program, num_nodes:{}", children.size())); break;
+        case AST_TYPE::DECL_LIST: print_ast_list(fmt::format("Node: Decl list, num_nodes:{}", children.size())); break;
+        case AST_TYPE::RETURN: print_ast_list("Node: return stmt"); break;
+        case AST_TYPE::NULL_STMT: print_ast_list("Node: null stmt"); break;
+        case AST_TYPE::STMT_LIST: print_ast_list("Node: stmt list"); break;
+        case AST_TYPE::EXPR_STMT: print_ast_list("Node: expr stmt"); break;
+        case AST_TYPE::PTR_LIST: print_ast_list("Node: ptr list"); break;
+        case AST_TYPE::ARRAY_SPEC_LIST: print_ast_list("Node: array list"); break;
+        case AST_TYPE::PARAM_LIST: print_ast_list("Node: param list"); break;
     }
 }
 

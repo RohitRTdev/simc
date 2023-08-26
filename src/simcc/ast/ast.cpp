@@ -9,9 +9,31 @@ ast_token::ast_token(const token* _tok) : ast(AST_TYPE::TOKEN), tok(_tok)
 ast_token::ast_token(const token* _tok, bool is_expr) : ast(AST_TYPE::EXPR), tok(_tok)
 {}
 
+ast_base_type::ast_base_type(const token* storage_spec, const token* type_spec,
+const token* const_qual, const token* vol_qual, const token* sign_qual) : ast(AST_TYPE::BASE_TYPE),
+base_type{storage_spec, type_spec, const_qual, vol_qual, sign_qual} {
+
+}
+
+ast_ptr_spec::ast_ptr_spec(const token* _pointer, const token* _const_qual, const token* _vol_qual) : ast(AST_TYPE::PTR_SPEC), 
+pointer(_pointer), const_qual(_const_qual), vol_qual(_vol_qual) {
+}
+
+ast_array_spec::ast_array_spec(const token* _constant) : ast(AST_TYPE::ARRAY_SPEC), constant(_constant) {
+
+}
+
+ast_decl::ast_decl(const token* _ident) : ast(AST_TYPE::DECL), ident(_ident) {
+
+}
+
 void ast::attach_node(std::unique_ptr<ast> node) {
     children.push_front(std::move(node));
 }
+
+void ast::attach_back(std::unique_ptr<ast> node) {
+    children.push_back(std::move(node));
+} 
 
 std::unique_ptr<ast> ast::remove_node() {
     auto node = std::move(children.back());
@@ -25,10 +47,6 @@ bool ast::is_decl_list() const {
 
 bool ast::is_decl() const {
     return type == AST_TYPE::DECL;
-} 
-
-bool ast::is_fn_arg() const {
-    return type == AST_TYPE::FN_ARG;
 } 
 
 bool ast::is_stmt() const {
@@ -56,10 +74,6 @@ bool ast::is_prog() const {
     return type == AST_TYPE::PROGRAM;
 }
 
-bool ast::is_fn_decl() const {
-    return type == AST_TYPE::FN_DECL;
-}
-
 bool ast::is_fn_def() const {
     return type == AST_TYPE::FN_DEF;
 }
@@ -76,3 +90,18 @@ bool ast::is_expr_stmt() const {
     return type == AST_TYPE::EXPR_STMT;
 }
 
+bool ast::is_pointer_list() const {
+    return type == AST_TYPE::PTR_LIST;
+}
+
+bool ast::is_array_specifier_list() const {
+    return type == AST_TYPE::ARRAY_SPEC_LIST;
+}
+
+bool ast::is_base_type() const {
+    return type == AST_TYPE::BASE_TYPE;
+}
+
+bool ast::is_param_list() const {
+    return type == AST_TYPE::PARAM_LIST;
+}

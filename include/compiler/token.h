@@ -84,7 +84,7 @@ private:
     token_type type;
     token_sub_type sub_type;
 
-    bool is_data_type() const;
+    bool is_keyword_data_type() const;
 
 public:
     std::variant<char, std::string, operator_type, keyword_type> value;
@@ -108,7 +108,6 @@ public:
 
     bool is_keyword_else() const;
     bool is_keyword_return() const;
-    bool is_keyword_data_type() const;
     bool is_keyword_long() const;
     bool is_keyword_auto() const;
     bool is_keyword_extern() const;
@@ -116,14 +115,24 @@ public:
     bool is_keyword_register() const;
     bool is_keyword_const() const;
     bool is_keyword_volatile() const;
+    bool is_keyword_signed() const;
+    bool is_keyword_unsigned() const;
+    bool is_keyword_char() const;
+    bool is_keyword_void() const;
     bool is_operator_comma() const;
     bool is_operator_lb() const;
     bool is_operator_rb() const;
     bool is_operator_sc() const;
     bool is_operator_clb() const; 
     bool is_operator_crb() const;
+    bool is_operator_lsb() const;
+    bool is_operator_rsb() const;
     bool is_operator_eq() const; 
     bool is_operator_plus() const;
+    bool is_operator_star() const;
+    bool is_data_type() const;
+    bool is_storage_specifier() const;
+    bool is_type_qualifier() const;
     bool is_identifier() const;
     bool is_constant() const;
     bool is_integer_constant() const;
