@@ -23,12 +23,11 @@ enum c_type {
 
     //These types are used since they are needed in certain situations, however they are not
     //used physically while moving data from one register to another in a given arch 
-    C_VOID,
     C_PTR
 };
 
 #define NUM_TYPES 5
-
+//Code generator's view of a variable
 struct c_var {
     std::string name;
     c_type type;

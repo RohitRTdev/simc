@@ -676,6 +676,11 @@ static void reduce_base_type(state_machine* inst) {
         sim_log_error("Invalid type specifier mentioned");
     }
 
+    if(reduce_helper.base_reduce_context(inst) == base_reduction_context::EXTERNAL &&
+    storage_spec && (storage_spec->is_keyword_auto() || storage_spec->is_keyword_register())) {
+        sim_log_error("Only static/extern storage specifiers allowed in declaration at global scope");
+    }
+
     auto type_spec = int_modifier ? int_modifier : core_type;
 
     inst->parser_stack.push(create_ast_base_type(storage_spec, type_spec, sign_qual, const_qual, vol_qual));
