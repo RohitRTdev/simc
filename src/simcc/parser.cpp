@@ -675,6 +675,10 @@ static void reduce_base_type(state_machine* inst) {
     if(int_modifier && core_type && (core_type->is_keyword_char() || core_type->is_keyword_void())) {
         sim_log_error("Invalid type specifier mentioned");
     }
+    
+    if (sign_qual && core_type && core_type->is_keyword_void()) {
+        sim_log_error("void type cannot have signed/unsigned modifiers");
+    }
 
     if(reduce_helper.base_reduce_context(inst) == base_reduction_context::EXTERNAL &&
     storage_spec && (storage_spec->is_keyword_auto() || storage_spec->is_keyword_register())) {

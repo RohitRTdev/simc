@@ -376,7 +376,7 @@ static type_spec forge_type(const base_type_res& base_res, const decltype(type_s
     return {base_res.phy_type, base_res.is_void, base_res.is_signed, base_res.cv, mod_list};
 }
 
-static void eval_decl_list(std::unique_ptr<ast> decl_list, std::shared_ptr<Itranslation> tu) {
+static void eval_decl_list(std::unique_ptr<ast> decl_list, std::shared_ptr<Itranslation> tu, bool fn_def = false) {
 
     struct context {
         std::unique_ptr<ast> decl_list;
@@ -404,6 +404,7 @@ static void eval_decl_list(std::unique_ptr<ast> decl_list, std::shared_ptr<Itran
     bool skip_to_new_decl = false;
     bool array = false, function = false;
     decltype(type_spec::mod_list) mod_list;
+    std::vector<std::string_view> fn_args;
 
     while(!decl_list->children.empty() || !iter_stack.empty()) {    
         //Retrieve the saved context and resume from there
@@ -515,18 +516,34 @@ static void eval_decl_list(std::unique_ptr<ast> decl_list, std::shared_ptr<Itran
                 sim_log_error("array of void is not allowed");
             }
         }
-        if(iter_stack.empty()) {     
-            current_scope->add_variable(0, std::get<std::string>(pointer_cast<ast_decl>(decl)->ident->value),
-        res, stor_spec);
+        auto decl_view = pointer_cast<ast_decl>(decl)->ident;
+        std::string_view name;
+        if(decl_view) {
+            name = std::get<std::string>(decl_view->value);
+        } 
+        if(iter_stack.empty()) {    
+            if(fn_def) {
+                current_scope->add_function_definition(name, res, stor_spec, fn_args);
+            } 
+            else {
+                bool is_global = current_scope->is_global_scope();
+                current_scope->add_variable(0, name, res, stor_spec, is_global);
+            }
         }
         else {
+            if(fn_def) {
+                fn_args.push_back(name);
+            }
             saved_res = res; 
         } 
-
         mod_list.clear();
-
     }
 
+}
+
+void eval_fn_def(std::unique_ptr<ast> decl_list, std::shared_ptr<Itranslation> tu) {
+    auto fn_decl = fetch_child(decl_list);
+    eval_decl_list(std::move(fn_decl), tu, true);
 }
 
 void eval(std::unique_ptr<ast> prog) {
@@ -539,6 +556,9 @@ void eval(std::unique_ptr<ast> prog) {
     for(auto& child: prog->children) {
         if(child->is_decl_list()) {
             eval_decl_list(std::move(child), tu);
+        }
+        else if(child->is_fn_def()) {
+            eval_fn_def(std::move(child), tu);
         }
         else {
             CRITICAL_ASSERT_NOW("Invalid ast node found as child of program node");

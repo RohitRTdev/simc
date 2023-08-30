@@ -10,6 +10,7 @@ struct decl_spec {
     const token* const_qual, *vol_qual;
     const token* sign_qual;
 
+    bool is_stor_none() const;
     bool is_stor_static() const;
     bool is_stor_extern() const;
     bool is_stor_auto() const;

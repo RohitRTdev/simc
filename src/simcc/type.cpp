@@ -12,6 +12,10 @@ c_type decl_spec::fetch_type_spec() const {
     }
 }
 
+bool decl_spec::is_stor_none() const {
+    return !storage_spec;
+}
+
 bool decl_spec::is_const() const {
     return const_qual && const_qual->is_keyword_const();
 }
