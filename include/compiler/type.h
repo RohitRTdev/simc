@@ -46,13 +46,13 @@ struct modifier {
 
 struct type_spec {
     c_type base_type;
-    bool is_void;
     bool is_signed;
     cv_info cv;
 
     std::deque<modifier> mod_list;
 
     type_spec resolve_type() const;
+    size_t get_size() const; 
     bool is_pointer_type() const;
     bool is_array_type() const;
     bool is_function_type() const;

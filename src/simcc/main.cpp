@@ -82,7 +82,7 @@ int app_start(int argc, char** argv) {
         auto file_info_buf = read_file(file);
         sim_log_debug("File size: {}", file_info_buf.size());
         start_compilation(file_info_buf);
-        //write_file("out.s", asm_code);
+        write_file("out.s", asm_code);
     }
 
     std::cout << "Compilation successful" << std::endl;  

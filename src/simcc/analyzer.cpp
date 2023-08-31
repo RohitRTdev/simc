@@ -1,3 +1,4 @@
+#include <tuple>
 #include <optional>
 #include <stack>
 #include "compiler/ast.h"
@@ -336,26 +337,18 @@ static const Ast* pointer_cast(const std::unique_ptr<ast>& ptr) {
     return static_cast<Ast*>(ptr.get());
 }
 
-static struct base_type_res {
-    c_type phy_type;
-    bool is_void;
-    bool is_signed;
-    cv_info cv;
-} forge_base_type(std::unique_ptr<ast_base_type> base_type) {
+using base_type_res = std::tuple<c_type, bool, cv_info>;
+
+static base_type_res forge_base_type(std::unique_ptr<ast_base_type> base_type) {
     c_type phy_type = C_INT;
-    bool is_void = false;
 
     if(!base_type->base_type.type_spec) {
         phy_type = C_INT;
     }
     else {
-        if(std::get<keyword_type>(base_type->base_type.type_spec->value) == TYPE_VOID) {
-            is_void = true;
-        }
-        else {
-            phy_type = base_type->base_type.fetch_type_spec();
-        }
+        phy_type = base_type->base_type.fetch_type_spec();
     }
+
     bool has_sign = false, is_signed = true;
     if(base_type->base_type.sign_qual) {
         has_sign = true;
@@ -369,27 +362,29 @@ static struct base_type_res {
     if(base_type->base_type.vol_qual)
         is_vol = true;
 
-    return {phy_type, is_void, is_signed, cv_info{is_const, is_vol}};    
+    return std::make_tuple(phy_type, is_signed, cv_info{is_const, is_vol});    
 }
 
 static type_spec forge_type(const base_type_res& base_res, const decltype(type_spec::mod_list)& mod_list) {
-    return {base_res.phy_type, base_res.is_void, base_res.is_signed, base_res.cv, mod_list};
+    return {std::get<0>(base_res), std::get<1>(base_res), std::get<2>(base_res), mod_list};
 }
 
-static void eval_decl_list(std::unique_ptr<ast> decl_list, std::shared_ptr<Itranslation> tu, bool fn_def = false) {
+static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_list, std::shared_ptr<Itranslation> tu, bool is_fn_def = false) {
 
     struct context {
         std::unique_ptr<ast> decl_list;
         decltype(type_spec::mod_list) mod_list;
         base_type_res base_type;
-
-        context(std::unique_ptr<ast> decl, const decltype(type_spec::mod_list)& mod, const base_type_res& base) :
-        decl_list(std::move(decl)), mod_list(mod), base_type(base)
+        decl_spec stor_spec;
+        context(std::unique_ptr<ast> decl, const decltype(type_spec::mod_list)& mod, 
+        const decl_spec& stor, const base_type_res& base) :
+        decl_list(std::move(decl)), mod_list(mod), stor_spec(stor), base_type(base)
         {}
 
         context(context&& obj) {
             decl_list = std::move(obj.decl_list);
             mod_list = obj.mod_list;
+            stor_spec = obj.stor_spec;
             base_type = obj.base_type;
         }
     };
@@ -412,6 +407,7 @@ static void eval_decl_list(std::unique_ptr<ast> decl_list, std::shared_ptr<Itran
             auto node = fetch_stack_node(iter_stack);
             decl_list = std::move(node.decl_list);
             mod_list = node.mod_list;
+            stor_spec = node.stor_spec;
             forged_base = node.base_type;
             
             base_type_init = true;
@@ -485,8 +481,8 @@ static void eval_decl_list(std::unique_ptr<ast> decl_list, std::shared_ptr<Itran
                     decl->attach_node(std::move(child));
                     decl_list->attach_node(std::move(decl));
 
-                    //Save the decl_list, mod_list and base_type
-                    context tmp(std::move(decl_list), mod_list, forged_base);
+                    //Save the decl_list, mod_list, stor_spec and base_type
+                    context tmp(std::move(decl_list), mod_list, stor_spec, forged_base);
                     iter_stack.push(std::move(tmp));
                     decl_list = std::move(param);
                     base_type_init = false;
@@ -508,7 +504,7 @@ static void eval_decl_list(std::unique_ptr<ast> decl_list, std::shared_ptr<Itran
 
         type_spec res{};
         res = forge_type(forged_base, mod_list);
-        if (res.is_void) {
+        if (res.base_type == C_VOID) {
             if (!res.mod_list.size()) {
                 sim_log_error("void base type cannot be used with unmodified type");
             }
@@ -522,16 +518,16 @@ static void eval_decl_list(std::unique_ptr<ast> decl_list, std::shared_ptr<Itran
             name = std::get<std::string>(decl_view->value);
         } 
         if(iter_stack.empty()) {    
-            if(fn_def) {
-                current_scope->add_function_definition(name, res, stor_spec, fn_args);
-            } 
-            else {
-                bool is_global = current_scope->is_global_scope();
-                current_scope->add_variable(0, name, res, stor_spec, is_global);
+            //Push the function name along with it's args for ease of processing
+            if(is_fn_def) {
+                fn_args.push_back(name);
             }
+            bool is_global = current_scope->is_global_scope();
+            current_scope->add_variable(0, name, res, stor_spec, is_global);
         }
         else {
-            if(fn_def) {
+            //Only top level fn arguments should get pushed to list
+            if(is_fn_def && iter_stack.size() == 1) {
                 fn_args.push_back(name);
             }
             saved_res = res; 
@@ -539,19 +535,21 @@ static void eval_decl_list(std::unique_ptr<ast> decl_list, std::shared_ptr<Itran
         mod_list.clear();
     }
 
+    return fn_args;
 }
 
 void eval_fn_def(std::unique_ptr<ast> decl_list, std::shared_ptr<Itranslation> tu) {
     auto fn_decl = fetch_child(decl_list);
-    eval_decl_list(std::move(fn_decl), tu, true);
+    auto fn_args = eval_decl_list(std::move(fn_decl), tu, true);
+    current_scope->add_function_definition(fn_args.back(), std::vector<std::string_view>(fn_args.begin(), fn_args.begin() + fn_args.size() - 1));
 }
 
 void eval(std::unique_ptr<ast> prog) {
     sim_log_debug("Starting evaluator...");
     CRITICAL_ASSERT(prog->is_prog(), "eval() called with non program node");
 
-    current_scope = new scope();
     auto tu = std::shared_ptr<Itranslation>(create_translation_unit());
+    current_scope = new scope(nullptr, tu);
 
     for(auto& child: prog->children) {
         if(child->is_decl_list()) {
@@ -565,6 +563,6 @@ void eval(std::unique_ptr<ast> prog) {
         }
     }
 
-    //tu->generate_code();
-    //asm_code = tu->fetch_code();
+    tu->generate_code();
+    asm_code = tu->fetch_code();
 }

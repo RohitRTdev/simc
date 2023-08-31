@@ -578,7 +578,7 @@ static void reduce_base_type(state_machine* inst) {
     const token* vol_qual = nullptr;
    
     auto extern_decl_check = [&] () {
-        return !inst->parser_stack.empty() && !inst->parser_stack.top()->is_decl_list();
+        return !inst->parser_stack.empty() && !inst->parser_stack.top()->is_decl_list() && !inst->parser_stack.top()->is_fn_def();
     };
 
     auto intern_decl_check = [&] () {

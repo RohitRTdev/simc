@@ -1,5 +1,6 @@
 #pragma once
 
+#include <tuple>
 #include <vector>
 #include <list>
 #include <optional>
@@ -31,17 +32,41 @@ struct c_expr_x64 {
 
 class x64_func;
 
+
 class x64_tu : public Itranslation {
     std::vector<c_var> globals;
-    std::vector<std::pair<x64_func*, size_t>>  fn_list;
+    std::vector<std::pair<x64_func*, size_t>> fn_list;
     size_t global_var_id;
+
+
+    enum Segment {
+        DATA,
+        BSS
+    };
+
+    template<Segment segment>
+    void write_segment(std::string& data) {
+        if(data.size()) {
+            const char* seg_name = nullptr;
+            if constexpr (segment == DATA) {
+                seg_name = LINE(".section .data");
+            }
+            else if constexpr (segment == BSS) {
+                seg_name = LINE(".section .bss");
+            }
+            data = seg_name + data;
+            add_inst_to_code(data);
+        }
+    }
+
 public:
     
     x64_tu();
     
-    int declare_global_variable(const std::string& name, c_type type) override;
-    int declare_global_variable(const std::string& name, c_type type, std::string_view constant) override;
-    Ifunc_translation* add_function(const std::string& name) override;
+    int declare_global_variable(std::string_view name, c_type type, bool is_signed, bool is_static) override;
+    int declare_global_variable(std::string_view name, c_type type, bool is_signed, bool is_static, std::string_view constant) override;
+    int declare_global_mem_variable(std::string_view name, bool is_static, size_t mem_var_size) override; 
+    Ifunc_translation* add_function(std::string_view name, c_type ret_type, bool is_signed, bool is_static) override; 
     void generate_code() override;
 
     const c_var& fetch_global_variable(int id) const;
@@ -57,36 +82,25 @@ class x64_func : public Ifunc_translation {
     bool sign_list[NUM_REGS];
     bool reg_no_clobber_list[NUM_REGS];
     size_t new_id;
-    size_t threshold_id;
     int cur_offset;
     x64_tu* parent;
-    const std::string fn_name; 
+    std::string_view fn_name; 
     static int new_label_id;
     int ret_label_id;
 
     constexpr static const std::array<char, NUM_TYPES> inst_suffix = {'l', 'b', 'q', 'w', 'q'};
 
-    struct ops {
-        int reg1;
-        int reg2;
-        int reg;
-        c_type type;
-    };
 
-    int fetch_size(c_type type) {
-        switch(type) {
-            case C_INT: return C_INTSIZE; 
-            case C_CHAR: return C_CHARSIZE;
-            case C_SHORT: return C_SHORTSIZE;
-            case C_LONG: return C_LONGSIZE;
-            case C_LONGLONG: return C_LONGLONGSIZE;
-            default: CRITICAL_ASSERT_NOW("fetch_size() called with invalid type");
-        }
-    }
+    using op_type = std::tuple<int, int, int, c_type>; 
 
     int advance_offset(c_type type) {
-        int alignment = fetch_size(type);
+        int alignment = base_type_size(type);
         cur_offset = -ALIGN(cur_offset, alignment) - alignment;
+        return cur_offset;
+    }
+
+    int advance_offset(size_t mem_var_size) {
+        cur_offset -= mem_var_size;
         return cur_offset;
     }
 
@@ -107,7 +121,13 @@ class x64_func : public Ifunc_translation {
             if(var.id == id) {
                 //Check if it is a variable
                 if(var.is_var) {
-                    int reg = load_var(var);
+                    int reg = 0;
+                    if(var.var_info.value().mem_var_size.has_value()) {
+                        reg = load_mem_var(var);
+                    }
+                    else {
+                        reg = load_var(var);
+                    }
                     return reg;
                 }
                 //Value of temporary location is cached in memory
@@ -179,6 +199,15 @@ class x64_func : public Ifunc_translation {
 
         sim_log_debug("No free register found");
         return save_and_free_reg(base_type, is_signed, exp_id);
+    }
+
+    int load_mem_var(const c_expr_x64& var) {
+        sim_log_debug("Loading memory var with var_id:{} -> name:{} and size:{}", var.id, var.var_info.value().name, var.var_info.value().mem_var_size.value());
+        int reg = choose_free_reg(C_LONG, false, var.id);
+        int offset = var.offset;
+        add_inst_to_code(INSTRUCTION("lea{} {}(%rbp), %{}", inst_suffix[C_LONG], offset, get_register_string(C_LONG, reg)));
+
+        return reg;
     }
 
     int load_var(const c_expr_x64& var) {
@@ -301,17 +330,17 @@ class x64_func : public Ifunc_translation {
         CRITICAL_ASSERT_NOW("transfer_to_reg() couldn't find exp_id:{} in id_list or reg_status_list", exp_id);
     }
 
-    ops unary_op_fetch(int id) {
+    op_type unary_op_fetch(int id) {
         int reg1 = fetch_result(id);
         reg_no_clobber_list[reg1] = true;
 
         auto type = reg_type_list[reg1];
         int reg = choose_free_reg(type, sign_list[reg1]);
 
-        return ops{reg1, 0, reg, type};
+        return std::make_tuple(reg1, 0, reg, type);
     }
 
-    ops binary_op_fetch(int id1, int id2) {
+    op_type binary_op_fetch(int id1, int id2) {
 
         int reg1 = fetch_result(id1);
         reg_no_clobber_list[reg1] = true;
@@ -323,7 +352,7 @@ class x64_func : public Ifunc_translation {
         auto type = reg_type_list[reg1];
         int reg = choose_free_reg(type, sign_list[reg1]);
 
-        return ops{reg1, reg2, reg, type};
+        return std::make_tuple(reg1, reg2, reg, type);
     }
 
     void free_reg(int reg_idx) {
@@ -332,9 +361,10 @@ class x64_func : public Ifunc_translation {
 
 public:
 
-    x64_func(const std::string& name, x64_tu* parent, size_t id_allowed);
+    x64_func(std::string_view name, x64_tu* parent);
 //declaration
-    int declare_local_variable(const std::string& name, c_type type, bool is_signed) override;
+    int declare_local_variable(std::string_view name, c_type type, bool is_signed) override;
+    int declare_local_mem_variable(std::string_view name, size_t mem_var_size) override; 
     void free_result(int exp_id) override;
 
 //Assign variable
@@ -361,7 +391,7 @@ public:
 
     void generate_code() override;
 
-    std::string fetch_fn_name() const {
+    std::string_view fetch_fn_name() const {
         return fn_name;
     }
 
