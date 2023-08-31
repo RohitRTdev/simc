@@ -1,42 +1,88 @@
+#include <optional>
 #include <variant>
 #include "compiler/scope.h"
 #include "debug-api.h"
 
-scope::scope(scope* _parent) : parent(_parent)
+scope::scope(scope* _parent) : parent(_parent), intf(_parent->intf)
 {}
 
-scope* scope::fetch_parent_scope() {
+scope::scope(scope* _parent, std::shared_ptr<Itranslation> tu) : parent(_parent), intf(tu)
+{}
+
+scope::scope(scope* _parent, std::shared_ptr<Ifunc_translation> fn) : parent(_parent), intf(fn)
+{}
+
+scope* scope::fetch_parent_scope() const {
     return parent;
 }
 
-void scope::redefine_symbol_check(std::string_view symbol) {
-    for(const auto& var: variables) {
-        if(var.var.name == symbol) {
-            sim_log_error("\"{}\" redefined", symbol);
+bool scope::is_global_scope() const {
+    return !parent;
+}
+
+c_type scope::fetch_phy_type(const var_info& var) {
+    c_type phy_type = var.type.base_type;
+    if(var.type.is_pointer_type()) {
+        phy_type = C_PTR;
+    }
+    return phy_type;
+}
+
+int scope::declare_variable(const var_info& var) {
+    CRITICAL_ASSERT(!var.type.is_function_type(), "declare_variable() called with function type");
+
+    std::optional<size_t> mem_var_size;
+    if(var.type.is_array_type()) {
+        mem_var_size = var.type.get_size();
+        sim_log_debug("Declaring array type of size:{}", mem_var_size.value());
+    } 
+    auto phy_type = fetch_phy_type(var);
+    if(is_global_scope()) {
+        if(mem_var_size.has_value()) {
+            return std::get<tu_intf_type>(intf)->declare_global_mem_variable(var.name, var.stor_spec.is_stor_static(), mem_var_size.value());
+        }
+        else {
+            return std::get<tu_intf_type>(intf)->declare_global_variable(var.name, phy_type, var.type.is_signed, var.stor_spec.is_stor_static());
         }
     }
-
-    for(const auto& fn: functions) {
-        if(std::get<std::string>(fn.name->value) == symbol) {
-            sim_log_error("\"{}\" redefined", symbol);
+    else {
+        if(mem_var_size.has_value()) {
+            return std::get<fn_intf_type>(intf)->declare_local_mem_variable(var.name, mem_var_size.value());
+        }
+        else {
+            return std::get<fn_intf_type>(intf)->declare_local_variable(var.name, phy_type, var.type.is_signed);
         }
     }
 }
 
+bool scope::redefine_symbol_check(std::string_view symbol, const type_spec& type) const {
+    for(auto& var: variables) {
+        if(var.name == symbol) {
+            if(!var.is_defined) {
+                if(!(var.type == type)) {
+                    sim_log_error("Current definition of symbol:{} does not match earlier declaration", symbol);
+                }
+                return true;
+            }
+            else {
+                sim_log_error("\"{}\" redefined", symbol);
+            }
+        }
+    }
+
+    return false;
+}
 
 var_info& scope::fetch_var_info(std::string_view symbol) {
-    
     scope* search_scope = this;
     sim_log_debug("Searching for symbol:{}", symbol);
     while(search_scope) {
         for(auto& var: search_scope->variables) {
-            if(var.var.name == symbol) {
-                sim_log_debug("Found var_id:{} for symbol:{}", var.var_id, var.var.name);
+            if(var.name == symbol) {
+                sim_log_debug("Found var_id:{} for symbol:{}", var.var_id, var.name);
                 return var;
             }
-
         }
-
         sim_log_debug("Couldn't find in current scope. Moving up a scope");
         search_scope = search_scope->parent;
     }
@@ -44,43 +90,41 @@ var_info& scope::fetch_var_info(std::string_view symbol) {
     sim_log_error("Variable:{} seems to be undefined", symbol);
 }
 
-void scope::add_variable(int id, std::string_view name, c_type type, bool is_global) {
-    redefine_symbol_check(name);
-    var_info var{};
-    var.var.name = name;
-    var.var.type = type;
-    var.var_id = id;
-    var.is_global = is_global;
+void scope::add_variable(int id, std::string_view name, const type_spec& type, const decl_spec& stor_spec, bool is_global) {
+    if(redefine_symbol_check(name, type)) {
+        sim_log_debug("Found existing declaration for symbol");
+        auto& var = fetch_var_info(name);
+        var.is_defined = true;
 
-    sim_log_debug("Declaring variable:{} of type:{}", name, type);
-
-    variables.push_back(var); 
-}
-
-void scope::add_variable(int id, std::string_view name, c_type type, std::string_view value, bool is_global) {
-    add_variable(id, name, type, is_global);
-    variables[variables.size()-1].var.value = value;
-}
-
-void scope::add_function(const token* name, const token* type, const std::vector<c_type>& arg_list) {
-    redefine_symbol_check(std::get<std::string>(name->value));
-    fn_info fn{false, type, name, arg_list};
-
-    sim_log_debug("Declaring function:{}", std::get<std::string>(name->value));
-    functions.push_back(fn);
-}
-
-void scope::add_function_definition(std::string_view fn_name, Ifunc_translation* fn_intf) {
-
-    sim_log_debug("Adding function definition for fn:{}", fn_name);
-    for(auto& fn: functions) {
-        if(std::get<std::string>(fn.name->value) == fn_name) {
-            if(fn.is_defined)
-                sim_log_error("Function {} redefined", fn_name);
-            
-            fn.is_defined = true;
-            fn.fn_intf = fn_intf;
-            return;
-        }
+        if(!var.type.is_function_type())
+            var.var_id = declare_variable(var);
     }
+    else {
+        var_info var{};
+        var.name = name;
+        var.type = type;
+        var.stor_spec = stor_spec;
+        var.var_id = id;
+        var.is_global = is_global;
+
+        if(stor_spec.is_stor_extern() || type.is_function_type()) {
+            sim_log_debug("Extern declaration of symbol:{}", name);
+        }
+        else { 
+            var.is_defined = true;
+            sim_log_debug("Normal declaration of symbol:{}", name);
+            if(!type.is_function_type())
+                var.var_id = declare_variable(var);
+        }
+
+        variables.push_back(var);
+    }
+}
+
+Ifunc_translation* scope::add_function_definition(std::string_view fn_name, const std::vector<std::string_view>& fn_args) {
+    auto& fn = fetch_var_info(fn_name);
+    fn.is_defined = true;
+    fn.args = fn_args;
+
+    return std::get<tu_intf_type>(intf)->add_function(fn_name, fn.type.base_type, fn.type.is_signed, fn.stor_spec.is_stor_static());
 }

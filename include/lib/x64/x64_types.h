@@ -5,3 +5,4 @@
 #define C_INTSIZE 4
 #define C_LONGSIZE 8
 #define C_LONGLONGSIZE 8
+#define C_PTRSIZE 8

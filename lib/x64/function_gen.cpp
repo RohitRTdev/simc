@@ -10,8 +10,8 @@ const std::vector<std::array<std::string, NUM_REGS>> regs = {{"rax", "rbx", "rcx
 
 int x64_func::new_label_id = 0;
 
-x64_func::x64_func(const std::string& name, x64_tu* _parent, size_t ids): new_id(1), cur_offset(0), 
-fn_name(name), parent(_parent), threshold_id(ids), ret_label_id(0) {
+x64_func::x64_func(std::string_view name, x64_tu* _parent): new_id(1), cur_offset(0), 
+fn_name(name), parent(_parent), ret_label_id(0) {
     //0 indicates reg is free
     for(size_t reg_idx = 0; reg_idx < NUM_REGS; reg_idx++) {
         reg_status_list[reg_idx] = 0;
@@ -74,8 +74,6 @@ int x64_func::assign_to_mem(int id, std::string_view constant, c_type type) {
 }
 
 int x64_func::fetch_global_var(int id) {
-    CRITICAL_ASSERT(id <= threshold_id, "Global var id:{} exceeds threshold:{}", id, threshold_id);
-
     auto& var = parent->fetch_global_variable(id);
     auto type = var.type;
 
@@ -87,8 +85,6 @@ int x64_func::fetch_global_var(int id) {
 }
 
 int x64_func::assign_global_var(int id, int expr_id) {
-    CRITICAL_ASSERT(id <= threshold_id, "Global var id:{} exceeds threshold:{}", id, threshold_id);
-    
     auto& var = parent->fetch_global_variable(id);
     auto type = var.type;
 
@@ -100,8 +96,6 @@ int x64_func::assign_global_var(int id, int expr_id) {
 }
 
 int x64_func::assign_global_var(int id, std::string_view constant) {
-    CRITICAL_ASSERT(id <= threshold_id, "Global var id:{} exceeds threshold:{}", id, threshold_id);
-
     auto& var = parent->fetch_global_variable(id);
     auto type = var.type;
 
@@ -111,16 +105,38 @@ int x64_func::assign_global_var(int id, std::string_view constant) {
     return id;
 }
 
-int x64_func::declare_local_variable(const std::string& name, c_type type, bool is_signed) {
-    c_expr_x64 var;
+int x64_func::declare_local_variable(std::string_view name, c_type type, bool is_signed) {
+    c_expr_x64 var{};
 
     sim_log_debug("Declaring variable {} of type {} at offset:{} with var_id:{}", name, type, cur_offset, new_id);
-    var.var_info = {name, type, is_signed};
+    
+    c_var var_info{};
+    var_info.name = name;
+    var_info.type = type;
+    var_info.is_signed = is_signed;
+    var.var_info = var_info;
     var.is_local = true;
     var.offset = advance_offset(type);
     var.is_var = true;
     var.id = new_id++;
     
+    id_list.push_back(var);
+
+    return var.id;
+}
+
+int x64_func::declare_local_mem_variable(std::string_view name, size_t mem_var_size) {
+    c_expr_x64 var{};
+
+    sim_log_debug("Declaring mem variable {} at offset:{} with var_id:{}", name, cur_offset, new_id);
+    c_var var_info{};
+    var_info.name = name;
+    var_info.mem_var_size = mem_var_size;
+    var.is_local = true;
+    var.is_var = true;
+    var.offset = advance_offset(mem_var_size);
+    var.id = new_id++;
+
     id_list.push_back(var);
 
     return var.id;
@@ -165,5 +181,5 @@ void x64_func::generate_code() {
         frame = frame1 + frame2 + frame3 + code + endframe;
     else
         frame = "\tnop\n\tret";
-    code = fn_name + ":\n" + frame; 
+    code = std::string(fn_name) + ":\n" + frame; 
 }
