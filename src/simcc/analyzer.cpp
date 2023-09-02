@@ -321,7 +321,9 @@ static Ast fetch_stack_node(std::stack<Ast>& iter_stack) {
 
 template<typename Ast>
 static std::unique_ptr<Ast> fetch_child_and_cast(std::unique_ptr<ast>& parent) {
-    return std::unique_ptr<Ast>(static_cast<Ast*>(fetch_child(parent).release()));
+    auto _ptr = dynamic_cast<Ast*>(fetch_child(parent).release()); 
+    CRITICAL_ASSERT(_ptr, "fetch_child_and_cast called with invalid pointer");
+    return std::unique_ptr<Ast>(_ptr);
 }
 
 template<typename Ast, typename Predicate>
@@ -334,7 +336,10 @@ static void list_consume(std::unique_ptr<ast> child, Predicate&& lambda) {
 
 template<typename Ast>
 static const Ast* pointer_cast(const std::unique_ptr<ast>& ptr) {
-    return static_cast<Ast*>(ptr.get());
+    auto _ptr = dynamic_cast<Ast*>(ptr.get());
+    CRITICAL_ASSERT(_ptr, "invalid pointer_cast");
+
+    return _ptr;
 }
 
 using base_type_res = std::tuple<c_type, bool, cv_info>;
@@ -365,8 +370,8 @@ static base_type_res forge_base_type(std::unique_ptr<ast_base_type> base_type) {
     return std::make_tuple(phy_type, is_signed, cv_info{is_const, is_vol});    
 }
 
-static type_spec forge_type(const base_type_res& base_res, const decltype(type_spec::mod_list)& mod_list) {
-    return {std::get<0>(base_res), std::get<1>(base_res), std::get<2>(base_res), mod_list};
+static type_spec forge_type(const base_type_res& base_res, const decltype(type_spec::mod_list)& mod_list, const decl_spec& stor_spec) {
+    return {std::get<0>(base_res), std::get<1>(base_res), std::get<2>(base_res), stor_spec.is_stor_register(), mod_list};
 }
 
 static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_list, std::shared_ptr<Itranslation> tu, bool is_fn_def = false) {
@@ -388,7 +393,6 @@ static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_li
             base_type = obj.base_type;
         }
     };
-
     std::stack<context> iter_stack;
     std::optional<type_spec> saved_res;
 
@@ -503,7 +507,7 @@ static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_li
         }
 
         type_spec res{};
-        res = forge_type(forged_base, mod_list);
+        res = forge_type(forged_base, mod_list, stor_spec);
         if (res.base_type == C_VOID) {
             if (!res.mod_list.size()) {
                 sim_log_error("void base type cannot be used with unmodified type");

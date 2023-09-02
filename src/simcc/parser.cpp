@@ -273,7 +273,7 @@ enum class base_reduction_context {
 struct reduction_helpers {
     std::function<base_reduction_context (state_machine*)> base_reduce_context;
     std::function<bool (const std::unique_ptr<ast>&)> is_abstract;
-    std::function<bool(const std::unique_ptr<ast>&)> is_empty;
+    std::function<bool (const std::unique_ptr<ast>&)> is_empty;
 
     reduction_helpers() {
         base_reduce_context = [&] (state_machine* inst) {

@@ -102,7 +102,8 @@ bool type_spec::is_function_type() const {
 
 bool type_spec::operator == (const type_spec& type) const {
     if(!(base_type == type.base_type && is_signed == type.is_signed && 
-    cv.is_const == type.cv.is_const && cv.is_volatile == type.cv.is_volatile))
+    cv.is_const == type.cv.is_const && cv.is_volatile == type.cv.is_volatile &&
+    is_register == type.is_register))
         return false;
 
     if(mod_list.size() != type.mod_list.size())

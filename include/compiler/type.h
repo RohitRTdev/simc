@@ -48,6 +48,7 @@ struct type_spec {
     c_type base_type;
     bool is_signed;
     cv_info cv;
+    bool is_register;
 
     std::deque<modifier> mod_list;
 
