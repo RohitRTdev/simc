@@ -11,7 +11,7 @@ const c_var& x64_tu::fetch_global_variable(int id) const {
 int x64_tu::declare_global_variable(std::string_view name, c_type type, bool is_signed, bool is_static) {
     c_var var{};
     var.name = name;
-    var.type = type;
+    var.type = type == C_PTR ? C_LONG : type;
     var.is_signed = is_signed;
     var.is_static = is_static;
     globals.push_back(var);

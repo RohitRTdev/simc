@@ -6,10 +6,10 @@
 scope::scope(scope* _parent) : parent(_parent), intf(_parent->intf)
 {}
 
-scope::scope(scope* _parent, std::shared_ptr<Itranslation> tu) : parent(_parent), intf(tu)
+scope::scope(scope* _parent, tu_intf_type tu) : parent(_parent), intf(tu)
 {}
 
-scope::scope(scope* _parent, std::shared_ptr<Ifunc_translation> fn) : parent(_parent), intf(fn)
+scope::scope(scope* _parent, fn_intf_type fn) : parent(_parent), intf(fn)
 {}
 
 scope* scope::fetch_parent_scope() const {

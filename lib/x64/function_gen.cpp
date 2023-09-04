@@ -108,17 +108,17 @@ int x64_func::assign_global_var(int id, std::string_view constant) {
 int x64_func::declare_local_variable(std::string_view name, c_type type, bool is_signed) {
     c_expr_x64 var{};
 
-    sim_log_debug("Declaring variable {} of type {} at offset:{} with var_id:{}", name, type, cur_offset, new_id);
-    
     c_var var_info{};
     var_info.name = name;
-    var_info.type = type;
+    var_info.type = type == C_PTR ? C_LONG : type; 
     var_info.is_signed = is_signed;
     var.var_info = var_info;
     var.is_local = true;
     var.offset = advance_offset(type);
     var.is_var = true;
     var.id = new_id++;
+    
+    sim_log_debug("Declaring variable {} of type {} at offset:{} with var_id:{}", name, type, cur_offset, var.id);
     
     id_list.push_back(var);
 
@@ -128,7 +128,6 @@ int x64_func::declare_local_variable(std::string_view name, c_type type, bool is
 int x64_func::declare_local_mem_variable(std::string_view name, size_t mem_var_size) {
     c_expr_x64 var{};
 
-    sim_log_debug("Declaring mem variable {} at offset:{} with var_id:{}", name, cur_offset, new_id);
     c_var var_info{};
     var_info.name = name;
     var_info.mem_var_size = mem_var_size;
@@ -136,6 +135,8 @@ int x64_func::declare_local_mem_variable(std::string_view name, size_t mem_var_s
     var.is_var = true;
     var.offset = advance_offset(mem_var_size);
     var.id = new_id++;
+    
+    sim_log_debug("Declaring mem variable {} at offset:{} with var_id:{}", name, cur_offset, var.id);
 
     id_list.push_back(var);
 

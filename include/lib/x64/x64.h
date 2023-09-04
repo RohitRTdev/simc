@@ -56,6 +56,7 @@ class x64_tu : public Itranslation {
             }
             data = seg_name + data;
             add_inst_to_code(data);
+            add_inst_to_code(LINE());
         }
     }
 

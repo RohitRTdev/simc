@@ -513,7 +513,7 @@ static void reduce_pointer_list(state_machine* inst) {
 
     auto ptr_spec = create_ast_ptr_spec(pointer, const_qual, vol_qual);
     if(inst->parser_stack.top()->is_pointer_list()) {
-        inst->parser_stack.top()->attach_back(std::move(ptr_spec));
+        inst->parser_stack.top()->attach_node(std::move(ptr_spec));
     }
     else {
         auto ptr_list = create_ast_ptr_list();

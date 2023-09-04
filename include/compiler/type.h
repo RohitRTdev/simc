@@ -57,7 +57,10 @@ struct type_spec {
     bool is_pointer_type() const;
     bool is_array_type() const;
     bool is_function_type() const;
-    
+
+    bool is_modified_type() const;
+    bool is_type_operable(const type_spec& type) const;
+    bool is_modifiable() const; 
     bool operator == (const type_spec& type) const;
 
 };

@@ -100,6 +100,29 @@ bool type_spec::is_function_type() const {
     return mod_list.size() && (mod_list[0].fn_spec.size() || (!is_array_type() && !is_pointer_type()));
 }
 
+bool type_spec::is_modifiable() const {
+    if(is_array_type() || is_function_type())
+        return false;
+    
+    if(is_pointer_type()) {
+        return !mod_list[0].ptr_list[0].is_const;
+    }
+
+    return !cv.is_const;
+}
+
+bool type_spec::is_modified_type() const {
+    return is_pointer_type() || is_array_type() || is_function_type();
+}
+
+bool type_spec::is_type_operable(const type_spec& type) const {
+   if(is_modified_type() || type.is_modified_type()) {
+        return false;
+   }
+
+   return base_type == type.base_type && is_signed == type.is_signed;
+}
+
 bool type_spec::operator == (const type_spec& type) const {
     if(!(base_type == type.base_type && is_signed == type.is_signed && 
     cv.is_const == type.cv.is_const && cv.is_volatile == type.cv.is_volatile &&

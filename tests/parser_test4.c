@@ -1,6 +1,7 @@
 
 static const volatile long long * const a[3];
-static char d, b;
+static char d;
+static long int b;
 
 int fn();
 static int bye(int,int);
@@ -13,6 +14,14 @@ volatile signed (*m[3][2])[2], (*(ptr)())[2], * const complex(void(int, int (reg
 static volatile void good_old_function(int, void par(), int **);
 
 static void volatile good_old_function(int param1, void (param2)(), int **ptr_param) {
+
+    int b1, * const volatile *c, d[3], (*e)[2];
+    long int a;
+    long int f;
+    unsigned char m[2];
+
+    a = b + f;;
+    ;
 
 }
 
