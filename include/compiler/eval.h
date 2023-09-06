@@ -38,7 +38,15 @@ class eval_expr {
     std::stack<expr_result> res_stack;
     std::stack<std::unique_ptr<ast>> op_stack;
 
+    using common_type_res = std::pair<int, int>;
+
     bool is_assignable() const;
+    bool is_base_equal(const type_spec& type_1, const type_spec& type_2);
+    bool is_rank_same(const type_spec& type_1, const type_spec& type_2);
+    bool is_rank_higher(const type_spec& type_1, const type_spec& type_2);
+    void convert_type(expr_result& res1, expr_result& res2);
+    void perform_arithmetic_conversion(expr_result& res1, expr_result& res2);
+    void perform_integer_promotion(expr_result& res1);
     scope* fn_scope;
     Ifunc_translation* fn_intf;
     std::unique_ptr<ast> expr_node;

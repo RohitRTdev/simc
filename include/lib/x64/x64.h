@@ -89,11 +89,12 @@ class x64_func : public Ifunc_translation {
     std::string_view fn_name; 
     static int new_label_id;
     int ret_label_id;
+    c_type m_ret_type;
+    bool m_is_signed;
+    friend class x64_tu;
+    constexpr static const std::array<char, NUM_TYPES> inst_suffix = {'b', 'w', 'l', 'q', 'q'};
 
-    constexpr static const std::array<char, NUM_TYPES> inst_suffix = {'l', 'b', 'q', 'w', 'q'};
-
-
-    using op_type = std::tuple<int, int, int, c_type>; 
+    using op_type = std::tuple<int, int, c_type>; 
 
     int advance_offset(c_type type) {
         int alignment = base_type_size(type);
@@ -110,9 +111,7 @@ class x64_func : public Ifunc_translation {
     int fetch_result(int id) {
         sim_log_debug("Fetching result location for id:{}", id);
         
-       //Check if result is saved in a register
-        
-                
+        //Check if result is saved in a register
         auto pos = std::find(reg_status_list.begin(), reg_status_list.end(), id);
         if(pos != reg_status_list.end()) {
             size_t reg_idx = pos - reg_status_list.begin();
@@ -186,7 +185,6 @@ class x64_func : public Ifunc_translation {
     }
 
     int choose_free_reg(c_type base_type, bool is_signed, int exp_id = 0) {
-        
         auto pos = std::find(reg_status_list.begin(), reg_status_list.end(), 0);
         if(pos != reg_status_list.end()) {
             int reg_index = pos - reg_status_list.begin();
@@ -201,7 +199,7 @@ class x64_func : public Ifunc_translation {
 
     int load_mem_var(const c_expr_x64& var) {
         sim_log_debug("Loading memory var with var_id:{} -> name:{} and size:{}", var.id, var.var_info.name, var.var_info.mem_var_size.value());
-        int reg = choose_free_reg(C_LONG, false, var.id);
+        int reg = choose_free_reg(C_LONG, false);
         int offset = var.offset;
 
         insert_code("lea{} {}(%rbp), %{}", C_LONG, std::to_string(offset), reg);
@@ -210,7 +208,7 @@ class x64_func : public Ifunc_translation {
 
     int load_var(const c_expr_x64& var) {
         sim_log_debug("Loading var with var_id:{} -> name:\"{}\"", var.id, var.var_info.name);
-        int reg = choose_free_reg(var.var_info.type, var.var_info.is_signed, var.id);
+        int reg = choose_free_reg(var.var_info.type, var.var_info.is_signed);
         int offset = var.offset;
         auto type = var.var_info.type;
         insert_code("mov{} {}(%rbp), %{}", type, std::to_string(offset), reg);
@@ -286,17 +284,16 @@ class x64_func : public Ifunc_translation {
     }
 
     void transfer_to_reg(enum registers reg_idx, int exp_id) {
-        
         if(reg_status_list[reg_idx] == exp_id)
             return;
 
-        CRITICAL_ASSERT(!reg_no_clobber_list[reg_idx], "tranfer_to_reg() failed as reg_idx:{} is in no_clobber_list", reg_idx);
+        CRITICAL_ASSERT(!reg_no_clobber_list[reg_idx], "transfer_to_reg() failed as reg_idx:{} is in no_clobber_list", reg_idx);
         
         if(reg_status_list[reg_idx]) {
             flush_register(reg_idx);
         }
 
-        for(int i = 0; i < NUM_REGS; i++) {
+        for(int i = 0; i < reg_status_list.size(); i++) {
             if(reg_status_list[i] == exp_id) {
                 if(i != reg_idx) {
                     reg_status_list[reg_idx] = exp_id;
@@ -304,7 +301,6 @@ class x64_func : public Ifunc_translation {
                     free_reg(i);
                     
                     auto type = reg_type_list[reg_idx];
-
                     insert_code("mov{} %{}, %{}", type, i, reg_idx);    
                     return;
                 }
@@ -330,12 +326,10 @@ class x64_func : public Ifunc_translation {
 
     op_type unary_op_fetch(int id) {
         int reg1 = fetch_result(id);
-        reg_no_clobber_list[reg1] = true;
 
         auto type = reg_type_list[reg1];
-        int reg = choose_free_reg(type, sign_list[reg1]);
 
-        return std::make_tuple(reg1, 0, reg, type);
+        return std::make_tuple(reg1, 0, type);
     }
 
     op_type binary_op_fetch(int id1, int id2) {
@@ -343,14 +337,12 @@ class x64_func : public Ifunc_translation {
         int reg1 = fetch_result(id1);
         reg_no_clobber_list[reg1] = true;
         int reg2 = fetch_result(id2);
-        reg_no_clobber_list[reg2] = true;
       
         type_mismatch_check(reg1, reg2);
 
         auto type = reg_type_list[reg1];
-        int reg = choose_free_reg(type, sign_list[reg1]);
-
-        return std::make_tuple(reg1, reg2, reg, type);
+        reg_no_clobber_list[reg1] = false;
+        return std::make_tuple(reg1, reg2, type);
     }
 
     void free_reg(int reg_idx) {
@@ -359,7 +351,7 @@ class x64_func : public Ifunc_translation {
     }
 
     std::tuple<c_type, bool> fetch_result_type(int exp_id) {
-        for(int i = 0; i < NUM_REGS; i++) {
+        for(int i = 0; i < reg_status_list.size(); i++) {
             if(reg_status_list[i] == exp_id) {
                 return std::make_tuple(reg_type_list[i], sign_list[i]);
             }            
@@ -414,7 +406,7 @@ class x64_func : public Ifunc_translation {
 
 public:
 
-    x64_func(std::string_view name, x64_tu* parent);
+    x64_func(std::string_view name, x64_tu* parent, c_type ret_type, bool is_signed);
 //declaration
     int declare_local_variable(std::string_view name, c_type type, bool is_signed) override;
     int declare_local_mem_variable(std::string_view name, size_t mem_var_size) override; 
@@ -437,6 +429,9 @@ public:
     int sub(std::string_view constant, int id) override;
     int mul(int id1, int id2) override;
     int mul(int id1, std::string_view constant) override;
+    
+//Type conversion
+    int type_cast(int exp_id, c_type cast_type, bool cast_sign) override;
     
 //Branch operation
     int create_label() override;

@@ -1,8 +1,9 @@
 #include "lib/code-gen.h"
 #include "lib/x64/x64.h"
 
-x64_tu::x64_tu() : global_var_id(0)
-{}
+x64_tu::x64_tu() : global_var_id(0) {
+    x64_func::new_label_id = 0;
+}
 
 const c_var& x64_tu::fetch_global_variable(int id) const {
     return globals[id-1];
@@ -43,7 +44,7 @@ int x64_tu::declare_global_mem_variable(std::string_view name, bool is_static, s
 }
 
 Ifunc_translation* x64_tu::add_function(std::string_view name, c_type ret_type, bool is_signed, bool is_static) {
-    auto fn = new x64_func(name, this);
+    auto fn = new x64_func(name, this, ret_type, is_signed);
 
     declare_global_variable(name, ret_type, is_signed, is_static);
     globals[global_var_id-1].is_fn = true;

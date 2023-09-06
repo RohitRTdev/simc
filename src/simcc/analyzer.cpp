@@ -37,24 +37,23 @@ static void eval_expr_stmt(std::unique_ptr<ast> cur_stmt, Ifunc_translation* fn,
         fn->free_result(res_id);
 
 }
-/*
-static void eval_ret_stmt(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation* fn, bool is_branch = false) {
-    if(!cur_stmt_list->children.size()) {
-        sim_log_error("return should be followed by expression!(Other case not supported right now)");
-    }
 
-    auto res = eval_expr(std::move(cur_stmt_list->children[0]), fn);
+static void eval_ret_stmt(std::unique_ptr<ast> ret_stmt, Ifunc_translation* fn, bool eval_status, bool is_branch = false) {
+    if(!ret_stmt->children.size())
+        return;
+
+    auto res_id = eval_expr(std::move(ret_stmt->children[0]), fn, current_scope, eval_status).eval();
+    
 
     if(is_branch) {
-        fn->branch_return(res.expr_id);
+        CRITICAL_ASSERT_NOW("branch return not supported right now");
     }
     else {
-        fn->fn_return(res.expr_id);
+        fn->fn_return(res_id);
     }
 
-    fn->free_result(res.expr_id);
+    fn->free_result(res_id);
 }
-*/
 
 using base_type_res = std::tuple<c_type, bool, cv_info>;
 
@@ -278,6 +277,10 @@ static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation
         }
         else if(stmt->is_expr_stmt()) {
             eval_expr_stmt(std::move(stmt), fn, eval_status);
+        }
+        else if(stmt->is_ret_stmt()) {
+            eval_ret_stmt(std::move(stmt), fn, eval_status);
+            eval_status = true;
         }
         else if(stmt->is_null_stmt())
             continue;

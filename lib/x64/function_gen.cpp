@@ -10,9 +10,10 @@ const std::vector<std::array<std::string, NUM_REGS>> regs = {{"rax", "rbx", "rcx
 
 int x64_func::new_label_id = 0;
 
-x64_func::x64_func(std::string_view name, x64_tu* _parent): new_id(1), cur_offset(0), 
-fn_name(name), parent(_parent), ret_label_id(0) {
+x64_func::x64_func(std::string_view name, x64_tu* _parent, c_type ret_type, bool is_signed): new_id(1), cur_offset(0), 
+fn_name(name), parent(_parent), ret_label_id(0), m_is_signed(is_signed) {
     //0 indicates reg is free
+    m_ret_type = ret_type == C_PTR ? C_LONG : ret_type;
     for(size_t reg_idx = 0; reg_idx < NUM_REGS; reg_idx++) {
         reg_status_list[reg_idx] = 0;
         reg_no_clobber_list[reg_idx] = false;
@@ -31,7 +32,7 @@ int x64_func::assign_var(int var_id, int id) {
     auto type = reg_type_list[reg];
 
     insert_code("mov{} %{}, {}(%rbp)", type, reg, std::to_string(offset));
-    return id;
+    return reg_status_list[reg];
 }
 
 int x64_func::assign_var(int var_id, std::string_view constant) {
@@ -55,10 +56,10 @@ int x64_func::assign_to_mem(int id1, int id2) {
     "assign_to_mem called with expr_id:{} not of pointer type", id1);
 
     add_inst_to_code(INSTRUCTION("mov{} %{}, (%{})", inst_suffix[type], 
-    get_register_string(type, reg2), regs[0][reg1])); 
-    reg_no_clobber_list[reg1] = false;
+    get_register_string(type, reg2), get_register_string(C_LONG, reg1))); 
 
-    return id2;
+    free_reg(reg1);
+    return reg_status_list[reg2];
 }
 
 int x64_func::assign_to_mem(int id, std::string_view constant, c_type type) {
@@ -67,7 +68,7 @@ int x64_func::assign_to_mem(int id, std::string_view constant, c_type type) {
     CRITICAL_ASSERT(reg_type_list[reg] != C_LONG,
     "assign_to_mem called with expr_id:{} not of pointer type", id);
 
-    add_inst_to_code(INSTRUCTION("mov{} ${}, (%{})", inst_suffix[type], constant, regs[0][reg])); 
+    add_inst_to_code(INSTRUCTION("mov{} ${}, (%{})", inst_suffix[type], constant, get_register_string(C_LONG, reg))); 
 
     return id;
 }
@@ -142,11 +143,11 @@ int x64_func::declare_local_mem_variable(std::string_view name, size_t mem_var_s
 
 void x64_func::free_result(int exp_id) {
     sim_log_debug("Freeing expr_id:{}", exp_id);
-    for(auto& reg: reg_status_list) {
-        if(reg == exp_id) {
-            reg = 0;
-            break;
-        }
+    auto pos = std::find(reg_status_list.begin(),reg_status_list.end(), exp_id);
+    if(pos != reg_status_list.end()) {
+        int reg_idx = pos - reg_status_list.begin();
+        free_reg(reg_idx);
+        return;
     }
 
     for(auto& loc: id_list) {

@@ -31,6 +31,68 @@ bool eval_expr::is_assignable() const {
     return false; 
 }
 
+bool eval_expr::is_base_equal(const type_spec& type_1, const type_spec& type_2) {
+    return type_1.base_type == type_2.base_type && type_1.is_signed == type_2.is_signed;
+}
+
+bool eval_expr::is_rank_same(const type_spec& type_1, const type_spec& type_2) {
+    return type_1.base_type == type_2.base_type;
+}
+
+bool eval_expr::is_rank_higher(const type_spec& type_1, const type_spec& type_2) {
+    return type_1.base_type > type_2.base_type;
+}
+
+void eval_expr::convert_type(expr_result& res1, expr_result& res2) {
+    sim_log_debug("Converting type:{} with sign:{} to type:{} with sign:{}",
+    res1.type.base_type, res1.type.is_signed,
+    res2.type.base_type, res2.type.is_signed);
+
+    if(!res1.is_constant) {
+        res1.expr_id = fn_intf->type_cast(res1.expr_id, res2.type.base_type, res2.type.is_signed);
+    }
+
+    res1.type.base_type = res2.type.base_type;
+    res1.type.is_signed = res2.type.is_signed;
+}
+
+void eval_expr::perform_integer_promotion(expr_result& res) {    
+    if(res.type.base_type < C_INT) {
+        sim_log_debug("Performing integer promotion from type:{} to int", res.type.base_type);
+        if(!res.is_constant)
+            res.expr_id = fn_intf->type_cast(res.expr_id, C_INT, true);
+        res.type.base_type = C_INT;
+        res.type.is_signed = true;
+    }
+}
+
+void eval_expr::perform_arithmetic_conversion(expr_result& res1, expr_result& res2) {
+    perform_integer_promotion(res1);
+    perform_integer_promotion(res2);
+
+    if(is_base_equal(res1.type, res2.type)) {
+        return;
+    }
+
+    if(res1.type.is_signed == res2.type.is_signed) {
+        if(is_rank_higher(res1.type, res2.type)) {
+            convert_type(res2, res1);
+        }
+        else {
+            convert_type(res1, res2);
+        }
+    }
+    else {
+        auto& res_u = res1.type.is_signed ? res2 : res1;
+        auto& res_s = res2.type.is_signed ? res2 : res1;
+        if(is_rank_higher(res_u.type, res_s.type) || is_rank_same(res_u.type, res_s.type)) {
+            convert_type(res_s, res_u);
+        }
+        else {
+            convert_type(res_u, res_s);
+        }
+    }
+}
 
 void eval_expr::handle_arithmetic_op(operator_type op) {
     
@@ -40,10 +102,14 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
     
     auto res2 = fetch_stack_node(res_stack);
     auto res1 = fetch_stack_node(res_stack);
-    
+
     if(!res1.type.is_type_operable(res2.type)) {
-        sim_log_error("Arithmetic operation requires both types to be integral and equal");
+        if(res1.type.is_modified_type() || res1.type.is_modified_type()) {
+            sim_log_error("Arithmetic operation requires both types to be integral and equal");
+        }
     }
+
+    perform_arithmetic_conversion(res1, res2);
 
     bool is_commutative = true;
     int res_id = 0;
@@ -107,43 +173,44 @@ void eval_expr::handle_assignment() {
             sim_log_error("Pointer type mismatch during assignment operation");
         }
     }
-    else {
-        if(!(!res2.type.is_modified_type() && res2.type.is_type_operable(res1.type))) {
-            sim_log_error("Inconsistent types encountered during assignment operation");
-        }
+
+    if(!(res1.type == res2.type)) {
+        convert_type(res2, res1);
     }
 
     int (Ifunc_translation::*assign_con)(int, std::string_view);
     int (Ifunc_translation::*assign_var)(int, int);
 
+    int res_id = 0;
     switch(res1.category) {
         case l_val_cat::LOCAL: {
             if(res2.is_constant) {
                 assign_con = &Ifunc_translation::assign_var;
-                call_code_gen(fn_intf, assign_con, res1.expr_id, res2.constant);
+                res_id = call_code_gen(fn_intf, assign_con, res1.expr_id, res2.constant);
             } 
             else {
                 assign_var = &Ifunc_translation::assign_var;
-                call_code_gen(fn_intf, assign_var, res1.expr_id, res2.expr_id);
+                res_id = call_code_gen(fn_intf, assign_var, res1.expr_id, res2.expr_id);
             }
             break;
         }
         case l_val_cat::GLOBAL: {
             if(res2.is_constant) {
                 assign_con = &Ifunc_translation::assign_global_var;
-                call_code_gen(fn_intf, assign_con, res1.expr_id, res2.constant); 
+                res_id = call_code_gen(fn_intf, assign_con, res1.expr_id, res2.constant); 
             }
             else {
                 assign_var = &Ifunc_translation::assign_global_var;
-                call_code_gen(fn_intf, assign_var, res1.expr_id, res2.expr_id); 
+                res_id = call_code_gen(fn_intf, assign_var, res1.expr_id, res2.expr_id); 
             }
             break;
         }
         default: CRITICAL_ASSERT_NOW("Invalid l-value category encountered during assignment operation");
     }
 
-    res2.is_lvalue = false;
-    res_stack.push(res2);
+    res1.is_lvalue = false;
+    res1.expr_id = res_id;
+    res_stack.push(res1);
 }
 
 void eval_expr::handle_var() {
