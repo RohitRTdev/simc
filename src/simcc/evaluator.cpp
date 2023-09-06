@@ -58,6 +58,10 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
             is_commutative = false;
             break;
         }
+        case MUL: {
+            op_vars = &Ifunc_translation::mul; op_var_con = &Ifunc_translation::mul;
+            break;
+        }
         default: {
             CRITICAL_ASSERT_NOW("handle_arithmetic_op called with invalid operator");
         }
@@ -83,7 +87,6 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
         }
     }
 
-    CRITICAL_ASSERT(res_id, "res_id has null value after arithmetic operation!");
     expr_result res{};
     res.expr_id = res_id;
     res.type = res1.type;
@@ -185,7 +188,8 @@ void eval_expr::handle_node() {
         
         switch(op) {
             case PLUS:
-            case MINUS: {
+            case MINUS:
+            case MUL: {
                 handle_arithmetic_op(op);
                 break;
             }

@@ -134,19 +134,23 @@ bool type_spec::operator == (const type_spec& type) const {
 
     for(size_t i = 0; i < mod_list.size(); i++) {
         if(mod_list[i].is_pointer_mod()) {
+            if (!type.mod_list[i].is_pointer_mod() || (type.mod_list[i].ptr_list.size() != mod_list[i].ptr_list.size()))
+                return false;
             for(size_t j = 0; j < mod_list[i].ptr_list.size(); j++) {
                 if(!(mod_list[i].ptr_list[j] == type.mod_list[i].ptr_list[j]))
                     return false;
             }
         }
         else if(mod_list[i].is_array_mod()) {
+            if (!type.mod_list[i].is_array_mod() || (type.mod_list[i].array_spec.size() != mod_list[i].array_spec.size()))
+                return false;
             for(size_t j = 0; j < mod_list[i].array_spec.size(); j++) {
                 if(mod_list[i].array_spec[j] != type.mod_list[i].array_spec[j])
                     return false;
             }
         }
         else {
-            if(mod_list[i].fn_spec.size() != type.mod_list[i].fn_spec.size())
+            if(!type.mod_list[i].is_function_mod() || (mod_list[i].fn_spec.size() != type.mod_list[i].fn_spec.size()))
                 return false;
             for(size_t j = 0; j < mod_list[i].fn_spec.size(); j++) {
                 if(!(mod_list[i].fn_spec[j] == type.mod_list[i].fn_spec[j]))

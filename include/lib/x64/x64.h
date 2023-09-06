@@ -1,9 +1,10 @@
 #pragma once
 
+#include <algorithm>
+#include <array>
 #include <tuple>
 #include <vector>
 #include <list>
-#include <optional>
 #include "debug-api.h"
 #include "lib/code-gen.h"
 
@@ -27,7 +28,7 @@ struct c_expr_x64 {
     bool cached; //Tells if value is loaded into some register or not
     size_t id; //This uniquely identifies this variable or expression
     int offset; //Gives us info on where var/tmp is loaded in memory(stack)
-    std::optional<c_var> var_info; //This info is only used during debugging
+    c_var var_info; //Gives us crucial information on the properties of the variable
 };
 
 class x64_func;
@@ -78,10 +79,10 @@ public:
 class x64_func : public Ifunc_translation {
 
     std::vector<c_expr_x64> id_list;
-    size_t reg_status_list[NUM_REGS];
-    c_type reg_type_list[NUM_REGS];
-    bool sign_list[NUM_REGS];
-    bool reg_no_clobber_list[NUM_REGS];
+    std::array<size_t, NUM_REGS> reg_status_list;
+    std::array<c_type, NUM_REGS> reg_type_list;
+    std::array<bool, NUM_REGS> sign_list;
+    std::array<bool, NUM_REGS> reg_no_clobber_list;
     size_t new_id;
     int cur_offset;
     x64_tu* parent;
@@ -110,12 +111,14 @@ class x64_func : public Ifunc_translation {
         sim_log_debug("Fetching result location for id:{}", id);
         
        //Check if result is saved in a register
-        for(size_t reg_idx = 0; reg_idx < NUM_REGS; reg_idx++) {
-            if(reg_status_list[reg_idx] == id) {
-                sim_log_debug("Found id saved in register:{}", regs[0][reg_idx]);
-                return reg_idx;
-            }
-        } 
+        
+                
+        auto pos = std::find(reg_status_list.begin(), reg_status_list.end(), id);
+        if(pos != reg_status_list.end()) {
+            size_t reg_idx = pos - reg_status_list.begin();
+            sim_log_debug("Found id saved in register:{}", regs[0][reg_idx]);
+            return reg_idx;
+        }
         
         //If not found in register, then find it's location in memory
         for(auto& var : id_list) {
@@ -123,7 +126,7 @@ class x64_func : public Ifunc_translation {
                 //Check if it is a variable
                 if(var.is_var) {
                     int reg = 0;
-                    if(var.var_info.value().mem_var_size.has_value()) {
+                    if(var.var_info.mem_var_size.has_value()) {
                         reg = load_mem_var(var);
                     }
                     else {
@@ -134,9 +137,9 @@ class x64_func : public Ifunc_translation {
                 //Value of temporary location is cached in memory
                 else if(var.cached) {
                     sim_log_debug("Found id in stack");
-                    auto type = var.var_info.value().type;
-                    int reg = choose_free_reg(type, var.var_info.value().is_signed, var.id);
-                    add_inst_to_code(INSTRUCTION("mov{} {}(%rbp), %{}", inst_suffix[type], var.offset, get_register_string(type, reg)));
+                    auto type = var.var_info.type;
+                    int reg = choose_free_reg(type, var.var_info.is_signed, var.id);
+                    insert_code("mov{} {}(%rbp), %{}", type, std::to_string(var.offset), reg);
                     var.cached = false;
 
                     return reg;
@@ -148,19 +151,7 @@ class x64_func : public Ifunc_translation {
         return 0;
     }
 
-    int save_and_free_reg(c_type base_type, bool is_signed, int exp_id = 0) {
-        
-        //First select a register not present in no_clobber_list
-        int reg = 0;
-        for(auto _reg: reg_no_clobber_list) {
-            if(!_reg) {
-                break;
-            }
-            reg++;
-        }
-
-        flush_register(static_cast<registers>(reg));
-
+    void allocate_exp_id(int exp_id, c_type base_type, bool is_signed, int reg) {
         if(!exp_id) {
             reg_status_list[reg] = new_id++;
             set_reg_type(reg, base_type, is_signed);
@@ -170,7 +161,22 @@ class x64_func : public Ifunc_translation {
             reg_status_list[reg] = exp_id;
             set_reg_type(reg, base_type, is_signed);
         }
+    }
 
+    int save_and_free_reg(c_type base_type, bool is_signed, int exp_id = 0) {
+        
+        //First select a register not present in no_clobber_list
+        int reg = 0;
+        auto pos = std::find(reg_no_clobber_list.begin(), reg_no_clobber_list.end(), false);
+        if(pos != reg_no_clobber_list.end()) {
+            reg = pos - reg_no_clobber_list.begin();
+        }
+        else {
+            CRITICAL_ASSERT_NOW("reg allocation failed as save_and_free_reg() could not find/flush any register");
+        }
+
+        flush_register(reg);
+        allocate_exp_id(exp_id, base_type, is_signed, reg);
         return reg;   
     }
 
@@ -180,22 +186,13 @@ class x64_func : public Ifunc_translation {
     }
 
     int choose_free_reg(c_type base_type, bool is_signed, int exp_id = 0) {
-        int reg_index = 0;
-        for(auto& reg: reg_status_list) {
-            if(!reg) {
-                sim_log_debug("Found new free register:{}", regs[0][reg_index]);
-                if(!exp_id) {
-                    reg = new_id++;
-                    set_reg_type(reg_index, base_type, is_signed);
-                    sim_log_debug("Allocating new exp_id:{}", reg);
-                } else {
-                    reg = exp_id;   
-                    set_reg_type(reg_index, base_type, is_signed);
-                    sim_log_debug("Using exp_id:{}", exp_id);
-                }
-                return reg_index;
-            }
-            reg_index++;
+        
+        auto pos = std::find(reg_status_list.begin(), reg_status_list.end(), 0);
+        if(pos != reg_status_list.end()) {
+            int reg_index = pos - reg_status_list.begin();
+            sim_log_debug("Found new free register:{}", regs[0][reg_index]);
+            allocate_exp_id(exp_id, base_type, is_signed, reg_index);
+            return reg_index;
         }
 
         sim_log_debug("No free register found");
@@ -203,20 +200,20 @@ class x64_func : public Ifunc_translation {
     }
 
     int load_mem_var(const c_expr_x64& var) {
-        sim_log_debug("Loading memory var with var_id:{} -> name:{} and size:{}", var.id, var.var_info.value().name, var.var_info.value().mem_var_size.value());
+        sim_log_debug("Loading memory var with var_id:{} -> name:{} and size:{}", var.id, var.var_info.name, var.var_info.mem_var_size.value());
         int reg = choose_free_reg(C_LONG, false, var.id);
         int offset = var.offset;
-        add_inst_to_code(INSTRUCTION("lea{} {}(%rbp), %{}", inst_suffix[C_LONG], offset, get_register_string(C_LONG, reg)));
 
+        insert_code("lea{} {}(%rbp), %{}", C_LONG, std::to_string(offset), reg);
         return reg;
     }
 
     int load_var(const c_expr_x64& var) {
-        sim_log_debug("Loading var with var_id:{} -> name:\"{}\"", var.id, var.var_info.value().name);
-        int reg = choose_free_reg(var.var_info.value().type, var.var_info.value().is_signed, var.id);
+        sim_log_debug("Loading var with var_id:{} -> name:\"{}\"", var.id, var.var_info.name);
+        int reg = choose_free_reg(var.var_info.type, var.var_info.is_signed, var.id);
         int offset = var.offset;
-        auto type = var.var_info.value().type;
-        add_inst_to_code(INSTRUCTION("mov{} {}(%rbp), %{}", inst_suffix[type], offset, get_register_string(type, reg)));
+        auto type = var.var_info.type;
+        insert_code("mov{} {}(%rbp), %{}", type, std::to_string(offset), reg);
 
         return reg;
     }
@@ -247,7 +244,7 @@ class x64_func : public Ifunc_translation {
             "type mismatch occured between exp_id:{} and exp_id:{} of type:{} and type:{}", reg_status_list[reg1], reg_status_list[reg2], reg_type_list[reg1], reg_type_list[reg2]);
     }
 
-    void flush_register(enum registers reg_idx) {
+    void flush_register(int reg_idx) {
         int offset = 0;
         bool found_existing_cache = false;
         for(auto& loc: id_list) {
@@ -260,8 +257,8 @@ class x64_func : public Ifunc_translation {
                 loc.cached = true;
                 loc.id = reg_status_list[reg_idx];
                 offset = loc.offset;
-                loc.var_info.value().type = reg_type_list[reg_idx];
-                loc.var_info.value().is_signed = sign_list[reg_idx];
+                loc.var_info.type = reg_type_list[reg_idx];
+                loc.var_info.is_signed = sign_list[reg_idx];
                 found_existing_cache = true;
                 break;
             }
@@ -273,8 +270,8 @@ class x64_func : public Ifunc_translation {
             tmp.id = reg_status_list[reg_idx];
             offset = tmp.offset = advance_offset(reg_type_list[reg_idx]);
             tmp.is_var = false;
-            tmp.var_info->is_signed = sign_list[reg_idx];
-            tmp.var_info->type = reg_type_list[reg_idx];
+            tmp.var_info.is_signed = sign_list[reg_idx];
+            tmp.var_info.type = reg_type_list[reg_idx];
             reg_status_list[reg_idx] = 0;
         
             id_list.push_back(tmp);
@@ -283,7 +280,7 @@ class x64_func : public Ifunc_translation {
         sim_log_debug("Freeing {} register to stack at offset:{}", regs[0][reg_idx], offset);
 
         auto type = reg_type_list[reg_idx];
-        add_inst_to_code(INSTRUCTION("mov{} %{}, {}(%rbp)", inst_suffix[type], get_register_string(type, reg_idx), offset));
+        insert_code("mov{} %{}, {}(%rbp)", type, reg_idx, std::to_string(offset));
 
         free_reg(reg_idx);
     }
@@ -292,6 +289,8 @@ class x64_func : public Ifunc_translation {
         
         if(reg_status_list[reg_idx] == exp_id)
             return;
+
+        CRITICAL_ASSERT(!reg_no_clobber_list[reg_idx], "tranfer_to_reg() failed as reg_idx:{} is in no_clobber_list", reg_idx);
         
         if(reg_status_list[reg_idx]) {
             flush_register(reg_idx);
@@ -305,10 +304,8 @@ class x64_func : public Ifunc_translation {
                     free_reg(i);
                     
                     auto type = reg_type_list[reg_idx];
-                    auto reg1_str = get_register_string(type, i);
-                    auto reg2_str = get_register_string(type, reg_idx); 
-                    
-                    add_inst_to_code(INSTRUCTION("mov{} %{}, %{}", inst_suffix[type], reg1_str, reg2_str));
+
+                    insert_code("mov{} %{}, %{}", type, i, reg_idx);    
                     return;
                 }
             }
@@ -320,10 +317,10 @@ class x64_func : public Ifunc_translation {
                     loc.cached = false;
                 }
                 reg_status_list[reg_idx] = exp_id;
-                set_reg_type(reg_idx, loc.var_info.value().type, loc.var_info.value().is_signed);
+                set_reg_type(reg_idx, loc.var_info.type, loc.var_info.is_signed);
                 
                 auto type = reg_type_list[reg_idx];
-                add_inst_to_code(INSTRUCTION("mov{} {}(%rbp), %{}", inst_suffix[type], loc.offset, get_register_string(type, reg_idx)));
+                insert_code("mov{} {}(%rbp), %{}", type, std::to_string(loc.offset), reg_idx);
                 return;
             }
         }
@@ -357,7 +354,62 @@ class x64_func : public Ifunc_translation {
     }
 
     void free_reg(int reg_idx) {
+        reg_no_clobber_list[reg_idx] = false;
         reg_status_list[reg_idx] = 0;
+    }
+
+    std::tuple<c_type, bool> fetch_result_type(int exp_id) {
+        for(int i = 0; i < NUM_REGS; i++) {
+            if(reg_status_list[i] == exp_id) {
+                return std::make_tuple(reg_type_list[i], sign_list[i]);
+            }            
+        }
+
+        for(const auto& var: id_list) {
+            if(var.is_var || var.cached) {
+                if(var.id == exp_id) {
+                    return std::make_tuple(var.var_info.type, var.var_info.is_signed);
+                }
+            }
+        }
+
+        CRITICAL_ASSERT_NOW("fetch_result_type() called with invalid exp_id:{}", exp_id);
+    }
+
+    void free_preferred_register(int reg_idx, c_type type, bool is_signed) {
+        if(reg_status_list[reg_idx]) {
+            int i;
+            for (i = 0; i < NUM_REGS; i++) {
+                if (i != reg_idx && !reg_status_list[i]) {
+                    //We found a free register
+                    insert_code("mov{} %{}, %{}", type, reg_idx, i);
+                    set_reg_type(i, reg_type_list[reg_idx], sign_list[reg_idx]);
+                    reg_status_list[i] = reg_status_list[reg_idx];
+                    break;
+                }
+            }
+            if(i == NUM_REGS) {
+                //We didn't find a free register
+                flush_register(static_cast<registers>(reg_idx));
+            }
+        }   
+
+        reg_status_list[reg_idx] = new_id++;
+        set_reg_type(reg_idx, type, is_signed);
+    }
+
+    std::string_view make_format_args(c_type type, std::string_view constant) {
+        return constant;
+    }
+    
+    std::string_view make_format_args(c_type type, int reg) {
+        return get_register_string(type, reg);
+    }
+
+    template<typename... Args>
+    void insert_code(std::string_view msg, c_type type, Args&&... args) {
+        std::string _msg = "\t" + std::string(msg) + "\n";
+        add_inst_to_code(fmt::format(_msg, inst_suffix[type], make_format_args(type, args)...));
     }
 
 public:
@@ -383,6 +435,8 @@ public:
     int sub(int id1, int id2) override;
     int sub(int id, std::string_view constant) override;
     int sub(std::string_view constant, int id) override;
+    int mul(int id1, int id2) override;
+    int mul(int id1, std::string_view constant) override;
     
 //Branch operation
     int create_label() override;

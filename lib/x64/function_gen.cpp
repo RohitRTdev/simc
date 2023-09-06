@@ -25,23 +25,22 @@ int x64_func::assign_var(int var_id, int id) {
     int offset = var.offset;
     int reg = fetch_result(id);
 
-    CRITICAL_ASSERT(reg_type_list[reg] == var.var_info.value().type,
+    CRITICAL_ASSERT(reg_type_list[reg] == var.var_info.type,
     "var type of var_id:{} != expr_id:{} type", var_id, id);
 
     auto type = reg_type_list[reg];
 
-    add_inst_to_code(INSTRUCTION("mov{} %{}, {}(%rbp)", inst_suffix[type], get_register_string(type, reg), offset));
-
+    insert_code("mov{} %{}, {}(%rbp)", type, reg, std::to_string(offset));
     return id;
 }
 
 int x64_func::assign_var(int var_id, std::string_view constant) {
     
     auto& var = fetch_var(var_id);
-    auto type = var.var_info.value().type;
+    auto type = var.var_info.type;
     int offset = var.offset;
-    add_inst_to_code(INSTRUCTION("mov{} ${}, {}(%rbp)", inst_suffix[type], constant, offset));
-
+    
+    insert_code("mov{} ${}, {}(%rbp)", type, constant, std::to_string(offset));
     return var_id;
 }
 
@@ -78,8 +77,7 @@ int x64_func::fetch_global_var(int id) {
     auto type = var.type;
 
     int reg = choose_free_reg(type, var.is_signed);
-    add_inst_to_code(INSTRUCTION("mov{} {}(%rip), %{}", inst_suffix[type], 
-    var.name, get_register_string(type, reg)));
+    insert_code("mov{} {}(%rip), %{}", type, var.name, reg);
 
     return reg_status_list[reg];
 }
@@ -89,8 +87,7 @@ int x64_func::assign_global_var(int id, int expr_id) {
     auto type = var.type;
 
     int reg = fetch_result(expr_id);
-    add_inst_to_code(INSTRUCTION("mov{} %{}, {}(%rip)", inst_suffix[type], 
-    get_register_string(type, reg), var.name));
+    insert_code("mov{} %{}, {}(%rip)", type, reg, var.name);
 
     return reg_status_list[reg];
 }

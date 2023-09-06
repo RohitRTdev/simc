@@ -3,25 +3,18 @@
 int x64_func::add(int id1, int id2) {
     auto [reg1, reg2, reg, type] = binary_op_fetch(id1, id2);
 
-    add_inst_to_code(INSTRUCTION("lea{} (%{}, %{}), %{}", inst_suffix[type], 
-    get_register_string(type, reg1), get_register_string(type, reg2), get_register_string(type, reg)));
+    insert_code("lea{} (%{}, %{}), %{}", type, reg1, reg2, reg);
 
-
-    reg_no_clobber_list[reg1] = reg_no_clobber_list[reg2] = false;
     free_reg(reg1), free_reg(reg2);
-
     return reg_status_list[reg];
 }
 
 int x64_func::add(int id, std::string_view constant) {
     auto [reg1, _, reg, type] = unary_op_fetch(id);
 
-    add_inst_to_code(INSTRUCTION("lea{} {}(%{}), %{}", inst_suffix[type], 
-    constant, get_register_string(type, reg1), get_register_string(type, reg)));
+    insert_code("lea{} {}(%{}), %{}", type, constant, reg1, reg);
 
-    reg_no_clobber_list[reg1] = false;
     free_reg(reg1);
-
     return reg_status_list[reg];
 }
 
@@ -29,12 +22,8 @@ int x64_func::sub(int id1, int id2) {
 
     auto [reg1, reg2, reg, type] = binary_op_fetch(id1, id2);
 
-    add_inst_to_code(INSTRUCTION("mov{} %{}, %{}", inst_suffix[type],
-    get_register_string(type, reg1), get_register_string(type, reg)));
-    add_inst_to_code(INSTRUCTION("subl %{}, %{}", inst_suffix[type],
-    get_register_string(type, reg2), get_register_string(type, reg)));
-
-    reg_no_clobber_list[reg1] = reg_no_clobber_list[reg2] = false;
+    insert_code("mov{} %{}, %{}", type, reg1, reg);
+    insert_code("sub{} %{}, %{}", type, reg2, reg);
 
     free_reg(reg1), free_reg(reg2);
     return reg_status_list[reg];
@@ -43,27 +32,61 @@ int x64_func::sub(int id1, int id2) {
 int x64_func::sub(int id, std::string_view constant) {
     auto [reg1, _, reg, type] = unary_op_fetch(id);
 
-    add_inst_to_code(INSTRUCTION("mov{} %{}, %{}", inst_suffix[type], 
-    get_register_string(type, reg1), get_register_string(type, reg)));
-    add_inst_to_code(INSTRUCTION("sub{} ${}, %{}", inst_suffix[type], constant,
-    get_register_string(type, reg)));
+    insert_code("mov{} %{}, %{}", type, reg1, reg);
+    insert_code("sub{} ${}, %{}", type, constant, reg);
 
-    reg_no_clobber_list[reg1] = false;
     free_reg(reg1);
-
     return reg_status_list[reg];
 }
 
 int x64_func::sub(std::string_view constant, int id) {
     auto [reg1, _, reg, type] = unary_op_fetch(id);
 
-    add_inst_to_code(INSTRUCTION("mov{} ${}, %{}", inst_suffix[type], constant,
-    get_register_string(type, reg)));
-    add_inst_to_code(INSTRUCTION("sub{} %{}, %{}", inst_suffix[type], 
-    get_register_string(type, reg1), get_register_string(type, reg)));
+    insert_code("mov{} ${}, %{}", type, constant, reg);
+    insert_code("sub{} ${}, %{}", type, reg1, reg);
 
-    reg_no_clobber_list[reg1] = false;
     free_reg(reg1);
-
     return reg_status_list[reg];
+}
+
+int x64_func::mul(int id1, int id2) {
+    auto [type, is_signed] = fetch_result_type(id1);
+    free_preferred_register(RAX, type, is_signed);
+    reg_no_clobber_list[RAX] = true;
+
+    int reg1 = fetch_result(id1);
+    reg_no_clobber_list[reg1] = true;
+    int reg2 = fetch_result(id2);
+
+    insert_code("mov{} %{}, %{}", type, reg1, RAX);
+    if(is_signed) {
+        insert_code("imul{} %{}, %{}", type, reg2, RAX);
+    }
+    else {
+        insert_code("mul{} %{}", type, reg2);
+    }
+
+    free_reg(reg1), free_reg(reg2);
+    reg_no_clobber_list[RAX] = false;
+    return reg_status_list[RAX];
+}
+
+int x64_func::mul(int id1, std::string_view constant) {
+    auto [type, is_signed] = fetch_result_type(id1);
+    free_preferred_register(RAX, type, is_signed);
+    reg_no_clobber_list[RAX] = true;
+
+    int reg1 = fetch_result(id1);
+
+    insert_code("mov{} ${}, %{}", type, constant, RAX);
+    if(is_signed) {
+        insert_code("imul{} %{}, %{}", type, reg1, RAX);
+    }
+    else {
+        insert_code("mul{} %{}", type, reg1);
+    }
+
+    free_reg(reg1);
+    reg_no_clobber_list[RAX] = false;
+    return reg_status_list[RAX];
 }

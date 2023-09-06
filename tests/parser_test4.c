@@ -19,13 +19,18 @@ static void volatile good_old_function(int param1, void (param2)(), int **ptr_pa
     long int a;
     long int f;
     unsigned char m[2];
-
-    a = b + f;;
+    long int j;
+    j = 3;
+    f = a * f * a + (j = 5) - 2;
+    a = a + 1;
+    ; ;;
     ;
 
 }
 
 signed volatile * const complex(void param1(int john, int (register int), char mac), const int param2[2]) {
+    int * const * a, * const * b;
+    b = a;
 
 }
 

@@ -89,6 +89,8 @@ public:
     virtual int sub(int id1, int id2) = 0;
     virtual int sub(int id, std::string_view constant) = 0;
     virtual int sub(std::string_view constant, int id) = 0;
+    virtual int mul(int id1, int id2) = 0;
+    virtual int mul(int id1, std::string_view constant) = 0;
 
 //Branch operation
     virtual int create_label() = 0;
