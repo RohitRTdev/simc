@@ -1,4 +1,5 @@
 #include "compiler/ast.h"
+#include "debug-api.h"
 
 ast_expr::ast_expr(EXPR_TYPE _type) : ast_token(nullptr, true), type(_type)
 {}
@@ -123,9 +124,13 @@ bool is_ast_expr_operator(const std::unique_ptr<ast>& node) {
 }
 
 const ast_expr* cast_to_ast_expr(const std::unique_ptr<ast>& node) {
-    return static_cast<const ast_expr*>(node.get());
+    auto _ptr = dynamic_cast<ast_expr*>(node.get());
+    CRITICAL_ASSERT(_ptr, "cast_to_ast_expr() called with invalid ast node");
+    return _ptr;
 }
 
 const ast_op* cast_to_ast_op(const std::unique_ptr<ast>& node) {
-    return static_cast<const ast_op*>(cast_to_ast_expr(node));
+    auto _ptr = dynamic_cast<ast_op*>(node.get());
+    CRITICAL_ASSERT(_ptr, "cast_to_ast_op() called with invalid ast node");
+    return _ptr;
 }

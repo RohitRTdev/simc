@@ -1,6 +1,7 @@
 #pragma once
 
 #include "compiler/ast.h"
+#include "debug-api.h"
 
 static inline std::unique_ptr<ast> create_ast_program() {
     return std::make_unique<ast>(AST_TYPE::PROGRAM);
@@ -77,5 +78,8 @@ static inline std::unique_ptr<ast> create_ast_array_spec(const token* constant) 
 
 
 static inline const ast_token* cast_to_ast_token(const std::unique_ptr<ast>& node) {
-    return static_cast<ast_token*>(node.get());
+    auto _ptr = dynamic_cast<ast_token*>(node.get());
+    CRITICAL_ASSERT(_ptr, "cast_to_ast_token called with invalid ast node");
+    
+    return _ptr;
 }

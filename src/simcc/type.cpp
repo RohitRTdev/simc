@@ -100,9 +100,33 @@ bool type_spec::is_function_type() const {
     return mod_list.size() && (mod_list[0].fn_spec.size() || (!is_array_type() && !is_pointer_type()));
 }
 
+bool type_spec::is_modifiable() const {
+    if(is_array_type() || is_function_type())
+        return false;
+    
+    if(is_pointer_type()) {
+        return !mod_list[0].ptr_list[0].is_const;
+    }
+
+    return !cv.is_const;
+}
+
+bool type_spec::is_modified_type() const {
+    return is_pointer_type() || is_array_type() || is_function_type();
+}
+
+bool type_spec::is_type_operable(const type_spec& type) const {
+   if(is_modified_type() || type.is_modified_type()) {
+        return false;
+   }
+
+   return base_type == type.base_type && is_signed == type.is_signed;
+}
+
 bool type_spec::operator == (const type_spec& type) const {
     if(!(base_type == type.base_type && is_signed == type.is_signed && 
-    cv.is_const == type.cv.is_const && cv.is_volatile == type.cv.is_volatile))
+    cv.is_const == type.cv.is_const && cv.is_volatile == type.cv.is_volatile &&
+    is_register == type.is_register))
         return false;
 
     if(mod_list.size() != type.mod_list.size())
@@ -110,19 +134,23 @@ bool type_spec::operator == (const type_spec& type) const {
 
     for(size_t i = 0; i < mod_list.size(); i++) {
         if(mod_list[i].is_pointer_mod()) {
+            if (!type.mod_list[i].is_pointer_mod() || (type.mod_list[i].ptr_list.size() != mod_list[i].ptr_list.size()))
+                return false;
             for(size_t j = 0; j < mod_list[i].ptr_list.size(); j++) {
                 if(!(mod_list[i].ptr_list[j] == type.mod_list[i].ptr_list[j]))
                     return false;
             }
         }
         else if(mod_list[i].is_array_mod()) {
+            if (!type.mod_list[i].is_array_mod() || (type.mod_list[i].array_spec.size() != mod_list[i].array_spec.size()))
+                return false;
             for(size_t j = 0; j < mod_list[i].array_spec.size(); j++) {
                 if(mod_list[i].array_spec[j] != type.mod_list[i].array_spec[j])
                     return false;
             }
         }
         else {
-            if(mod_list[i].fn_spec.size() != type.mod_list[i].fn_spec.size())
+            if(!type.mod_list[i].is_function_mod() || (mod_list[i].fn_spec.size() != type.mod_list[i].fn_spec.size()))
                 return false;
             for(size_t j = 0; j < mod_list[i].fn_spec.size(); j++) {
                 if(!(mod_list[i].fn_spec[j] == type.mod_list[i].fn_spec[j]))

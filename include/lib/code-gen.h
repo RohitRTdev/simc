@@ -16,10 +16,10 @@
 #define INSTRUCTION( msg, ... ) fmt::format("\t" LINE(msg) __VA_OPT__(,) __VA_ARGS__)
 
 enum c_type {
-    C_INT, 
     C_CHAR,
-    C_LONG,
     C_SHORT,
+    C_INT, 
+    C_LONG,
     C_LONGLONG,
 
     //These types are used since they are needed in certain situations, however they are not
@@ -89,6 +89,11 @@ public:
     virtual int sub(int id1, int id2) = 0;
     virtual int sub(int id, std::string_view constant) = 0;
     virtual int sub(std::string_view constant, int id) = 0;
+    virtual int mul(int id1, int id2) = 0;
+    virtual int mul(int id1, std::string_view constant) = 0;
+    
+//Type conversion
+    virtual int type_cast(int exp_id, c_type cast_type, bool cast_sign) = 0;
 
 //Branch operation
     virtual int create_label() = 0;

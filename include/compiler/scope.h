@@ -21,7 +21,7 @@ class scope {
     scope* parent;
 
     using tu_intf_type = std::shared_ptr<Itranslation>;
-    using fn_intf_type = std::shared_ptr<Ifunc_translation>;
+    using fn_intf_type = Ifunc_translation*;
 
     std::variant<tu_intf_type, fn_intf_type> intf; 
 
@@ -29,8 +29,8 @@ class scope {
     int declare_variable(const var_info& var); 
 public:
     scope(scope* _parent); 
-    scope(scope* _parent, std::shared_ptr<Itranslation> tu);
-    scope(scope* _parent, std::shared_ptr<Ifunc_translation> fn);
+    scope(scope* _parent, tu_intf_type tu);
+    scope(scope* _parent, fn_intf_type fn);
     scope* fetch_parent_scope() const;
     bool is_global_scope() const; 
 

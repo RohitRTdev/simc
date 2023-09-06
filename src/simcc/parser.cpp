@@ -273,7 +273,7 @@ enum class base_reduction_context {
 struct reduction_helpers {
     std::function<base_reduction_context (state_machine*)> base_reduce_context;
     std::function<bool (const std::unique_ptr<ast>&)> is_abstract;
-    std::function<bool(const std::unique_ptr<ast>&)> is_empty;
+    std::function<bool (const std::unique_ptr<ast>&)> is_empty;
 
     reduction_helpers() {
         base_reduce_context = [&] (state_machine* inst) {
@@ -513,7 +513,7 @@ static void reduce_pointer_list(state_machine* inst) {
 
     auto ptr_spec = create_ast_ptr_spec(pointer, const_qual, vol_qual);
     if(inst->parser_stack.top()->is_pointer_list()) {
-        inst->parser_stack.top()->attach_back(std::move(ptr_spec));
+        inst->parser_stack.top()->attach_node(std::move(ptr_spec));
     }
     else {
         auto ptr_list = create_ast_ptr_list();
