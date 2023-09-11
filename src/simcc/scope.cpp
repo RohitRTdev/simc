@@ -20,14 +20,6 @@ bool scope::is_global_scope() const {
     return !parent;
 }
 
-c_type scope::fetch_phy_type(const var_info& var) {
-    c_type phy_type = var.type.base_type;
-    if(var.type.is_pointer_type()) {
-        phy_type = C_PTR;
-    }
-    return phy_type;
-}
-
 int scope::declare_variable(const var_info& var) {
     CRITICAL_ASSERT(!var.type.is_function_type(), "declare_variable() called with function type");
 
@@ -36,21 +28,21 @@ int scope::declare_variable(const var_info& var) {
         mem_var_size = var.type.get_size();
         sim_log_debug("Declaring array type of size:{}", mem_var_size.value());
     } 
-    auto phy_type = fetch_phy_type(var);
+    auto [phy_type, is_signed] = var.type.get_simple_type(); 
     if(is_global_scope()) {
-        if(mem_var_size.has_value()) {
+        if(mem_var_size) {
             return std::get<tu_intf_type>(intf)->declare_global_mem_variable(var.name, var.stor_spec.is_stor_static(), mem_var_size.value());
         }
         else {
-            return std::get<tu_intf_type>(intf)->declare_global_variable(var.name, phy_type, var.type.is_signed, var.stor_spec.is_stor_static());
+            return std::get<tu_intf_type>(intf)->declare_global_variable(var.name, phy_type, is_signed, var.stor_spec.is_stor_static());
         }
     }
     else {
-        if(mem_var_size.has_value()) {
+        if(mem_var_size) {
             return std::get<fn_intf_type>(intf)->declare_local_mem_variable(var.name, mem_var_size.value());
         }
         else {
-            return std::get<fn_intf_type>(intf)->declare_local_variable(var.name, phy_type, var.type.is_signed);
+            return std::get<fn_intf_type>(intf)->declare_local_variable(var.name, phy_type, is_signed);
         }
     }
 }
@@ -126,5 +118,7 @@ Ifunc_translation* scope::add_function_definition(std::string_view fn_name, cons
     fn.is_defined = true;
     fn.args = fn_args;
 
-    return std::get<tu_intf_type>(intf)->add_function(fn_name, fn.type.base_type, fn.type.is_signed, fn.stor_spec.is_stor_static());
+    auto [base_type, is_signed] = fn.type.resolve_type().get_simple_type();
+
+    return std::get<tu_intf_type>(intf)->add_function(fn_name, base_type, is_signed, fn.stor_spec.is_stor_static());
 }

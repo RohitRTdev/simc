@@ -53,7 +53,8 @@ bool ast::is_stmt() const {
     switch(type) {
         case AST_TYPE::RETURN:
         case AST_TYPE::NULL_STMT: 
-        case AST_TYPE::DECL_STMT: return true;
+        case AST_TYPE::DECL_STMT:
+        case AST_TYPE::EXPR_STMT: return true;
     }
 
     return false;

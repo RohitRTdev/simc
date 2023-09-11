@@ -89,6 +89,7 @@ int x64_func::type_cast(int exp_id, c_type cast_type, bool cast_sign) {
     auto [reg1, _, type] = unary_op_fetch(exp_id);
     bool is_signed = sign_list[reg1];
 
+    filter_type(cast_type, cast_sign);
     set_reg_type(reg1, cast_type, cast_sign);
     if(cast_type <= type) {
         return reg_status_list[reg1];

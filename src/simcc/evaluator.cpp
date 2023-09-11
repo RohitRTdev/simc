@@ -5,15 +5,15 @@
 #include "compiler/eval.h"
 #include "compiler/utils.h"
 
-eval_expr::eval_expr(std::unique_ptr<ast> expr_start, Ifunc_translation* fn, scope* cur_scope, bool only_eval) : expr_node(std::move(expr_start)), 
-fn_intf(fn), fn_scope(cur_scope), eval_only(only_eval) 
+eval_expr::eval_expr(std::unique_ptr<ast> expr_start, Ifunc_translation* fn, scope* cur_scope) : expr_node(std::move(expr_start)), 
+fn_intf(fn), fn_scope(cur_scope) 
 {}
 
-int eval_expr::eval() {
+expr_result eval_expr::eval() {
     main_loop();
 
     CRITICAL_ASSERT(res_stack.size() == 1, "res_stack.size() == 1 assertion failed during call to eval()");
-    return fetch_stack_node(res_stack).expr_id;
+    return fetch_stack_node(res_stack);
 }
 
 bool eval_expr::is_assignable() const {
@@ -43,24 +43,13 @@ bool eval_expr::is_rank_higher(const type_spec& type_1, const type_spec& type_2)
     return type_1.base_type > type_2.base_type;
 }
 
-void eval_expr::convert_type(expr_result& res1, expr_result& res2) {
-    sim_log_debug("Converting type:{} with sign:{} to type:{} with sign:{}",
-    res1.type.base_type, res1.type.is_signed,
-    res2.type.base_type, res2.type.is_signed);
-
-    if(!res1.is_constant) {
-        res1.expr_id = fn_intf->type_cast(res1.expr_id, res2.type.base_type, res2.type.is_signed);
-    }
-
-    res1.type.base_type = res2.type.base_type;
-    res1.type.is_signed = res2.type.is_signed;
-}
 
 void eval_expr::perform_integer_promotion(expr_result& res) {    
     if(res.type.base_type < C_INT) {
         sim_log_debug("Performing integer promotion from type:{} to int", res.type.base_type);
         if(!res.is_constant)
-            res.expr_id = fn_intf->type_cast(res.expr_id, C_INT, true);
+            res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::type_cast, res.expr_id, C_INT, true);
+        
         res.type.base_type = C_INT;
         res.type.is_signed = true;
     }
@@ -76,20 +65,20 @@ void eval_expr::perform_arithmetic_conversion(expr_result& res1, expr_result& re
 
     if(res1.type.is_signed == res2.type.is_signed) {
         if(is_rank_higher(res1.type, res2.type)) {
-            convert_type(res2, res1);
+            res2.convert_type(res1, fn_intf);
         }
         else {
-            convert_type(res1, res2);
+            res1.convert_type(res2, fn_intf);
         }
     }
     else {
         auto& res_u = res1.type.is_signed ? res2 : res1;
         auto& res_s = res2.type.is_signed ? res2 : res1;
         if(is_rank_higher(res_u.type, res_s.type) || is_rank_same(res_u.type, res_s.type)) {
-            convert_type(res_s, res_u);
+            res_s.convert_type(res_u, fn_intf);
         }
         else {
-            convert_type(res_u, res_s);
+            res_u.convert_type(res_s, fn_intf);
         }
     }
 }
@@ -134,7 +123,7 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
     }
 
     if(!res1.is_constant && !res2.is_constant) {
-        res_id = call_code_gen(fn_intf, op_vars, res1.expr_id, res2.expr_id);
+        res_id = code_gen::call_code_gen(fn_intf, op_vars, res1.expr_id, res2.expr_id);
     }
     else if(res1.is_constant && res2.is_constant) {
         CRITICAL_ASSERT_NOW("Constant folding feature is not supported yet");
@@ -142,14 +131,14 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
     else {
         if(res1.is_constant) {
             if(!is_commutative) {
-                res_id = call_code_gen(fn_intf, op_con_var, res1.constant, res2.expr_id);
+                res_id = code_gen::call_code_gen(fn_intf, op_con_var, res1.constant, res2.expr_id);
             }
             else {
-                res_id = call_code_gen(fn_intf, op_var_con, res2.expr_id, res1.constant);
+                res_id = code_gen::call_code_gen(fn_intf, op_var_con, res2.expr_id, res1.constant);
             }
         }
         else {
-            res_id = call_code_gen(fn_intf, op_var_con, res1.expr_id, res2.constant);
+            res_id = code_gen::call_code_gen(fn_intf, op_var_con, res1.expr_id, res2.constant);
         }
     }
 
@@ -168,40 +157,29 @@ void eval_expr::handle_assignment() {
         sim_log_error("LHS of '=' operator must be a modifiable l-value");
     }
 
-    if(res1.type.is_pointer_type()) {
-        if(!(res2.type.is_pointer_type() && (res1.type.resolve_type() == res2.type.resolve_type()))) {
-            sim_log_error("Pointer type mismatch during assignment operation");
-        }
+    if(!res1.type.is_type_convertible(res2.type)) {
+        sim_log_error("Incompatible types encountered during assignment operation");
     }
 
-    if(!(res1.type == res2.type)) {
-        convert_type(res2, res1);
-    }
-
-    int (Ifunc_translation::*assign_con)(int, std::string_view);
-    int (Ifunc_translation::*assign_var)(int, int);
+    res2.convert_type(res1, fn_intf);
 
     int res_id = 0;
     switch(res1.category) {
         case l_val_cat::LOCAL: {
             if(res2.is_constant) {
-                assign_con = &Ifunc_translation::assign_var;
-                res_id = call_code_gen(fn_intf, assign_con, res1.expr_id, res2.constant);
+                res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::assign_var, res1.expr_id, res2.constant);
             } 
             else {
-                assign_var = &Ifunc_translation::assign_var;
-                res_id = call_code_gen(fn_intf, assign_var, res1.expr_id, res2.expr_id);
+                res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::assign_var, res1.expr_id, res2.expr_id);
             }
             break;
         }
         case l_val_cat::GLOBAL: {
             if(res2.is_constant) {
-                assign_con = &Ifunc_translation::assign_global_var;
-                res_id = call_code_gen(fn_intf, assign_con, res1.expr_id, res2.constant); 
+                res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::assign_global_var, res1.expr_id, res2.constant); 
             }
             else {
-                assign_var = &Ifunc_translation::assign_global_var;
-                res_id = call_code_gen(fn_intf, assign_var, res1.expr_id, res2.expr_id); 
+                res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::assign_global_var, res1.expr_id, res2.expr_id); 
             }
             break;
         }
@@ -220,7 +198,7 @@ void eval_expr::handle_var() {
     auto category = l_val_cat::LOCAL;
     if(var.is_global) {
         if(!is_assignable()) {
-            var_id = fn_intf->fetch_global_var(var.var_id);
+            var_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::fetch_global_var, var.var_id);
         }
         category = l_val_cat::GLOBAL;
     }

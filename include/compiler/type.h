@@ -44,6 +44,8 @@ struct modifier {
     bool is_pointer_mod() const;
 };
 
+using phy_type = std::pair<int, type_spec>;
+
 struct type_spec {
     c_type base_type;
     bool is_signed;
@@ -58,9 +60,16 @@ struct type_spec {
     bool is_array_type() const;
     bool is_function_type() const;
 
+    void convert_to_pointer_type();
+
+    bool is_void() const;
     bool is_modified_type() const;
     bool is_type_operable(const type_spec& type) const;
     bool is_modifiable() const; 
     bool operator == (const type_spec& type) const;
 
+    bool is_type_convertible(type_spec& type);
+    static int convert_type(const type_spec& dest_type, int src_id, type_spec& src_type, Ifunc_translation* fn_intf, bool do_phy_conv = true);
+
+    std::pair<c_type, bool> get_simple_type() const;
 };

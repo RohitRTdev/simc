@@ -33,6 +33,8 @@ struct c_expr_x64 {
 
 class x64_func;
 
+void filter_type(c_type& type, bool& is_signed);
+void filter_type(c_type& type);
 
 class x64_tu : public Itranslation {
     std::vector<c_var> globals;
@@ -87,11 +89,9 @@ class x64_func : public Ifunc_translation {
     int cur_offset;
     x64_tu* parent;
     std::string_view fn_name; 
-    static int new_label_id;
     int ret_label_id;
     c_type m_ret_type;
     bool m_is_signed;
-    friend class x64_tu;
     constexpr static const std::array<char, NUM_TYPES> inst_suffix = {'b', 'w', 'l', 'q', 'q'};
 
     using op_type = std::tuple<int, int, c_type>; 
@@ -405,7 +405,7 @@ class x64_func : public Ifunc_translation {
     }
 
 public:
-
+    static int new_label_id;
     x64_func(std::string_view name, x64_tu* parent, c_type ret_type, bool is_signed);
 //declaration
     int declare_local_variable(std::string_view name, c_type type, bool is_signed) override;
@@ -438,11 +438,11 @@ public:
     void add_label(int label_id) override;
     void branch_return(int exp_id) override;
     void fn_return(int exp_id) override;
+    void fn_return(std::string_view constant) override;
 
     void generate_code() override;
 
     std::string_view fetch_fn_name() const {
         return fn_name;
     }
-
 };

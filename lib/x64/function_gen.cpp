@@ -11,14 +11,12 @@ const std::vector<std::array<std::string, NUM_REGS>> regs = {{"rax", "rbx", "rcx
 int x64_func::new_label_id = 0;
 
 x64_func::x64_func(std::string_view name, x64_tu* _parent, c_type ret_type, bool is_signed): new_id(1), cur_offset(0), 
-fn_name(name), parent(_parent), ret_label_id(0), m_is_signed(is_signed) {
+fn_name(name), parent(_parent), ret_label_id(0), m_is_signed(is_signed), m_ret_type(ret_type) {
     //0 indicates reg is free
-    m_ret_type = ret_type == C_PTR ? C_LONG : ret_type;
     for(size_t reg_idx = 0; reg_idx < NUM_REGS; reg_idx++) {
         reg_status_list[reg_idx] = 0;
         reg_no_clobber_list[reg_idx] = false;
     }
-        
 }
 
 int x64_func::assign_var(int var_id, int id) {
@@ -36,7 +34,6 @@ int x64_func::assign_var(int var_id, int id) {
 }
 
 int x64_func::assign_var(int var_id, std::string_view constant) {
-    
     auto& var = fetch_var(var_id);
     auto type = var.var_info.type;
     int offset = var.offset;
@@ -64,6 +61,8 @@ int x64_func::assign_to_mem(int id1, int id2) {
 
 int x64_func::assign_to_mem(int id, std::string_view constant, c_type type) {
     int reg = fetch_result(id);
+
+    filter_type(type);
 
     CRITICAL_ASSERT(reg_type_list[reg] != C_LONG,
     "assign_to_mem called with expr_id:{} not of pointer type", id);
@@ -104,11 +103,12 @@ int x64_func::assign_global_var(int id, std::string_view constant) {
 }
 
 int x64_func::declare_local_variable(std::string_view name, c_type type, bool is_signed) {
+    filter_type(type, is_signed);
     c_expr_x64 var{};
 
     c_var var_info{};
     var_info.name = name;
-    var_info.type = type == C_PTR ? C_LONG : type; 
+    var_info.type = type; 
     var_info.is_signed = is_signed;
     var.var_info = var_info;
     var.is_local = true;

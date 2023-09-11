@@ -9,6 +9,7 @@
 #include "compiler/eval.h"
 #include "debug-api.h"
 scope* current_scope = nullptr;
+bool code_gen::eval_only = false;
 
 //Fn scope
 static void create_new_scope(Ifunc_translation* fn_intf) {
@@ -29,30 +30,41 @@ static void revert_to_old_scope() {
     current_scope = parent;
 }
 
-static void eval_expr_stmt(std::unique_ptr<ast> cur_stmt, Ifunc_translation* fn, bool eval_status) {
-
-    auto res_id = eval_expr(fetch_child(cur_stmt), fn, current_scope, eval_status).eval();
-
-    if(res_id)
-        fn->free_result(res_id);
-
+static void eval_expr_stmt(std::unique_ptr<ast> cur_stmt, Ifunc_translation* fn) {
+    auto res = eval_expr(fetch_child(cur_stmt), fn, current_scope).eval();
+    res.free(fn);
 }
 
-static void eval_ret_stmt(std::unique_ptr<ast> ret_stmt, Ifunc_translation* fn, bool eval_status, bool is_branch = false) {
-    if(!ret_stmt->children.size())
+static void eval_ret_stmt(std::unique_ptr<ast> ret_stmt, Ifunc_translation* fn, const var_info& var, bool is_branch = false) {
+    auto ret_type = var.type.resolve_type();
+    if(!ret_stmt->children.size()) {
+        if(!ret_type.is_void()) {
+            sim_log_error("Function with non void return type, returning void expression");
+        }
         return;
+    }
 
-    auto res_id = eval_expr(std::move(ret_stmt->children[0]), fn, current_scope, eval_status).eval();
-    
+    auto res = eval_expr(std::move(ret_stmt->children[0]), fn, current_scope).eval();
+
+    if(ret_type.is_void() && !res.type.is_void()) {
+        sim_log_error("Function with void return type, returning an expression");
+    }
+
+    if(!res.type.is_type_convertible(ret_type)) {
+        sim_log_error("Expr type not compatible with return type of function");
+    }
+
+    res.convert_type(expr_result(ret_type), fn);
 
     if(is_branch) {
         CRITICAL_ASSERT_NOW("branch return not supported right now");
     }
     else {
-        fn->fn_return(res_id);
+        if(res.is_constant)
+            code_gen::call_code_gen(fn, &Ifunc_translation::fn_return, res.constant);
+        else
+            code_gen::call_code_gen(fn, &Ifunc_translation::fn_return, res.expr_id);
     }
-
-    fn->free_result(res_id);
 }
 
 using base_type_res = std::tuple<c_type, bool, cv_info>;
@@ -255,10 +267,11 @@ static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_li
     return fn_args;
 }
 
-static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation* fn) {
+static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation* fn, std::string_view fn_name) {
 
     std::stack<std::unique_ptr<ast>> stmt_stack;
-    bool eval_status = false;
+    std::optional<var_info> fn_decl;
+    code_gen::eval_only = false;
     while(!stmt_stack.empty() || cur_stmt_list->children.size()) {
         if(!cur_stmt_list->children.size()) {
             cur_stmt_list = fetch_stack_node(stmt_stack);
@@ -276,16 +289,25 @@ static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation
             eval_decl_list(fetch_child(stmt));
         }
         else if(stmt->is_expr_stmt()) {
-            eval_expr_stmt(std::move(stmt), fn, eval_status);
+            eval_expr_stmt(std::move(stmt), fn);
         }
         else if(stmt->is_ret_stmt()) {
-            eval_ret_stmt(std::move(stmt), fn, eval_status);
-            eval_status = true;
+            if(!fn_decl)
+                fn_decl = current_scope->fetch_var_info(fn_name);
+            eval_ret_stmt(std::move(stmt), fn, *fn_decl);
+            code_gen::eval_only = true;
         }
         else if(stmt->is_null_stmt())
             continue;
         else
             CRITICAL_ASSERT_NOW("Invalid statement encountered during evaluation");
+    }
+
+    if(!code_gen::eval_only) {
+        auto& fn_info = current_scope->fetch_var_info(fn_name);
+        if(!fn_info.type.resolve_type().is_void()) {
+            sim_log_error("Function with non void return type is not returning any expression");
+        }
     } 
 
 }
@@ -295,7 +317,7 @@ void eval_fn_def(std::unique_ptr<ast> fn_def) {
     auto fn_intf = current_scope->add_function_definition(fn_args.back(), std::vector<std::string_view>(fn_args.begin(), fn_args.begin() + fn_args.size() - 1));
 
     create_new_scope(fn_intf);
-    eval_stmt_list(fetch_child(fn_def), fn_intf);
+    eval_stmt_list(fetch_child(fn_def), fn_intf, fn_args.back());
     revert_to_old_scope();
 }
 

@@ -25,7 +25,6 @@ class scope {
 
     std::variant<tu_intf_type, fn_intf_type> intf; 
 
-    c_type fetch_phy_type(const var_info& var); 
     int declare_variable(const var_info& var); 
 public:
     scope(scope* _parent); 

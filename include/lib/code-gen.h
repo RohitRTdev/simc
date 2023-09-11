@@ -100,6 +100,7 @@ public:
     virtual void add_label(int label_id) = 0;
     virtual void branch_return(int exp_id) = 0;
     virtual void fn_return(int exp_id) = 0;
+    virtual void fn_return(std::string_view constant) = 0;
 
     virtual void generate_code() = 0;
 
