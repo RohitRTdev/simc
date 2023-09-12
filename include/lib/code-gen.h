@@ -79,9 +79,13 @@ public:
     virtual int assign_var(int var_id, std::string_view constant) = 0; 
     virtual int assign_to_mem(int id1, int id2) = 0;
     virtual int assign_to_mem(int id, std::string_view constant, c_type type) = 0;
+    virtual int fetch_from_mem(int id, c_type type, bool is_signed) = 0;
+    virtual int fetch_from_mem(std::string_view constant, c_type type, bool is_signed) = 0;
     virtual int fetch_global_var(int id) = 0;
     virtual int assign_global_var(int id, int expr_id) = 0;
     virtual int assign_global_var(int id, std::string_view constant) = 0;
+    virtual int get_address_of(std::string_view constant) = 0;
+    virtual int get_address_of(int id, bool is_mem, bool is_global) = 0;
 
 //Addition operation
     virtual int add(int id1, int id2) = 0; 
@@ -91,6 +95,10 @@ public:
     virtual int sub(std::string_view constant, int id) = 0;
     virtual int mul(int id1, int id2) = 0;
     virtual int mul(int id1, std::string_view constant) = 0;
+    virtual int pre_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) = 0;
+    virtual int pre_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) = 0;
+    virtual int post_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) = 0;
+    virtual int post_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) = 0;
     
 //Type conversion
     virtual int type_cast(int exp_id, c_type cast_type, bool cast_sign) = 0;
@@ -100,6 +108,7 @@ public:
     virtual void add_label(int label_id) = 0;
     virtual void branch_return(int exp_id) = 0;
     virtual void fn_return(int exp_id) = 0;
+    virtual void fn_return(std::string_view constant) = 0;
 
     virtual void generate_code() = 0;
 

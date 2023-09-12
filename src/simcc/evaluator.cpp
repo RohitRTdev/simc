@@ -5,15 +5,19 @@
 #include "compiler/eval.h"
 #include "compiler/utils.h"
 
-eval_expr::eval_expr(std::unique_ptr<ast> expr_start, Ifunc_translation* fn, scope* cur_scope, bool only_eval) : expr_node(std::move(expr_start)), 
-fn_intf(fn), fn_scope(cur_scope), eval_only(only_eval) 
-{}
+std::vector<std::string> eval_expr::const_storage;
 
-int eval_expr::eval() {
+eval_expr::eval_expr(std::unique_ptr<ast> expr_start, Ifunc_translation* fn, scope* cur_scope) : expr_node(std::move(expr_start)), 
+fn_intf(fn), fn_scope(cur_scope) 
+{
+    const_storage.clear();
+}
+
+expr_result eval_expr::eval() {
     main_loop();
 
     CRITICAL_ASSERT(res_stack.size() == 1, "res_stack.size() == 1 assertion failed during call to eval()");
-    return fetch_stack_node(res_stack).expr_id;
+    return fetch_stack_node(res_stack);
 }
 
 bool eval_expr::is_assignable() const {
@@ -21,10 +25,21 @@ bool eval_expr::is_assignable() const {
         return false;
 
     auto _expr = cast_to_ast_expr(op_stack.top());
-    if(_expr->is_operator() && cast_to_ast_op(op_stack.top())->tok->is_operator_eq()) {
-        //This means we're looking at left child of EQUAL operator
-        if(_expr->children.size() == 1) {
+    if(_expr->is_operator()) {
+        auto op = cast_to_ast_op(op_stack.top());
+        if(op->tok->is_operator_eq() && _expr->children.size() == 1) {
             return true;
+        }
+        else {
+            auto sym = std::get<operator_type>(op->tok->value);
+            switch(sym) {
+                case INCREMENT:
+                case DECREMENT: return true; 
+                case AMPER: {
+                    if(op->is_unary)
+                        return true;
+                }
+            }
         }
     }
     
@@ -43,24 +58,13 @@ bool eval_expr::is_rank_higher(const type_spec& type_1, const type_spec& type_2)
     return type_1.base_type > type_2.base_type;
 }
 
-void eval_expr::convert_type(expr_result& res1, expr_result& res2) {
-    sim_log_debug("Converting type:{} with sign:{} to type:{} with sign:{}",
-    res1.type.base_type, res1.type.is_signed,
-    res2.type.base_type, res2.type.is_signed);
-
-    if(!res1.is_constant) {
-        res1.expr_id = fn_intf->type_cast(res1.expr_id, res2.type.base_type, res2.type.is_signed);
-    }
-
-    res1.type.base_type = res2.type.base_type;
-    res1.type.is_signed = res2.type.is_signed;
-}
 
 void eval_expr::perform_integer_promotion(expr_result& res) {    
     if(res.type.base_type < C_INT) {
         sim_log_debug("Performing integer promotion from type:{} to int", res.type.base_type);
         if(!res.is_constant)
-            res.expr_id = fn_intf->type_cast(res.expr_id, C_INT, true);
+            res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::type_cast, res.expr_id, C_INT, true);
+        
         res.type.base_type = C_INT;
         res.type.is_signed = true;
     }
@@ -76,20 +80,20 @@ void eval_expr::perform_arithmetic_conversion(expr_result& res1, expr_result& re
 
     if(res1.type.is_signed == res2.type.is_signed) {
         if(is_rank_higher(res1.type, res2.type)) {
-            convert_type(res2, res1);
+            res2.convert_type(res1, fn_intf);
         }
         else {
-            convert_type(res1, res2);
+            res1.convert_type(res2, fn_intf);
         }
     }
     else {
         auto& res_u = res1.type.is_signed ? res2 : res1;
         auto& res_s = res2.type.is_signed ? res2 : res1;
         if(is_rank_higher(res_u.type, res_s.type) || is_rank_same(res_u.type, res_s.type)) {
-            convert_type(res_s, res_u);
+            res_s.convert_type(res_u, fn_intf);
         }
         else {
-            convert_type(res_u, res_s);
+            res_u.convert_type(res_s, fn_intf);
         }
     }
 }
@@ -134,7 +138,7 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
     }
 
     if(!res1.is_constant && !res2.is_constant) {
-        res_id = call_code_gen(fn_intf, op_vars, res1.expr_id, res2.expr_id);
+        res_id = code_gen::call_code_gen(fn_intf, op_vars, res1.expr_id, res2.expr_id);
     }
     else if(res1.is_constant && res2.is_constant) {
         CRITICAL_ASSERT_NOW("Constant folding feature is not supported yet");
@@ -142,14 +146,14 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
     else {
         if(res1.is_constant) {
             if(!is_commutative) {
-                res_id = call_code_gen(fn_intf, op_con_var, res1.constant, res2.expr_id);
+                res_id = code_gen::call_code_gen(fn_intf, op_con_var, res1.constant, res2.expr_id);
             }
             else {
-                res_id = call_code_gen(fn_intf, op_var_con, res2.expr_id, res1.constant);
+                res_id = code_gen::call_code_gen(fn_intf, op_var_con, res2.expr_id, res1.constant);
             }
         }
         else {
-            res_id = call_code_gen(fn_intf, op_var_con, res1.expr_id, res2.constant);
+            res_id = code_gen::call_code_gen(fn_intf, op_var_con, res1.expr_id, res2.constant);
         }
     }
 
@@ -168,49 +172,157 @@ void eval_expr::handle_assignment() {
         sim_log_error("LHS of '=' operator must be a modifiable l-value");
     }
 
-    if(res1.type.is_pointer_type()) {
-        if(!(res2.type.is_pointer_type() && (res1.type.resolve_type() == res2.type.resolve_type()))) {
-            sim_log_error("Pointer type mismatch during assignment operation");
-        }
+    if(!res1.type.is_type_convertible(res2.type)) {
+        sim_log_error("Incompatible types encountered during assignment operation");
     }
 
-    if(!(res1.type == res2.type)) {
-        convert_type(res2, res1);
-    }
-
-    int (Ifunc_translation::*assign_con)(int, std::string_view);
-    int (Ifunc_translation::*assign_var)(int, int);
+    res2.convert_type(res1, fn_intf);
 
     int res_id = 0;
     switch(res1.category) {
         case l_val_cat::LOCAL: {
             if(res2.is_constant) {
-                assign_con = &Ifunc_translation::assign_var;
-                res_id = call_code_gen(fn_intf, assign_con, res1.expr_id, res2.constant);
+                res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::assign_var, res1.expr_id, res2.constant);
             } 
             else {
-                assign_var = &Ifunc_translation::assign_var;
-                res_id = call_code_gen(fn_intf, assign_var, res1.expr_id, res2.expr_id);
+                res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::assign_var, res1.expr_id, res2.expr_id);
             }
             break;
         }
         case l_val_cat::GLOBAL: {
             if(res2.is_constant) {
-                assign_con = &Ifunc_translation::assign_global_var;
-                res_id = call_code_gen(fn_intf, assign_con, res1.expr_id, res2.constant); 
+                res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::assign_global_var, res1.expr_id, res2.constant); 
             }
             else {
-                assign_var = &Ifunc_translation::assign_global_var;
-                res_id = call_code_gen(fn_intf, assign_var, res1.expr_id, res2.expr_id); 
+                res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::assign_global_var, res1.expr_id, res2.expr_id); 
+            }
+            break;
+        }
+        case l_val_cat::INDIR: {
+            auto [base_type, _] = res2.type.get_simple_type();
+            if(res2.is_constant) {
+                res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::assign_to_mem, res1.expr_id, res2.constant, base_type);
+            }            
+            else {
+                res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::assign_to_mem, res1.expr_id, res2.expr_id); 
             }
             break;
         }
         default: CRITICAL_ASSERT_NOW("Invalid l-value category encountered during assignment operation");
     }
 
-    res1.is_lvalue = false;
-    res1.expr_id = res_id;
-    res_stack.push(res1);
+    res2.is_lvalue = false;
+    res2.expr_id = res_id;
+    res_stack.push(res2);
+}
+
+
+void eval_expr::handle_addr() {
+    auto in = fetch_stack_node(res_stack);   
+
+    if(!in.is_lvalue) {
+        sim_log_error("'&' operator requires operand to be an lvalue");
+    }
+
+    bool is_mem = in.category == l_val_cat::INDIR;
+    bool is_global = in.category == l_val_cat::GLOBAL;
+
+    expr_result res{in.type.addr_type()};
+
+    if(in.type.is_function_type()) {
+        std::string_view fn_name = std::get<std::string>(in.var_token->value);
+        res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::get_address_of, fn_name);
+    }
+    else {
+        res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::get_address_of, in.expr_id, is_mem, is_global);
+    }
+
+    res_stack.push(res);
+}
+
+void eval_expr::handle_indir() {
+    auto res_in = fetch_stack_node(res_stack);
+
+    //Must be a pointer
+    if(!res_in.type.is_pointer_type()) {
+        if(res_in.type.is_convertible_to_pointer_type()) {
+            res_in.type.convert_to_pointer_type();
+        }
+        else {
+            sim_log_error("'*' operator requires operand to be a pointer type");
+        }
+    }
+
+    expr_result res{res_in.type.resolve_type()};
+    auto [base_type, is_signed] = res.type.get_simple_type();
+    res.expr_id = res_in.expr_id;
+
+    if(!is_assignable()) {
+        res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::fetch_from_mem, res_in.expr_id, base_type, is_signed); 
+    }
+
+    res.category = l_val_cat::INDIR;
+    res.is_lvalue = true;
+    res_stack.push(res);
+}
+
+void eval_expr::handle_inc_dec(operator_type op, bool is_postfix) {
+    auto in = fetch_stack_node(res_stack);
+    if(!in.is_lvalue || !in.type.is_modifiable()) {
+        sim_log_error("Operand to a inc/dec operator must be a modifiable lvalue");
+    }
+
+    expr_result res{in.type};
+    auto [base_type, is_signed] = res.type.get_simple_type();
+    size_t inc_count = res.type.is_pointer_type() ? base_type_size(res.type.resolve_type().get_simple_type().first) : 1;
+    bool is_mem = in.category == l_val_cat::INDIR; //If dereference or array subscript, force memory variable case
+    bool is_global = in.category == l_val_cat::GLOBAL;
+    auto ptr_mem = &Ifunc_translation::post_inc;
+    switch(op) {
+        case INCREMENT: {
+            if(is_postfix) {
+                ptr_mem = &Ifunc_translation::post_inc;
+            }
+            else {
+                ptr_mem = &Ifunc_translation::pre_inc;
+            }
+            break;
+        }
+        case DECREMENT: {
+            if(is_postfix) {
+                ptr_mem = &Ifunc_translation::post_dec;
+            }
+            else {
+                ptr_mem = &Ifunc_translation::pre_dec;
+            }
+            break;
+        }
+        default: {
+            CRITICAL_ASSERT_NOW("Invalid operator passed to handle_inc_dec()");
+        }
+    }
+
+    res.expr_id = code_gen::call_code_gen(fn_intf, ptr_mem, in.expr_id, base_type, is_signed, inc_count, is_mem, is_global);
+    res_stack.push(res);
+}
+
+void eval_expr::handle_unary_op(operator_type op) {
+    switch(op) {
+        case MUL: {
+            handle_indir();
+            break;
+        }
+        case AMPER: {
+            handle_addr();
+            break;
+        }
+        case INCREMENT:  
+        case DECREMENT: { 
+            handle_inc_dec(op, false);
+            break;
+        }
+        default: CRITICAL_ASSERT_NOW("handle_unary_op() called with invalid operator_type");
+    } 
 }
 
 void eval_expr::handle_var() {
@@ -220,7 +332,7 @@ void eval_expr::handle_var() {
     auto category = l_val_cat::LOCAL;
     if(var.is_global) {
         if(!is_assignable()) {
-            var_id = fn_intf->fetch_global_var(var.var_id);
+            var_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::fetch_global_var, var.var_id);
         }
         category = l_val_cat::GLOBAL;
     }
@@ -230,15 +342,21 @@ void eval_expr::handle_var() {
 
 void eval_expr::handle_constant() {
     //We consider a constant by default to be a signed integer
+    CRITICAL_ASSERT(!expr->tok->is_string_constant(), "String constant not supported right now");
+
     type_spec type{};
-    type.base_type = C_INT;
+    type.base_type = expr->tok->is_integer_constant() ? C_INT : C_CHAR;
     type.is_signed = true;
-    
+
     expr_result res{};
     res.is_constant = true;
-    res.constant = std::get<std::string>(expr->tok->value);
+    if(type.base_type == C_CHAR) {
+        const_storage.push_back(std::to_string(int(std::get<char>(expr->tok->value))));
+        res.constant = const_storage.back();
+    }
+    else 
+        res.constant = std::get<std::string>(expr->tok->value);
     res.type = type;
-
     res_stack.push(res);
 }
 
@@ -251,20 +369,25 @@ void eval_expr::handle_node() {
         handle_constant();
     }
     else if(expr->is_operator()) {
-        auto op = std::get<operator_type>(cast_to_ast_op(expr_node)->tok->value);
-        
-        switch(op) {
-            case PLUS:
-            case MINUS:
-            case MUL: {
-                handle_arithmetic_op(op);
-                break;
+        auto op = cast_to_ast_op(expr_node);
+        auto sym = std::get<operator_type>(op->tok->value);
+
+        if(op->is_postfix) {
+            handle_inc_dec(sym, true);
+        }
+        else if(op->is_unary) {
+            handle_unary_op(sym);
+        }
+        else {
+            switch(sym) {
+                case EQUAL: {
+                    handle_assignment();
+                    break;
+                }
+                default: {
+                    handle_arithmetic_op(sym);
+                }
             }
-            case EQUAL: {
-                handle_assignment();
-                break;
-            }
-            default: CRITICAL_ASSERT_NOW("Only +, - and = operators supported right now");
         }
     }
     else {

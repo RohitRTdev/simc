@@ -1,4 +1,5 @@
 #include "compiler/type.h"
+#include "compiler/utils.h"
 #include "debug-api.h"
 
 c_type decl_spec::fetch_type_spec() const {
@@ -45,6 +46,15 @@ bool decl_spec::is_signed() const {
     return sign_qual && sign_qual->is_keyword_signed();
 }
 
+type_spec type_spec::addr_type() const {
+    type_spec tmp = *this;
+
+    modifier mod{};
+    mod.ptr_list.push_back(cv_info{});
+    tmp.mod_list.push_front(mod);
+
+    return tmp;
+}
 
 type_spec type_spec::resolve_type() const {
     type_spec tmp = *this;
@@ -111,6 +121,32 @@ bool type_spec::is_modifiable() const {
     return !cv.is_const;
 }
 
+bool type_spec::is_convertible_to_pointer_type() {
+    return is_array_type() || is_function_type();
+}
+
+void type_spec::convert_to_pointer_type() {
+    CRITICAL_ASSERT(is_array_type() || is_function_type(), "convert_to_pointer_type() called on non array/function type");
+
+    if(is_array_type()) {
+        mod_list[0].array_spec.pop_front();
+        if(mod_list[0].array_spec.size()) {
+            modifier tmp{};
+            tmp.ptr_list.push_back(cv_info{}); //Insert one pointer
+            mod_list.push_front(tmp);
+        }
+        else {
+            mod_list[0].ptr_list.push_back(cv_info{});
+        }
+    }
+    else if(is_function_type()) {
+        mod_list[0].fn_spec.clear();
+        mod_list[0].ptr_list.push_back(cv_info{});
+    }
+    base_type = C_PTR;
+    is_signed = false;
+}
+
 bool type_spec::is_modified_type() const {
     return is_pointer_type() || is_array_type() || is_function_type();
 }
@@ -175,4 +211,46 @@ bool modifier::is_array_mod() const {
 
 bool modifier::is_pointer_mod() const {
     return ptr_list.size();
+}
+
+bool type_spec::is_void() const {
+    return !is_modified_type() && base_type == C_VOID;
+}
+
+bool type_spec::is_type_convertible(type_spec& type) {
+    if(type.is_array_type() || type.is_function_type()) {
+        type.convert_to_pointer_type();
+    }
+    if(is_pointer_type() || !is_modified_type())
+        return true;
+    
+    return false;
+}
+
+std::pair<c_type, bool> type_spec::get_simple_type() const {
+    c_type sim_type = base_type;
+    bool sim_sign = is_signed;
+    if(is_modified_type()) {
+        sim_type = C_PTR;
+        sim_sign = false;
+    }
+
+    return std::make_pair(sim_type, sim_sign);
+}
+
+int type_spec::convert_type(const type_spec& dest_type, int src_id, type_spec& src_type, Ifunc_translation* fn_intf, bool do_phy_conv) {
+    CRITICAL_ASSERT(src_type.is_pointer_type() || !src_type.is_modified_type(), 
+    "Array/function type passed as source type during call to convert_type()");
+
+    auto [base_type, is_signed] = dest_type.get_simple_type();
+
+    sim_log_debug("Converting type:{} with sign:{} to type:{} with sign:{}",
+    src_type.base_type, src_type.is_signed, base_type, is_signed);
+
+    int dest_id = src_id;
+    if(do_phy_conv && !dest_type.is_void())
+        dest_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::type_cast, src_id, base_type, is_signed);
+    src_type = dest_type;
+
+    return dest_id;
 }

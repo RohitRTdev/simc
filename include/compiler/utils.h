@@ -1,4 +1,5 @@
 #pragma once
+#include <stack>
 #include "compiler/ast.h"
 #include "debug-api.h"
 
@@ -39,3 +40,24 @@ static const Ast* pointer_cast(const std::unique_ptr<ast>& ptr) {
 
     return _ptr;
 }
+
+struct code_gen {
+    static bool eval_only;
+    
+    template<typename T, typename... Args> 
+    static int call_code_gen(T* intf, int (T::*member)(Args...), const Args&... args) {
+        if(!eval_only) {
+            return (intf->*member)(args...);
+        }
+
+        return 0;
+    }
+    
+    template<typename T, typename... Args> 
+    static void call_code_gen(T* intf, void (T::*member)(Args...), const Args&... args) {
+        if(!eval_only) {
+            (intf->*member)(args...);
+        }
+    }
+
+};

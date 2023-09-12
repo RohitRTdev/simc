@@ -136,6 +136,8 @@ public:
     bool is_identifier() const;
     bool is_constant() const;
     bool is_integer_constant() const;
+    bool is_char_constant() const;
+    bool is_string_constant() const;
     bool is_unary_operator() const; 
     bool is_binary_operator() const; 
     bool is_postfix_operator() const; 

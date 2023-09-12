@@ -33,6 +33,8 @@ struct c_expr_x64 {
 
 class x64_func;
 
+void filter_type(c_type& type, bool& is_signed);
+void filter_type(c_type& type);
 
 class x64_tu : public Itranslation {
     std::vector<c_var> globals;
@@ -87,11 +89,9 @@ class x64_func : public Ifunc_translation {
     int cur_offset;
     x64_tu* parent;
     std::string_view fn_name; 
-    static int new_label_id;
     int ret_label_id;
     c_type m_ret_type;
     bool m_is_signed;
-    friend class x64_tu;
     constexpr static const std::array<char, NUM_TYPES> inst_suffix = {'b', 'w', 'l', 'q', 'q'};
 
     using op_type = std::tuple<int, int, c_type>; 
@@ -105,6 +105,16 @@ class x64_func : public Ifunc_translation {
     int advance_offset(size_t mem_var_size) {
         cur_offset -= mem_var_size;
         return cur_offset;
+    }
+
+    bool is_type_lower(c_type type1, c_type type2) {
+        if(type1 == C_LONGLONG)
+            type1 = C_LONG;
+        if(type2 == C_LONGLONG)
+            type2 = C_LONG;
+
+
+        return type1 <= type2;
     }
 
     //This function loads the value in a register and returns the register index
@@ -216,13 +226,17 @@ class x64_func : public Ifunc_translation {
         return reg;
     }
 
-    const c_expr_x64& fetch_var(int var_id) const {
-        for(const auto& var: id_list) {
-            if(var.id == var_id)
-                return var;
+    const std::optional<c_expr_x64> fetch_var(int var_id, bool avoid_mem_var = false) const {
+        auto pos = std::find_if(id_list.begin(), id_list.end(), [&] (const auto& var){
+            return var_id == var.id && var.is_var && ((avoid_mem_var && !var.var_info.mem_var_size) || (!avoid_mem_var));
+        });
+
+        if(pos != id_list.end()) {
+            return *pos;
         }
 
-        CRITICAL_ASSERT_NOW("fetch_var() called with incorrect var_id");
+        sim_log_debug("fetch_var() couldn't find var with var_id:{}", var_id);
+        return std::optional<c_expr_x64>();
     }
 
     std::string_view get_register_string(c_type base_type, int reg_idx) {
@@ -403,9 +417,11 @@ class x64_func : public Ifunc_translation {
         std::string _msg = "\t" + std::string(msg) + "\n";
         add_inst_to_code(fmt::format(_msg, inst_suffix[type], make_format_args(type, args)...));
     }
+    
+    int inc_common(int id, c_type type, bool is_signed, size_t inc_count, bool is_pre, bool inc, bool is_mem, bool is_global);
 
 public:
-
+    static int new_label_id;
     x64_func(std::string_view name, x64_tu* parent, c_type ret_type, bool is_signed);
 //declaration
     int declare_local_variable(std::string_view name, c_type type, bool is_signed) override;
@@ -417,9 +433,13 @@ public:
     int assign_var(int var_id1, std::string_view constant) override; 
     int assign_to_mem(int exp_id, int var_id) override;
     int assign_to_mem(int exp_id1, std::string_view constant, c_type type) override;
+    int fetch_from_mem(int id, c_type type, bool is_signed) override;
+    int fetch_from_mem(std::string_view constant, c_type type, bool is_signed) override;
     int fetch_global_var(int id) override;
     int assign_global_var(int id, int expr_id) override;
     int assign_global_var(int id, std::string_view constant) override;
+    int get_address_of(std::string_view constant) override;
+    int get_address_of(int id, bool is_mem, bool is_global) override;
 
 //Arithmetic operations
     int add(int id1, int id2) override; 
@@ -429,7 +449,10 @@ public:
     int sub(std::string_view constant, int id) override;
     int mul(int id1, int id2) override;
     int mul(int id1, std::string_view constant) override;
-    
+    int pre_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
+    int pre_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
+    int post_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
+    int post_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
 //Type conversion
     int type_cast(int exp_id, c_type cast_type, bool cast_sign) override;
     
@@ -438,11 +461,11 @@ public:
     void add_label(int label_id) override;
     void branch_return(int exp_id) override;
     void fn_return(int exp_id) override;
+    void fn_return(std::string_view constant) override;
 
     void generate_code() override;
 
     std::string_view fetch_fn_name() const {
         return fn_name;
     }
-
 };

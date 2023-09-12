@@ -11,18 +11,18 @@ const std::vector<std::array<std::string, NUM_REGS>> regs = {{"rax", "rbx", "rcx
 int x64_func::new_label_id = 0;
 
 x64_func::x64_func(std::string_view name, x64_tu* _parent, c_type ret_type, bool is_signed): new_id(1), cur_offset(0), 
-fn_name(name), parent(_parent), ret_label_id(0), m_is_signed(is_signed) {
+fn_name(name), parent(_parent), ret_label_id(0), m_is_signed(is_signed), m_ret_type(ret_type) {
     //0 indicates reg is free
-    m_ret_type = ret_type == C_PTR ? C_LONG : ret_type;
     for(size_t reg_idx = 0; reg_idx < NUM_REGS; reg_idx++) {
         reg_status_list[reg_idx] = 0;
         reg_no_clobber_list[reg_idx] = false;
     }
-        
 }
 
 int x64_func::assign_var(int var_id, int id) {
-    auto& var = fetch_var(var_id);
+    auto opt = fetch_var(var_id); 
+    CRITICAL_ASSERT(opt, "assign_var() called with invalid variable id:{}", var_id);
+    auto& var = *opt;
     int offset = var.offset;
     int reg = fetch_result(id);
 
@@ -36,8 +36,9 @@ int x64_func::assign_var(int var_id, int id) {
 }
 
 int x64_func::assign_var(int var_id, std::string_view constant) {
-    
-    auto& var = fetch_var(var_id);
+    auto opt = fetch_var(var_id); 
+    CRITICAL_ASSERT(opt, "assign_var() called with invalid variable id:{}", var_id);
+    auto& var = *opt; 
     auto type = var.var_info.type;
     int offset = var.offset;
     
@@ -52,7 +53,7 @@ int x64_func::assign_to_mem(int id1, int id2) {
 
     auto type = reg_type_list[reg2];
 
-    CRITICAL_ASSERT(reg_type_list[reg1] != C_LONG,
+    CRITICAL_ASSERT(reg_type_list[reg1] == C_LONG,
     "assign_to_mem called with expr_id:{} not of pointer type", id1);
 
     add_inst_to_code(INSTRUCTION("mov{} %{}, (%{})", inst_suffix[type], 
@@ -65,12 +66,32 @@ int x64_func::assign_to_mem(int id1, int id2) {
 int x64_func::assign_to_mem(int id, std::string_view constant, c_type type) {
     int reg = fetch_result(id);
 
-    CRITICAL_ASSERT(reg_type_list[reg] != C_LONG,
+    filter_type(type);
+
+    CRITICAL_ASSERT(reg_type_list[reg] == C_LONG,
     "assign_to_mem called with expr_id:{} not of pointer type", id);
 
-    add_inst_to_code(INSTRUCTION("mov{} ${}, (%{})", inst_suffix[type], constant, get_register_string(C_LONG, reg))); 
-
+    add_inst_to_code(INSTRUCTION("mov{} ${}, (%{})", inst_suffix[type], constant, get_register_string(C_LONG, reg)));
+    free_reg(reg);
     return id;
+}
+
+int x64_func::fetch_from_mem(int id, c_type type, bool is_signed) {
+    auto [reg, _, _type] = unary_op_fetch(id);
+    filter_type(type, is_signed);
+    insert_code("mov{} (%{}), %{}", type, get_register_string(C_LONG, reg), reg);
+
+    set_reg_type(reg, type, is_signed);
+    return reg_status_list[reg];
+}
+
+int x64_func::fetch_from_mem(std::string_view constant, c_type type, bool is_signed) {
+    filter_type(type, is_signed);
+    int reg = choose_free_reg(type, is_signed);
+    insert_code("mov{} ${}, %{}", type, constant, reg);
+    insert_code("mov{} (%{}), %{}", type, get_register_string(C_LONG, reg), reg);
+
+    return reg_status_list[reg];
 }
 
 int x64_func::fetch_global_var(int id) {
@@ -103,12 +124,41 @@ int x64_func::assign_global_var(int id, std::string_view constant) {
     return id;
 }
 
+
+int x64_func::get_address_of(std::string_view constant) {
+    int reg = choose_free_reg(C_LONG, false);
+    insert_code("lea{} {}(%rip), %{}", C_LONG, constant, reg);
+
+    return reg_status_list[reg];
+}
+
+int x64_func::get_address_of(int id, bool is_mem, bool is_global) {
+    auto pos = fetch_var(id);
+    if(is_global) {
+        auto& var = parent->fetch_global_variable(id);
+        return get_address_of(var.name);
+    }
+    int reg = 0;
+    if(pos && !is_mem) {
+        reg = choose_free_reg(C_LONG, false);
+        insert_code("lea{} {}(%rbp), %{}", C_LONG, std::to_string(pos->offset), reg);
+    }
+    else {
+        reg = fetch_result(id);
+        insert_code("lea{} (%{}), %{}", C_LONG, reg, reg);
+        set_reg_type(reg, C_LONG, false);
+    }
+
+    return reg_status_list[reg];
+}
+
 int x64_func::declare_local_variable(std::string_view name, c_type type, bool is_signed) {
+    filter_type(type, is_signed);
     c_expr_x64 var{};
 
     c_var var_info{};
     var_info.name = name;
-    var_info.type = type == C_PTR ? C_LONG : type; 
+    var_info.type = type; 
     var_info.is_signed = is_signed;
     var.var_info = var_info;
     var.is_local = true;

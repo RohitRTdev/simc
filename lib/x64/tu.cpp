@@ -1,19 +1,35 @@
 #include "lib/code-gen.h"
 #include "lib/x64/x64.h"
 
+void filter_type(c_type& type, bool& is_signed) {
+    if(type == C_PTR) {
+        type = C_LONG;
+        is_signed = false;
+    }
+}
+
+void filter_type(c_type& type) {
+    if(type == C_PTR) {
+        type = C_LONG;
+    }
+}
+
+
 x64_tu::x64_tu() : global_var_id(0) {
     x64_func::new_label_id = 0;
 }
+
 
 const c_var& x64_tu::fetch_global_variable(int id) const {
     return globals[id-1];
 }
 
 int x64_tu::declare_global_variable(std::string_view name, c_type type, bool is_signed, bool is_static) {
+    filter_type(type, is_signed);
     c_var var{};
     var.name = name;
-    var.type = type == C_PTR ? C_LONG : type;
     var.is_signed = is_signed;
+    var.type = type;
     var.is_static = is_static;
     globals.push_back(var);
 
@@ -44,6 +60,7 @@ int x64_tu::declare_global_mem_variable(std::string_view name, bool is_static, s
 }
 
 Ifunc_translation* x64_tu::add_function(std::string_view name, c_type ret_type, bool is_signed, bool is_static) {
+    filter_type(ret_type, is_signed);
     auto fn = new x64_func(name, this, ret_type, is_signed);
 
     declare_global_variable(name, ret_type, is_signed, is_static);
