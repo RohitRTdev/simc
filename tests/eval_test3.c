@@ -1,5 +1,16 @@
 static char a;
 
+
+int new_function() {
+    short *wait;
+    short (*val)[5];
+    int con;
+    *(*val++ + (++con + *wait--)) = 100;
+
+    return **(val+con);
+}
+
+
 void* ptr_test() {
     short int* val;
     int john, wick;

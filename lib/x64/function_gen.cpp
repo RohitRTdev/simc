@@ -183,6 +183,7 @@ int x64_func::declare_local_mem_variable(std::string_view name, size_t mem_var_s
     var.is_var = true;
     var.offset = advance_offset(mem_var_size);
     var.id = new_id++;
+    var.var_info = var_info;
     
     sim_log_debug("Declaring mem variable {} at offset:{} with var_id:{}", name, cur_offset, var.id);
 

@@ -98,6 +98,47 @@ void eval_expr::perform_arithmetic_conversion(expr_result& res1, expr_result& re
     }
 }
 
+
+bool eval_expr::handle_pointer_arithmetic(expr_result& res1, expr_result& res2, operator_type op) {
+    expr_result& res_p = res1, &res_i = res2;
+    if(res1.type.is_pointer_type() && res2.type.is_integral()) {
+        res_p = res1;
+        res_i = res2;
+    }
+    else if(res2.type.is_pointer_type() && res1.type.is_integral()) {
+        res_p = res2;
+        res_i = res1;
+    }
+    else {
+        return false;
+    }
+
+    if(op != PLUS && op != MINUS) {
+        return false;
+    }
+
+    sim_log_debug("Performing pointer arithmetic");
+    CRITICAL_ASSERT(!res_i.is_constant, "Pointer arithmetic with constant not yet supported");
+    res_i.convert_type(res_p, fn_intf);
+
+    std::string inc_count = std::to_string(res_p.type.get_pointer_base_type_size());
+    int res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::mul, res_i.expr_id, std::string_view(inc_count));
+    
+    int (Ifunc_translation::*op_var)(int, int); 
+    if(op == PLUS)
+        op_var = &Ifunc_translation::add;
+    else
+        op_var = &Ifunc_translation::sub;
+
+    res_id = code_gen::call_code_gen(fn_intf, op_var, res_p.expr_id, res_id);
+
+    expr_result res{res_p.type};
+    res.expr_id = res_id;
+
+    res_stack.push(res);
+    return true;
+}
+
 void eval_expr::handle_arithmetic_op(operator_type op) {
     
     int (Ifunc_translation::*op_vars)(int, int);
@@ -106,6 +147,19 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
     
     auto res2 = fetch_stack_node(res_stack);
     auto res1 = fetch_stack_node(res_stack);
+
+    auto convert_to_ptr_type = [&] (expr_result& res) {
+        if(res.type.is_array_type() || res.type.is_function_type()) {
+            res.type.convert_to_pointer_type();
+        }
+    };
+
+    //Convert to pointer type
+    convert_to_ptr_type(res1);
+    convert_to_ptr_type(res2);
+
+    if(handle_pointer_arithmetic(res1, res2, op))
+        return;
 
     if(!res1.type.is_type_operable(res2.type)) {
         if(res1.type.is_modified_type() || res1.type.is_modified_type()) {
@@ -274,7 +328,7 @@ void eval_expr::handle_inc_dec(operator_type op, bool is_postfix) {
 
     expr_result res{in.type};
     auto [base_type, is_signed] = res.type.get_simple_type();
-    size_t inc_count = res.type.is_pointer_type() ? base_type_size(res.type.resolve_type().get_simple_type().first) : 1;
+    size_t inc_count = res.type.is_pointer_type() ? res.type.get_pointer_base_type_size() : 1; 
     bool is_mem = in.category == l_val_cat::INDIR; //If dereference or array subscript, force memory variable case
     bool is_global = in.category == l_val_cat::GLOBAL;
     auto ptr_mem = &Ifunc_translation::post_inc;

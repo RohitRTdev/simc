@@ -31,7 +31,7 @@ int scope::declare_variable(const var_info& var) {
     auto [phy_type, is_signed] = var.type.get_simple_type(); 
     if(is_global_scope()) {
         if(mem_var_size) {
-            return std::get<tu_intf_type>(intf)->declare_global_mem_variable(var.name, var.stor_spec.is_stor_static(), mem_var_size.value());
+            return std::get<tu_intf_type>(intf)->declare_global_mem_variable(var.name, var.stor_spec.is_stor_static(), *mem_var_size);
         }
         else {
             return std::get<tu_intf_type>(intf)->declare_global_variable(var.name, phy_type, is_signed, var.stor_spec.is_stor_static());
@@ -39,7 +39,7 @@ int scope::declare_variable(const var_info& var) {
     }
     else {
         if(mem_var_size) {
-            return std::get<fn_intf_type>(intf)->declare_local_mem_variable(var.name, mem_var_size.value());
+            return std::get<fn_intf_type>(intf)->declare_local_mem_variable(var.name, *mem_var_size);
         }
         else {
             return std::get<fn_intf_type>(intf)->declare_local_variable(var.name, phy_type, is_signed);

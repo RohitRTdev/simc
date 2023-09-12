@@ -73,6 +73,7 @@ class eval_expr {
     void handle_indir();
     void handle_inc_dec(operator_type op, bool is_postfix);
     void handle_addr();
+    bool handle_pointer_arithmetic(expr_result& res1, expr_result& res2, operator_type op);
 
 
 public:

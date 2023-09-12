@@ -78,6 +78,12 @@ type_spec type_spec::resolve_type() const {
     return tmp;
 }
 
+size_t type_spec::get_pointer_base_type_size() const {
+    CRITICAL_ASSERT(is_pointer_type(), "get_pointer_base_type_size() called on non pointer type");
+
+    return resolve_type().get_size();
+}
+
 size_t type_spec::get_size() const {
     size_t cur_size = 1;
     for(const auto& mod: mod_list) {
@@ -108,6 +114,10 @@ bool type_spec::is_array_type() const {
 
 bool type_spec::is_function_type() const {
     return mod_list.size() && (mod_list[0].fn_spec.size() || (!is_array_type() && !is_pointer_type()));
+}
+
+bool type_spec::is_integral() const {
+    return !is_modified_type() && base_type != C_VOID;
 }
 
 bool type_spec::is_modifiable() const {
@@ -143,8 +153,6 @@ void type_spec::convert_to_pointer_type() {
         mod_list[0].fn_spec.clear();
         mod_list[0].ptr_list.push_back(cv_info{});
     }
-    base_type = C_PTR;
-    is_signed = false;
 }
 
 bool type_spec::is_modified_type() const {

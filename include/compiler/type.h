@@ -60,9 +60,10 @@ struct type_spec {
     bool is_pointer_type() const;
     bool is_array_type() const;
     bool is_function_type() const;
+    bool is_integral() const;
 
     void convert_to_pointer_type();
-    
+    size_t get_pointer_base_type_size() const;
     bool is_void() const;
     bool is_modified_type() const;
     bool is_type_operable(const type_spec& type) const;
