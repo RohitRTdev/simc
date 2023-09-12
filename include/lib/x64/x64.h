@@ -107,6 +107,16 @@ class x64_func : public Ifunc_translation {
         return cur_offset;
     }
 
+    bool is_type_lower(c_type type1, c_type type2) {
+        if(type1 == C_LONGLONG)
+            type1 = C_LONG;
+        if(type2 == C_LONGLONG)
+            type2 = C_LONG;
+
+
+        return type1 <= type2;
+    }
+
     //This function loads the value in a register and returns the register index
     int fetch_result(int id) {
         sim_log_debug("Fetching result location for id:{}", id);
@@ -216,13 +226,17 @@ class x64_func : public Ifunc_translation {
         return reg;
     }
 
-    const c_expr_x64& fetch_var(int var_id) const {
-        for(const auto& var: id_list) {
-            if(var.id == var_id)
-                return var;
+    const std::optional<c_expr_x64> fetch_var(int var_id) const {
+        auto pos = std::find_if(id_list.begin(), id_list.end(), [&] (const auto& var){
+            return var_id == var.id && var.is_var && !var.var_info.mem_var_size;
+        });
+
+        if(pos != id_list.end()) {
+            return *pos;
         }
 
-        CRITICAL_ASSERT_NOW("fetch_var() called with incorrect var_id");
+        sim_log_debug("fetch_var() couldn't find var with var_id:{}", var_id);
+        return std::optional<c_expr_x64>();
     }
 
     std::string_view get_register_string(c_type base_type, int reg_idx) {
@@ -403,6 +417,8 @@ class x64_func : public Ifunc_translation {
         std::string _msg = "\t" + std::string(msg) + "\n";
         add_inst_to_code(fmt::format(_msg, inst_suffix[type], make_format_args(type, args)...));
     }
+    
+    int inc_common(int id, c_type type, bool is_signed, size_t inc_count, bool is_pre, bool inc);
 
 public:
     static int new_label_id;
@@ -417,6 +433,8 @@ public:
     int assign_var(int var_id1, std::string_view constant) override; 
     int assign_to_mem(int exp_id, int var_id) override;
     int assign_to_mem(int exp_id1, std::string_view constant, c_type type) override;
+    int fetch_from_mem(int id, c_type type, bool is_signed) override;
+    int fetch_from_mem(std::string_view constant, c_type type, bool is_signed) override;
     int fetch_global_var(int id) override;
     int assign_global_var(int id, int expr_id) override;
     int assign_global_var(int id, std::string_view constant) override;
@@ -429,7 +447,10 @@ public:
     int sub(std::string_view constant, int id) override;
     int mul(int id1, int id2) override;
     int mul(int id1, std::string_view constant) override;
-    
+    int pre_inc(int id, c_type type, bool is_signed, size_t inc_count) override;
+    int pre_dec(int id, c_type type, bool is_signed, size_t inc_count) override;
+    int post_inc(int id, c_type type, bool is_signed, size_t inc_count) override;
+    int post_dec(int id, c_type type, bool is_signed, size_t inc_count) override;    
 //Type conversion
     int type_cast(int exp_id, c_type cast_type, bool cast_sign) override;
     

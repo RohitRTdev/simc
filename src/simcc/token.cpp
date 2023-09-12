@@ -99,6 +99,14 @@ bool token::is_integer_constant() const {
     return is_constant() && sub_type == TOK_INT;
 }
 
+bool token::is_char_constant() const {
+    return is_constant() && sub_type == TOK_CHAR;
+}
+
+bool token::is_string_constant() const {
+    return is_constant() && sub_type == TOK_STRING;
+}
+
 bool token::is_operator_eq() const {
     return type == OPERATOR && std::get<operator_type>(value) == EQUAL;
 }

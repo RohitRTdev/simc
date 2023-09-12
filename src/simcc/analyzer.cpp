@@ -68,6 +68,7 @@ static void eval_ret_stmt(std::unique_ptr<ast> ret_stmt, Ifunc_translation* fn, 
 }
 
 using base_type_res = std::tuple<c_type, bool, cv_info>;
+    void convert_to_pointer_type();
 
 static base_type_res forge_base_type(std::unique_ptr<ast_base_type> base_type) {
     c_type phy_type = C_INT;

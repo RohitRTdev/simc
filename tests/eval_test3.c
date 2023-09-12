@@ -1,4 +1,20 @@
 static char a;
+
+void* const * ptr_test() {
+    short int* val;
+    int john, wick;
+    long int solo;
+    char * const *money;
+    val--;
+    **money = *val++ + solo;
+    john = **--money + *++val;
+
+    long long b;
+    b = solo;
+
+    return money;
+}
+
 void good_old_function() {
     long int f;
     unsigned char m;
@@ -17,6 +33,7 @@ void good_old_function() {
 long long another_function() {
     a = a + 1;
     int b;
+    b = 2;
     long* m;
     void* j;
     m = b;

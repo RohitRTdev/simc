@@ -69,6 +69,7 @@ struct type_spec {
     bool operator == (const type_spec& type) const;
 
     bool is_type_convertible(type_spec& type);
+    bool is_convertible_to_pointer_type();
     static int convert_type(const type_spec& dest_type, int src_id, type_spec& src_type, Ifunc_translation* fn_intf, bool do_phy_conv = true);
 
     std::pair<c_type, bool> get_simple_type() const;

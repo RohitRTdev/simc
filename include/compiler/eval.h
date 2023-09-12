@@ -7,7 +7,8 @@
 
 enum class l_val_cat {
     LOCAL,
-    GLOBAL
+    GLOBAL,
+    INDIR
 };
 
 struct expr_result {
@@ -21,7 +22,12 @@ struct expr_result {
 
     expr_result() = default;
     expr_result(type_spec new_type) : type(new_type)
-    {}
+    {
+        expr_id = 0;
+        var_token = nullptr;
+        is_lvalue = false;
+        is_constant = false;
+    }
 
 
     expr_result(int id, type_spec m_type, const token* var, bool lval, l_val_cat cat, bool is_con = false, std::string_view con = std::string_view())
@@ -55,6 +61,7 @@ class eval_expr {
     Ifunc_translation* fn_intf;
     std::unique_ptr<ast> expr_node;
     const ast_expr* expr;
+    static std::vector<std::string> const_storage;
 
     void main_loop();
     void handle_node();
@@ -62,6 +69,10 @@ class eval_expr {
     void handle_constant();
     void handle_arithmetic_op(operator_type op);
     void handle_assignment();
+    void handle_unary_op(operator_type op);
+    void handle_indir();
+    void handle_inc_dec(operator_type op, bool is_postfix);
+
 
 public:
     eval_expr(std::unique_ptr<ast> expr_start, Ifunc_translation* fn, scope* cur_scope);

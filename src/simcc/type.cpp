@@ -112,6 +112,10 @@ bool type_spec::is_modifiable() const {
     return !cv.is_const;
 }
 
+bool type_spec::is_convertible_to_pointer_type() {
+    return is_array_type() || is_function_type();
+}
+
 void type_spec::convert_to_pointer_type() {
     CRITICAL_ASSERT(is_array_type() || is_function_type(), "convert_to_pointer_type() called on non array/function type");
 
@@ -130,6 +134,8 @@ void type_spec::convert_to_pointer_type() {
         mod_list[0].fn_spec.clear();
         mod_list[0].ptr_list.push_back(cv_info{});
     }
+    base_type = C_PTR;
+    is_signed = false;
 }
 
 bool type_spec::is_modified_type() const {
@@ -215,7 +221,7 @@ bool type_spec::is_type_convertible(type_spec& type) {
 std::pair<c_type, bool> type_spec::get_simple_type() const {
     c_type sim_type = base_type;
     bool sim_sign = is_signed;
-    if(is_pointer_type()) {
+    if(is_modified_type()) {
         sim_type = C_PTR;
         sim_sign = false;
     }
@@ -230,7 +236,7 @@ int type_spec::convert_type(const type_spec& dest_type, int src_id, type_spec& s
     auto [base_type, is_signed] = dest_type.get_simple_type();
 
     sim_log_debug("Converting type:{} with sign:{} to type:{} with sign:{}",
-    src_type.base_type, src_type.is_signed, dest_type.base_type, dest_type.is_signed);
+    src_type.base_type, src_type.is_signed, base_type, is_signed);
 
     int dest_id = src_id;
     if(do_phy_conv && !dest_type.is_void())

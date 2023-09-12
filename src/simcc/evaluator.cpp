@@ -5,9 +5,13 @@
 #include "compiler/eval.h"
 #include "compiler/utils.h"
 
+std::vector<std::string> eval_expr::const_storage;
+
 eval_expr::eval_expr(std::unique_ptr<ast> expr_start, Ifunc_translation* fn, scope* cur_scope) : expr_node(std::move(expr_start)), 
 fn_intf(fn), fn_scope(cur_scope) 
-{}
+{
+    const_storage.clear();
+}
 
 expr_result eval_expr::eval() {
     main_loop();
@@ -183,12 +187,98 @@ void eval_expr::handle_assignment() {
             }
             break;
         }
+        case l_val_cat::INDIR: {
+            auto [base_type, _] = res2.type.get_simple_type();
+            if(res2.is_constant) {
+                res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::assign_to_mem, res1.expr_id, res2.constant, base_type);
+            }            
+            else {
+                res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::assign_to_mem, res1.expr_id, res2.expr_id); 
+            }
+            break;
+        }
         default: CRITICAL_ASSERT_NOW("Invalid l-value category encountered during assignment operation");
     }
 
-    res1.is_lvalue = false;
-    res1.expr_id = res_id;
-    res_stack.push(res1);
+    res2.is_lvalue = false;
+    res2.expr_id = res_id;
+    res_stack.push(res2);
+}
+
+void eval_expr::handle_indir() {
+    auto res_in = fetch_stack_node(res_stack);
+
+    //Must be a pointer
+    if(!res_in.type.is_pointer_type()) {
+        if(res_in.type.is_convertible_to_pointer_type()) {
+            res_in.type.convert_to_pointer_type();
+        }
+        else {
+            sim_log_error("'*' operator requires operand to be a pointer type");
+        }
+    }
+
+    expr_result res{res_in.type.resolve_type()};
+    auto [base_type, is_signed] = res.type.get_simple_type();
+    res.expr_id = res_in.expr_id;
+
+    if(!is_assignable()) {
+        res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::fetch_from_mem, res_in.expr_id, base_type, is_signed); 
+    }
+
+    res.category = l_val_cat::INDIR;
+    res.is_lvalue = true;
+    res_stack.push(res);
+}
+
+void eval_expr::handle_inc_dec(operator_type op, bool is_postfix) {
+    auto in = fetch_stack_node(res_stack);
+    if(!in.is_lvalue || !in.type.is_modifiable()) {
+        sim_log_error("Operand to a inc/dec operator must be a modifiable lvalue");
+    }
+
+    expr_result res{in.type};
+    auto [base_type, is_signed] = res.type.get_simple_type();
+    size_t inc_count = res.type.is_pointer_type() ? base_type_size(res.type.resolve_type().get_simple_type().first) : 1;
+    switch(op) {
+        case INCREMENT: {
+            if(is_postfix) {
+                res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::post_inc, in.expr_id, base_type, is_signed, inc_count);
+            }
+            else {
+                res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::pre_inc, in.expr_id, base_type, is_signed, inc_count);
+            }
+            break;
+        }
+        case DECREMENT: {
+            if(is_postfix) {
+                res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::post_dec, in.expr_id, base_type, is_signed, inc_count);
+            }
+            else {
+                res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::pre_dec, in.expr_id, base_type, is_signed, inc_count);
+            }
+            break;
+        }
+        default: {
+            CRITICAL_ASSERT_NOW("Invalid operator passed to handle_inc_dec()");
+        }
+    }
+    res_stack.push(res);
+}
+
+void eval_expr::handle_unary_op(operator_type op) {
+    switch(op) {
+        case MUL: {
+            handle_indir();
+            break;
+        }
+        case INCREMENT:  
+        case DECREMENT: { 
+            handle_inc_dec(op, false);
+            break;
+        }
+        default: CRITICAL_ASSERT_NOW("handle_unary_op() called with invalid operator_type");
+    } 
 }
 
 void eval_expr::handle_var() {
@@ -208,15 +298,21 @@ void eval_expr::handle_var() {
 
 void eval_expr::handle_constant() {
     //We consider a constant by default to be a signed integer
+    CRITICAL_ASSERT(!expr->tok->is_string_constant(), "String constant not supported right now");
+
     type_spec type{};
-    type.base_type = C_INT;
+    type.base_type = expr->tok->is_integer_constant() ? C_INT : C_CHAR;
     type.is_signed = true;
-    
+
     expr_result res{};
     res.is_constant = true;
-    res.constant = std::get<std::string>(expr->tok->value);
+    if(type.base_type == C_CHAR) {
+        const_storage.push_back(std::to_string(int(std::get<char>(expr->tok->value))));
+        res.constant = const_storage.back();
+    }
+    else 
+        res.constant = std::get<std::string>(expr->tok->value);
     res.type = type;
-
     res_stack.push(res);
 }
 
@@ -229,20 +325,25 @@ void eval_expr::handle_node() {
         handle_constant();
     }
     else if(expr->is_operator()) {
-        auto op = std::get<operator_type>(cast_to_ast_op(expr_node)->tok->value);
-        
-        switch(op) {
-            case PLUS:
-            case MINUS:
-            case MUL: {
-                handle_arithmetic_op(op);
-                break;
+        auto op = cast_to_ast_op(expr_node);
+        auto sym = std::get<operator_type>(op->tok->value);
+
+        if(op->is_postfix) {
+            handle_inc_dec(sym, true);
+        }
+        else if(op->is_unary) {
+            handle_unary_op(sym);
+        }
+        else {
+            switch(sym) {
+                case EQUAL: {
+                    handle_assignment();
+                    break;
+                }
+                default: {
+                    handle_arithmetic_op(sym);
+                }
             }
-            case EQUAL: {
-                handle_assignment();
-                break;
-            }
-            default: CRITICAL_ASSERT_NOW("Only +, - and = operators supported right now");
         }
     }
     else {
