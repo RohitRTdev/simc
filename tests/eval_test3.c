@@ -1,32 +1,33 @@
 static char a;
 
-void* const * ptr_test() {
+void* ptr_test() {
     short int* val;
     int john, wick;
     long int solo;
-    char * const *money;
+    char *  * const money;
     val--;
     **money = *val++ + solo;
-    john = **--money + *++val;
+    john = **money + *++val;
+
 
     long long b;
     b = solo;
 
-    return money;
+    return --(*money);
 }
 
-void good_old_function() {
+short good_old_function() {
     long int f;
     unsigned char m;
-    short j;
+    short* j;
+    short b[2];
     f = 66000;
-    j = f;
-    m = f * j + 1;
-    f = m * j;
+    j = &b;
+    j = &*j;
 
-    return;
-    a = 77;
-    return;
+    int* val;
+    val = &ptr_test; 
+    return (*j)++;
 
 }
 

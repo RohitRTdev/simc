@@ -25,10 +25,21 @@ bool eval_expr::is_assignable() const {
         return false;
 
     auto _expr = cast_to_ast_expr(op_stack.top());
-    if(_expr->is_operator() && cast_to_ast_op(op_stack.top())->tok->is_operator_eq()) {
-        //This means we're looking at left child of EQUAL operator
-        if(_expr->children.size() == 1) {
+    if(_expr->is_operator()) {
+        auto op = cast_to_ast_op(op_stack.top());
+        if(op->tok->is_operator_eq() && _expr->children.size() == 1) {
             return true;
+        }
+        else {
+            auto sym = std::get<operator_type>(op->tok->value);
+            switch(sym) {
+                case INCREMENT:
+                case DECREMENT: return true; 
+                case AMPER: {
+                    if(op->is_unary)
+                        return true;
+                }
+            }
         }
     }
     
@@ -205,6 +216,30 @@ void eval_expr::handle_assignment() {
     res_stack.push(res2);
 }
 
+
+void eval_expr::handle_addr() {
+    auto in = fetch_stack_node(res_stack);   
+
+    if(!in.is_lvalue) {
+        sim_log_error("'&' operator requires operand to be an lvalue");
+    }
+
+    bool is_mem = in.category == l_val_cat::INDIR;
+    bool is_global = in.category == l_val_cat::GLOBAL;
+
+    expr_result res{in.type.addr_type()};
+
+    if(in.type.is_function_type()) {
+        std::string_view fn_name = std::get<std::string>(in.var_token->value);
+        res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::get_address_of, fn_name);
+    }
+    else {
+        res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::get_address_of, in.expr_id, is_mem, is_global);
+    }
+
+    res_stack.push(res);
+}
+
 void eval_expr::handle_indir() {
     auto res_in = fetch_stack_node(res_stack);
 
@@ -240,22 +275,25 @@ void eval_expr::handle_inc_dec(operator_type op, bool is_postfix) {
     expr_result res{in.type};
     auto [base_type, is_signed] = res.type.get_simple_type();
     size_t inc_count = res.type.is_pointer_type() ? base_type_size(res.type.resolve_type().get_simple_type().first) : 1;
+    bool is_mem = in.category == l_val_cat::INDIR; //If dereference or array subscript, force memory variable case
+    bool is_global = in.category == l_val_cat::GLOBAL;
+    auto ptr_mem = &Ifunc_translation::post_inc;
     switch(op) {
         case INCREMENT: {
             if(is_postfix) {
-                res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::post_inc, in.expr_id, base_type, is_signed, inc_count);
+                ptr_mem = &Ifunc_translation::post_inc;
             }
             else {
-                res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::pre_inc, in.expr_id, base_type, is_signed, inc_count);
+                ptr_mem = &Ifunc_translation::pre_inc;
             }
             break;
         }
         case DECREMENT: {
             if(is_postfix) {
-                res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::post_dec, in.expr_id, base_type, is_signed, inc_count);
+                ptr_mem = &Ifunc_translation::post_dec;
             }
             else {
-                res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::pre_dec, in.expr_id, base_type, is_signed, inc_count);
+                ptr_mem = &Ifunc_translation::pre_dec;
             }
             break;
         }
@@ -263,6 +301,8 @@ void eval_expr::handle_inc_dec(operator_type op, bool is_postfix) {
             CRITICAL_ASSERT_NOW("Invalid operator passed to handle_inc_dec()");
         }
     }
+
+    res.expr_id = code_gen::call_code_gen(fn_intf, ptr_mem, in.expr_id, base_type, is_signed, inc_count, is_mem, is_global);
     res_stack.push(res);
 }
 
@@ -270,6 +310,10 @@ void eval_expr::handle_unary_op(operator_type op) {
     switch(op) {
         case MUL: {
             handle_indir();
+            break;
+        }
+        case AMPER: {
+            handle_addr();
             break;
         }
         case INCREMENT:  

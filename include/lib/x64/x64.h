@@ -226,9 +226,9 @@ class x64_func : public Ifunc_translation {
         return reg;
     }
 
-    const std::optional<c_expr_x64> fetch_var(int var_id) const {
+    const std::optional<c_expr_x64> fetch_var(int var_id, bool avoid_mem_var = false) const {
         auto pos = std::find_if(id_list.begin(), id_list.end(), [&] (const auto& var){
-            return var_id == var.id && var.is_var && !var.var_info.mem_var_size;
+            return var_id == var.id && var.is_var && ((avoid_mem_var && !var.var_info.mem_var_size) || (!avoid_mem_var));
         });
 
         if(pos != id_list.end()) {
@@ -418,7 +418,7 @@ class x64_func : public Ifunc_translation {
         add_inst_to_code(fmt::format(_msg, inst_suffix[type], make_format_args(type, args)...));
     }
     
-    int inc_common(int id, c_type type, bool is_signed, size_t inc_count, bool is_pre, bool inc);
+    int inc_common(int id, c_type type, bool is_signed, size_t inc_count, bool is_pre, bool inc, bool is_mem, bool is_global);
 
 public:
     static int new_label_id;
@@ -438,6 +438,8 @@ public:
     int fetch_global_var(int id) override;
     int assign_global_var(int id, int expr_id) override;
     int assign_global_var(int id, std::string_view constant) override;
+    int get_address_of(std::string_view constant) override;
+    int get_address_of(int id, bool is_mem, bool is_global) override;
 
 //Arithmetic operations
     int add(int id1, int id2) override; 
@@ -447,10 +449,10 @@ public:
     int sub(std::string_view constant, int id) override;
     int mul(int id1, int id2) override;
     int mul(int id1, std::string_view constant) override;
-    int pre_inc(int id, c_type type, bool is_signed, size_t inc_count) override;
-    int pre_dec(int id, c_type type, bool is_signed, size_t inc_count) override;
-    int post_inc(int id, c_type type, bool is_signed, size_t inc_count) override;
-    int post_dec(int id, c_type type, bool is_signed, size_t inc_count) override;    
+    int pre_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
+    int pre_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
+    int post_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
+    int post_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
 //Type conversion
     int type_cast(int exp_id, c_type cast_type, bool cast_sign) override;
     

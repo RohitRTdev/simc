@@ -116,14 +116,30 @@ int x64_func::type_cast(int exp_id, c_type cast_type, bool cast_sign) {
 
 
 //Common function to handle pre/post/inc/dec cases
-int x64_func::inc_common(int id, c_type type, bool is_signed, size_t _inc_count, bool is_pre, bool inc) {
+int x64_func::inc_common(int id, c_type type, bool is_signed, size_t _inc_count, bool is_pre, bool inc, bool is_mem, bool is_global) {
     filter_type(type, is_signed);
-    auto pos = fetch_var(id);
+    auto pos = fetch_var(id, true);
     std::string inst;
     std::string inc_count = std::to_string(_inc_count);
     inst = inc ? "add" : "sub";
     //Check if it is a variable(Increment by one if it is)
-    if(pos) {
+
+    if (is_global) {
+        auto& var = parent->fetch_global_variable(id);
+        inst += "{} ${}, {}(%rip)";
+
+        if (is_pre) {
+            insert_code(inst, var.type, inc_count, var.name); 
+            return fetch_global_var(id);
+        }
+        else {
+            int new_id = fetch_global_var(id);
+            insert_code(inst, var.type, inc_count, var.name);
+
+            return new_id;
+        }
+    }
+    else if(pos && !is_mem) {
         inst += "{} ${}, {}(%rbp)"; 
         if(is_pre) {
             insert_code(inst, pos->var_info.type, inc_count, std::to_string(pos->offset));
@@ -140,7 +156,7 @@ int x64_func::inc_common(int id, c_type type, bool is_signed, size_t _inc_count,
         auto [reg, _, __] = unary_op_fetch(id);
         inst += "{} ${}, (%{})";
         if(is_pre) {
-            insert_code(inst, type, inc_count, reg);
+            insert_code(inst, type, inc_count, get_register_string(C_LONG, reg));
             insert_code("mov{} (%{}), %{}", type, get_register_string(C_LONG, reg), reg);
             set_reg_type(reg, type, is_signed);
             return reg_status_list[reg];
@@ -148,7 +164,7 @@ int x64_func::inc_common(int id, c_type type, bool is_signed, size_t _inc_count,
         else {
             int reg_hold = choose_free_reg(type, is_signed);
             insert_code("mov{} (%{}), %{}", type, get_register_string(C_LONG, reg), reg_hold);
-            insert_code(inst, type, inc_count, reg);
+            insert_code(inst, type, inc_count, get_register_string(C_LONG, reg));
             free_reg(reg);
 
             return reg_status_list[reg_hold];
@@ -158,18 +174,18 @@ int x64_func::inc_common(int id, c_type type, bool is_signed, size_t _inc_count,
     CRITICAL_ASSERT_NOW("Invalid id passed to inc_common()!")
 }
 
-int x64_func::pre_inc(int id, c_type type, bool is_signed, size_t inc_count) {    
-    return inc_common(id, type, is_signed, inc_count, true, true);
+int x64_func::pre_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) {
+    return inc_common(id, type, is_signed, inc_count, true, true, is_mem, is_global);
 }
 
-int x64_func::pre_dec(int id, c_type type, bool is_signed, size_t inc_count) {
-    return inc_common(id, type, is_signed, inc_count, true, false);
+int x64_func::pre_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) {
+    return inc_common(id, type, is_signed, inc_count, true, false, is_mem, is_global);
 }
 
-int x64_func::post_inc(int id, c_type type, bool is_signed, size_t inc_count) {
-    return inc_common(id, type, is_signed, inc_count, false, true);
+int x64_func::post_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) {
+    return inc_common(id, type, is_signed, inc_count, false, true, is_mem, is_global);
 }
 
-int x64_func::post_dec(int id, c_type type, bool is_signed, size_t inc_count) {
-    return inc_common(id, type, is_signed, inc_count, false, false);
+int x64_func::post_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) {
+    return inc_common(id, type, is_signed, inc_count, false, false, is_mem, is_global);
 }

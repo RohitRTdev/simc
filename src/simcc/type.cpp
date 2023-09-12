@@ -46,6 +46,15 @@ bool decl_spec::is_signed() const {
     return sign_qual && sign_qual->is_keyword_signed();
 }
 
+type_spec type_spec::addr_type() const {
+    type_spec tmp = *this;
+
+    modifier mod{};
+    mod.ptr_list.push_back(cv_info{});
+    tmp.mod_list.push_front(mod);
+
+    return tmp;
+}
 
 type_spec type_spec::resolve_type() const {
     type_spec tmp = *this;

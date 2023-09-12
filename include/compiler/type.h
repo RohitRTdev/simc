@@ -55,13 +55,14 @@ struct type_spec {
     std::deque<modifier> mod_list;
 
     type_spec resolve_type() const;
+    type_spec addr_type() const;
     size_t get_size() const; 
     bool is_pointer_type() const;
     bool is_array_type() const;
     bool is_function_type() const;
 
     void convert_to_pointer_type();
-
+    
     bool is_void() const;
     bool is_modified_type() const;
     bool is_type_operable(const type_spec& type) const;

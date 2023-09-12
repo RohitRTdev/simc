@@ -124,6 +124,34 @@ int x64_func::assign_global_var(int id, std::string_view constant) {
     return id;
 }
 
+
+int x64_func::get_address_of(std::string_view constant) {
+    int reg = choose_free_reg(C_LONG, false);
+    insert_code("lea{} {}(%rip), %{}", C_LONG, constant, reg);
+
+    return reg_status_list[reg];
+}
+
+int x64_func::get_address_of(int id, bool is_mem, bool is_global) {
+    auto pos = fetch_var(id);
+    if(is_global) {
+        auto& var = parent->fetch_global_variable(id);
+        return get_address_of(var.name);
+    }
+    int reg = 0;
+    if(pos && !is_mem) {
+        reg = choose_free_reg(C_LONG, false);
+        insert_code("lea{} {}(%rbp), %{}", C_LONG, std::to_string(pos->offset), reg);
+    }
+    else {
+        reg = fetch_result(id);
+        insert_code("lea{} (%{}), %{}", C_LONG, reg, reg);
+        set_reg_type(reg, C_LONG, false);
+    }
+
+    return reg_status_list[reg];
+}
+
 int x64_func::declare_local_variable(std::string_view name, c_type type, bool is_signed) {
     filter_type(type, is_signed);
     c_expr_x64 var{};

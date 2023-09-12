@@ -72,6 +72,7 @@ class eval_expr {
     void handle_unary_op(operator_type op);
     void handle_indir();
     void handle_inc_dec(operator_type op, bool is_postfix);
+    void handle_addr();
 
 
 public:
