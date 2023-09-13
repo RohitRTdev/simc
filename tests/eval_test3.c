@@ -7,7 +7,15 @@ int new_function() {
     int con;
     *(*val++ + (++con + *wait--)) = 100;
 
+
     return **(val+con);
+}
+
+void fn() {
+    void (*fn_ptr)(), new_var(int, char), goat(int, int);
+    fn_ptr = 1;
+
+    fn_ptr = new_var + 2;
 }
 
 

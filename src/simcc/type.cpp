@@ -49,10 +49,7 @@ bool decl_spec::is_signed() const {
 type_spec type_spec::addr_type() const {
     type_spec tmp = *this;
 
-    modifier mod{};
-    mod.ptr_list.push_back(cv_info{});
-    tmp.mod_list.push_front(mod);
-
+    tmp.mod_list.push_front(modifier{cv_info{}});
     return tmp;
 }
 
@@ -99,6 +96,12 @@ size_t type_spec::get_size() const {
 
     return cur_size * base_type_size(base_type);
 } 
+bool type_spec::is_incomplete_type() const {
+    if(is_function_type() || resolve_type().is_function_type())
+        return true;
+    
+    return false;
+} 
 
 bool cv_info::operator == (const cv_info& info) const {
     return is_const == info.is_const && is_volatile == info.is_volatile;
@@ -141,17 +144,15 @@ void type_spec::convert_to_pointer_type() {
     if(is_array_type()) {
         mod_list[0].array_spec.pop_front();
         if(mod_list[0].array_spec.size()) {
-            modifier tmp{};
-            tmp.ptr_list.push_back(cv_info{}); //Insert one pointer
-            mod_list.push_front(tmp);
+            mod_list.push_front(modifier{cv_info{}});
         }
         else {
             mod_list[0].ptr_list.push_back(cv_info{});
         }
     }
     else if(is_function_type()) {
-        mod_list[0].fn_spec.clear();
-        mod_list[0].ptr_list.push_back(cv_info{});
+        //Make it a pointer to function type
+        mod_list.push_front(modifier{cv_info{}});
     }
 }
 
@@ -164,7 +165,7 @@ bool type_spec::is_type_operable(const type_spec& type) const {
         return false;
    }
 
-   return base_type == type.base_type && is_signed == type.is_signed;
+   return true; 
 }
 
 bool type_spec::operator == (const type_spec& type) const {

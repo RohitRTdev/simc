@@ -4,6 +4,7 @@
 #include "compiler/ast.h"
 #include "compiler/scope.h"
 #include "compiler/type.h"
+#include "debug-api.h"
 
 enum class l_val_cat {
     LOCAL,
@@ -21,6 +22,11 @@ struct expr_result {
     std::string_view constant;
 
     expr_result() = default;
+
+    expr_result(int id, type_spec new_type) : expr_result(new_type)
+    {
+        expr_id = id;
+    }
     expr_result(type_spec new_type) : type(new_type)
     {
         expr_id = 0;
@@ -36,6 +42,16 @@ struct expr_result {
 
     void convert_type(const expr_result& res2, Ifunc_translation* fn_intf) {
         expr_id = type_spec::convert_type(res2.type, expr_id, type, fn_intf, !is_constant);
+    }
+
+    void convert_to_ptrdiff(Ifunc_translation* fn_intf) {
+        CRITICAL_ASSERT(type.is_pointer_type(), "convert_to_ptrdiff() called on non pointer type");
+        type_spec final_type{};
+        final_type.base_type = C_LONGLONG;
+        final_type.is_signed = true;
+    
+        //Convert to a signed long long
+        expr_id = type_spec::convert_type(final_type, expr_id, type, fn_intf);
     }
 
     void free(Ifunc_translation* fn) {

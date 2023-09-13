@@ -37,6 +37,11 @@ struct modifier {
     std::deque<std::string> array_spec;
     std::vector<type_spec> fn_spec;
 
+    modifier() = default;
+    modifier(cv_info) {
+        ptr_list.push_back(cv_info{});
+    } 
+
     bool operator == (const modifier& obj) const;
 
     bool is_function_mod() const;
@@ -67,7 +72,8 @@ struct type_spec {
     bool is_void() const;
     bool is_modified_type() const;
     bool is_type_operable(const type_spec& type) const;
-    bool is_modifiable() const; 
+    bool is_modifiable() const;
+    bool is_incomplete_type() const; 
     bool operator == (const type_spec& type) const;
 
     bool is_type_convertible(type_spec& type);

@@ -117,6 +117,10 @@ bool eval_expr::handle_pointer_arithmetic(expr_result& res1, expr_result& res2, 
         return false;
     }
 
+    if(res_p.type.is_incomplete_type()) {
+        sim_log_error("Pointer arithmetic cannot be carried out on a pointer to an incomplete type");
+    }
+
     sim_log_debug("Performing pointer arithmetic");
     CRITICAL_ASSERT(!res_i.is_constant, "Pointer arithmetic with constant not yet supported");
     res_i.convert_type(res_p, fn_intf);
@@ -161,10 +165,22 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
     if(handle_pointer_arithmetic(res1, res2, op))
         return;
 
-    if(!res1.type.is_type_operable(res2.type)) {
-        if(res1.type.is_modified_type() || res1.type.is_modified_type()) {
-            sim_log_error("Arithmetic operation requires both types to be integral and equal");
+
+    if(res1.type.is_pointer_type() && res2.type.is_pointer_type()) {
+        if(op != MINUS) {
+            sim_log_error("Arithmetic operation can have 2 pointer operands only if it is a subtraction");
         }
+        res1.convert_to_ptrdiff(fn_intf);
+        res2.convert_to_ptrdiff(fn_intf);
+
+        int res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::sub, res1.expr_id, res2.expr_id);
+        expr_result res{res_id, res1.type};
+        res_stack.push(res);
+        return;
+    }
+
+    if(!res1.type.is_type_operable(res2.type)) {
+        sim_log_error("Arithmetic operation requires both operands to be of arithmetic types");
     }
 
     perform_arithmetic_conversion(res1, res2);
@@ -211,10 +227,7 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
         }
     }
 
-    expr_result res{};
-    res.expr_id = res_id;
-    res.type = res1.type;
-
+    expr_result res{res_id, res1.type};
     res_stack.push(res);
 }
 
@@ -326,6 +339,10 @@ void eval_expr::handle_inc_dec(operator_type op, bool is_postfix) {
         sim_log_error("Operand to a inc/dec operator must be a modifiable lvalue");
     }
 
+    if(in.type.is_incomplete_type()) {
+        sim_log_error("inc/dec operator cannot be applied to an incomplete type");
+    }
+
     expr_result res{in.type};
     auto [base_type, is_signed] = res.type.get_simple_type();
     size_t inc_count = res.type.is_pointer_type() ? res.type.get_pointer_base_type_size() : 1; 
@@ -384,7 +401,15 @@ void eval_expr::handle_var() {
 
     int var_id = var.var_id;
     auto category = l_val_cat::LOCAL;
-    if(var.is_global) {
+    if(var.type.is_function_type()) {
+        if(!is_assignable()) {
+            var_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::get_address_of, var.name);
+        }
+        if(var.is_global) {
+            category = l_val_cat::GLOBAL;
+        }
+    }
+    else if(var.is_global) {
         if(!is_assignable()) {
             var_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::fetch_global_var, var.var_id);
         }

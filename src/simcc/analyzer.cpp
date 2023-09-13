@@ -269,7 +269,6 @@ static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_li
 }
 
 static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation* fn, std::string_view fn_name) {
-
     std::stack<std::unique_ptr<ast>> stmt_stack;
     std::optional<var_info> fn_decl;
     code_gen::eval_only = false;
