@@ -460,10 +460,18 @@ class x64_func : public Ifunc_translation {
         add_inst_to_code(fmt::format(_msg, inst_suffix[type], make_format_args(type, args)...));
     }
     
+    enum compare_op {
+        GT,
+        LT,
+        EQ,
+        NEQ
+    };
+
     int inc_common(int id, c_type type, bool is_signed, size_t inc_count, bool is_pre, bool inc, bool is_mem, bool is_global);
     void call_function_begin();
     void call_function_end();
     int setup_ret_type(c_type ret_type, bool is_signed);
+    int if_common(int id1, std::variant<int, std::string_view> object, compare_op op);
 
 public:
     static int new_label_id;
@@ -509,7 +517,17 @@ public:
     int post_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
 //Type conversion
     int type_cast(int exp_id, c_type cast_type, bool cast_sign) override;
-    
+
+//Conditional operation
+    int if_gt(int id1, int id2) override;
+    int if_lt(int id1, int id2) override;
+    int if_eq(int id1, int id2) override;
+    int if_neq(int id1, int id2) override;
+    int if_gt(int id1, std::string_view constant) override;
+    int if_lt(int id1, std::string_view constant) override;
+    int if_eq(int id1, std::string_view constant) override;
+    int if_neq(int id1, std::string_view constant) override;
+
 //Branch operation
     int create_label() override;
     void add_label(int label_id) override;

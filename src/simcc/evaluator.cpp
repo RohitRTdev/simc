@@ -252,6 +252,33 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
             op_vars = &Ifunc_translation::mul; op_var_con = &Ifunc_translation::mul;
             break;
         }
+        case GT: {
+            is_commutative = true;
+            op_vars = &Ifunc_translation::if_gt; op_var_con = &Ifunc_translation::if_gt; 
+            if(res1.is_constant && !res2.is_constant) {
+                std::swap(res1, res2);
+                op_var_con = &Ifunc_translation::if_lt;
+            }
+            break;
+        }
+        case LT: {
+            is_commutative = true;
+            op_vars = &Ifunc_translation::if_lt; op_var_con = &Ifunc_translation::if_lt; 
+            if(res1.is_constant && !res2.is_constant) {
+                std::swap(res1, res2);
+                op_var_con = &Ifunc_translation::if_gt;
+            }
+
+            break;
+        }
+        case EQUAL_EQUAL: {
+            op_vars = &Ifunc_translation::if_eq; op_var_con = &Ifunc_translation::if_eq; 
+            break;
+        }
+        case NOT_EQUAL: {
+            op_vars = &Ifunc_translation::if_neq; op_var_con = &Ifunc_translation::if_neq; 
+            break;
+        } 
         default: {
             CRITICAL_ASSERT_NOW("handle_arithmetic_op called with invalid operator");
         }
@@ -281,7 +308,7 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
     res_stack.push(res);
 }
 
-void eval_expr::handle_assignment() {
+ void eval_expr::handle_assignment() {
     auto res2 = fetch_stack_node(res_stack);
     auto res1 = fetch_stack_node(res_stack);
 

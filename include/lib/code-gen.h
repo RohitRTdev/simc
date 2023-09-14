@@ -111,6 +111,16 @@ public:
 //Type conversion
     virtual int type_cast(int exp_id, c_type cast_type, bool cast_sign) = 0;
 
+//Conditional operation
+    virtual int if_gt(int id1, int id2) = 0;
+    virtual int if_lt(int id1, int id2) = 0;
+    virtual int if_eq(int id1, int id2) = 0;
+    virtual int if_neq(int id1, int id2) = 0;
+    virtual int if_gt(int id1, std::string_view constant) = 0;
+    virtual int if_lt(int id1, std::string_view constant) = 0;
+    virtual int if_eq(int id1, std::string_view constant) = 0;
+    virtual int if_neq(int id1, std::string_view constant) = 0;
+
 //Branch operation
     virtual int create_label() = 0;
     virtual void add_label(int label_id) = 0;

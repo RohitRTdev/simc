@@ -14,5 +14,11 @@ unsigned long long fn(const char* str, int con) {
     int returns_sum(int, int);
     char test;
     test = 'm';
+    int val;
+    val = *str;
+    test = con > val;
+    test = con < val;
+    val = con == val;
+    val = (con != val) + test;
     return new_fn(&con)(str, con);
 }
