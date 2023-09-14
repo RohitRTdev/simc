@@ -74,6 +74,14 @@ public:
     virtual int declare_local_mem_variable(std::string_view name, size_t mem_var_size) = 0; 
     virtual void free_result(int exp_id) = 0;
 
+//function
+    virtual int save_param(std::string_view name, c_type type, bool is_signed) = 0;
+    virtual void begin_call_frame(size_t num_args) = 0;
+    virtual void load_param(int exp_id) = 0;
+    virtual void load_param(std::string_view constant, c_type type, bool is_signed) = 0;
+    virtual int call_function(int exp_id, c_type ret_type, bool is_signed) = 0;
+    virtual int call_function(std::string_view name, c_type ret_type, bool is_signed) = 0;
+
 //Assign variable
     virtual int assign_var(int var_id, int id) = 0; 
     virtual int assign_var(int var_id, std::string_view constant) = 0; 

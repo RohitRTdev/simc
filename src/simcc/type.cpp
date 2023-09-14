@@ -97,9 +97,12 @@ size_t type_spec::get_size() const {
     return cur_size * base_type_size(base_type);
 } 
 bool type_spec::is_incomplete_type() const {
-    if(is_function_type() || resolve_type().is_function_type())
+    auto type = resolve_type();
+    if(is_void() || is_function_type() || type.is_function_type())
         return true;
-    
+    else if(is_pointer_type() && type.is_void())
+        return true;
+
     return false;
 } 
 
@@ -124,7 +127,7 @@ bool type_spec::is_integral() const {
 }
 
 bool type_spec::is_modifiable() const {
-    if(is_array_type() || is_function_type())
+    if(is_void() || is_array_type() || is_function_type())
         return false;
     
     if(is_pointer_type()) {
@@ -161,7 +164,7 @@ bool type_spec::is_modified_type() const {
 }
 
 bool type_spec::is_type_operable(const type_spec& type) const {
-   if(is_modified_type() || type.is_modified_type()) {
+   if(is_void() || type.is_void() || is_modified_type() || type.is_modified_type()) {
         return false;
    }
 
@@ -236,6 +239,10 @@ bool type_spec::is_type_convertible(type_spec& type) {
     return false;
 }
 
+bool type_spec::is_pointer_to_function() const {
+    return is_pointer_type() && resolve_type().is_function_type();
+}
+
 std::pair<c_type, bool> type_spec::get_simple_type() const {
     c_type sim_type = base_type;
     bool sim_sign = is_signed;
@@ -257,7 +264,7 @@ int type_spec::convert_type(const type_spec& dest_type, int src_id, type_spec& s
     src_type.base_type, src_type.is_signed, base_type, is_signed);
 
     int dest_id = src_id;
-    if(do_phy_conv && !dest_type.is_void())
+    if(do_phy_conv && !dest_type.is_void() && !(base_type == src_type.get_simple_type().first && is_signed == src_type.get_simple_type().second))
         dest_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::type_cast, src_id, base_type, is_signed);
     src_type = dest_type;
 

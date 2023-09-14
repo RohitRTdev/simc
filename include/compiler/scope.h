@@ -26,6 +26,7 @@ class scope {
     std::variant<tu_intf_type, fn_intf_type> intf; 
 
     int declare_variable(const var_info& var); 
+    void add_param_variable(int id, std::string_view name, const type_spec& type);
 public:
     scope(scope* _parent); 
     scope(scope* _parent, tu_intf_type tu);
@@ -33,8 +34,8 @@ public:
     scope* fetch_parent_scope() const;
     bool is_global_scope() const; 
 
-    bool redefine_symbol_check(std::string_view symbol, const type_spec& type) const;
+    bool redefine_symbol_check(std::string_view symbol, const type_spec& type, bool no_redefine = false) const;
     var_info& fetch_var_info(std::string_view symbol);
     void add_variable(int id, std::string_view name, const type_spec& type, const decl_spec& stor_spec, bool is_global = false); 
-    Ifunc_translation* add_function_definition(std::string_view fn_name, const std::vector<std::string_view>& fn_args);
+    std::pair<Ifunc_translation*, scope*> add_function_definition(std::string_view fn_name, const std::vector<std::string_view>& fn_args);
 };

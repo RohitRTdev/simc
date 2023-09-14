@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <stack>
 #include <array>
 #include <tuple>
 #include <vector>
@@ -9,7 +10,8 @@
 #include "lib/code-gen.h"
 
 #define ALIGN(val, align) (((abs(val)-1) & ~((align)-1))+align)
-#define NUM_REGS 6
+#define NUM_REGS 8
+#define NUM_CALL_REGS 6
 
 extern const std::vector<std::array<std::string, NUM_REGS>> regs;
 enum registers {
@@ -18,7 +20,9 @@ enum registers {
     RCX,
     RDX,
     RSI,
-    RDI
+    RDI,
+    R8,
+    R9
 };
 
 
@@ -92,9 +96,23 @@ class x64_func : public Ifunc_translation {
     int ret_label_id;
     c_type m_ret_type;
     bool m_is_signed;
+    size_t num_call_args;
+    size_t call_index;
+    size_t bytes_moved;
+    size_t param_offset;
+    constexpr static const std::array<registers, NUM_CALL_REGS> reg_call_list = {RDI, RSI, RCX, RDX, R8, R9};
     constexpr static const std::array<char, NUM_TYPES> inst_suffix = {'b', 'w', 'l', 'q', 'q'};
 
+    using param_stack_type = std::variant<int, std::tuple<std::string_view, c_type, bool>>; 
+    std::stack<param_stack_type> param_stack;
+
     using op_type = std::tuple<int, int, c_type>; 
+
+    int advance_param_offset() {
+        const int param_alignment = 8;
+        param_offset += param_alignment;
+        return param_offset;
+    }
 
     int advance_offset(c_type type) {
         int alignment = base_type_size(type);
@@ -257,6 +275,9 @@ class x64_func : public Ifunc_translation {
     }
 
     void flush_register(int reg_idx) {
+        if(!reg_status_list[reg_idx])
+            return;
+
         int offset = 0;
         bool found_existing_cache = false;
         for(auto& loc: id_list) {
@@ -300,8 +321,6 @@ class x64_func : public Ifunc_translation {
     void transfer_to_reg(enum registers reg_idx, int exp_id) {
         if(reg_status_list[reg_idx] == exp_id)
             return;
-
-        CRITICAL_ASSERT(!reg_no_clobber_list[reg_idx], "transfer_to_reg() failed as reg_idx:{} is in no_clobber_list", reg_idx);
         
         if(reg_status_list[reg_idx]) {
             flush_register(reg_idx);
@@ -330,13 +349,36 @@ class x64_func : public Ifunc_translation {
                 set_reg_type(reg_idx, loc.var_info.type, loc.var_info.is_signed);
                 
                 auto type = reg_type_list[reg_idx];
-                insert_code("mov{} {}(%rbp), %{}", type, std::to_string(loc.offset), reg_idx);
+                if(loc.var_info.mem_var_size)
+                    insert_code("lea{} {}(%rbp), %{}", C_LONG, std::to_string(loc.offset), reg_idx);
+                else
+                    insert_code("mov{} {}(%rbp), %{}", type, std::to_string(loc.offset), reg_idx);
                 return;
             }
         }
 
         CRITICAL_ASSERT_NOW("transfer_to_reg() couldn't find exp_id:{} in id_list or reg_status_list", exp_id);
     }
+
+    void push_to_stack(param_stack_type stack_object) {
+        auto update_offset = [&] () {
+            cur_offset -= 8;
+            bytes_moved += 8;
+        };
+        
+        if(std::holds_alternative<int>(stack_object)) {
+            auto [reg, _, type] = unary_op_fetch(std::get<int>(stack_object));
+            update_offset();
+            insert_code("push{} %{}", C_LONG, reg);
+            free_reg(reg);        
+        }
+        else {
+            auto [constant, type, is_signed] = std::get<1>(stack_object);
+            update_offset();
+            insert_code("push{} ${}", C_LONG, constant);
+        }
+    }
+
 
     op_type unary_op_fetch(int id) {
         int reg1 = fetch_result(id);
@@ -419,6 +461,9 @@ class x64_func : public Ifunc_translation {
     }
     
     int inc_common(int id, c_type type, bool is_signed, size_t inc_count, bool is_pre, bool inc, bool is_mem, bool is_global);
+    void call_function_begin();
+    void call_function_end();
+    int setup_ret_type(c_type ret_type, bool is_signed);
 
 public:
     static int new_label_id;
@@ -427,6 +472,15 @@ public:
     int declare_local_variable(std::string_view name, c_type type, bool is_signed) override;
     int declare_local_mem_variable(std::string_view name, size_t mem_var_size) override; 
     void free_result(int exp_id) override;
+
+//function
+    int save_param(std::string_view name, c_type type, bool is_signed) override;
+    void begin_call_frame(size_t num_args);
+    void load_param(int exp_id) override;
+    void load_param(std::string_view constant, c_type type, bool is_signed) override;
+    int call_function(int exp_id, c_type ret_type, bool is_signed) override;
+    int call_function(std::string_view name, c_type ret_type, bool is_signed) override;
+
 
 //Assign variable
     int assign_var(int var_id1, int var_id2) override; 

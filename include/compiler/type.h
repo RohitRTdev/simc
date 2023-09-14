@@ -66,6 +66,7 @@ struct type_spec {
     bool is_array_type() const;
     bool is_function_type() const;
     bool is_integral() const;
+    bool is_pointer_to_function() const;
 
     void convert_to_pointer_type();
     size_t get_pointer_base_type_size() const;

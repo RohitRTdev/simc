@@ -132,6 +132,7 @@ struct ast_expr : ast_token {
     bool is_lb() const;
     bool is_rb() const;
     bool is_comma() const;
+    bool is_fn_call() const;
 
 #ifdef SIMDEBUG
     virtual void print() override;
@@ -152,6 +153,15 @@ struct ast_op : ast_expr {
 #endif
 private:
     void set_precedence(const token* tok);
+};
+
+struct ast_fn_call : ast_expr {
+    std::unique_ptr<ast> fn_designator;
+    ast_fn_call();
+
+#ifdef SIMDEBUG
+    void print() override;
+#endif
 };
 
 std::unique_ptr<ast> create_ast_unary_op(const token* tok); 

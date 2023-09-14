@@ -64,6 +64,7 @@ struct expr_result {
 class eval_expr {
     std::stack<expr_result> res_stack;
     std::stack<std::unique_ptr<ast>> op_stack;
+    std::stack<std::tuple<std::string_view, size_t, size_t, bool>> fn_call_stack;
 
     bool is_assignable() const;
     bool is_base_equal(const type_spec& type_1, const type_spec& type_2);
@@ -78,6 +79,7 @@ class eval_expr {
     std::unique_ptr<ast> expr_node;
     const ast_expr* expr;
     static std::vector<std::string> const_storage;
+    bool hook();
 
     void main_loop();
     void handle_node();
@@ -89,6 +91,7 @@ class eval_expr {
     void handle_indir();
     void handle_inc_dec(operator_type op, bool is_postfix);
     void handle_addr();
+    void handle_fn_call();
     bool handle_pointer_arithmetic(expr_result& res1, expr_result& res2, operator_type op);
 
 

@@ -4,6 +4,7 @@
 #include "compiler/scope.h"
 #include "compiler/eval.h"
 #include "compiler/utils.h"
+#include "compiler/ast-ops.h"
 
 std::vector<std::string> eval_expr::const_storage;
 
@@ -96,6 +97,55 @@ void eval_expr::perform_arithmetic_conversion(expr_result& res1, expr_result& re
             res_u.convert_type(res_s, fn_intf);
         }
     }
+}
+
+bool eval_expr::hook() {
+    expr = cast_to_ast_expr(expr_node);
+    if(expr->is_fn_call()) {
+       auto fn_expr = static_cast<ast_fn_call*>(const_cast<ast_expr*>(expr));
+
+       if(fn_expr->fn_designator) {
+            size_t num_args_found = fn_expr->children.size();
+            
+            auto fn_desig = std::move(fn_expr->fn_designator);
+            std::string_view fn_name;
+
+            //It's a function name
+            if(cast_to_ast_expr(fn_desig)->is_var()) {
+                fn_name = std::get<std::string>(cast_to_ast_token(fn_desig)->tok->value);
+            }
+            else {
+                //It's an expression. Evaluate it like usual
+                op_stack.push(std::move(expr_node));
+                expr_node = std::move(fn_desig);
+            }
+
+            fn_call_stack.push(std::make_tuple(fn_name, num_args_found, 0, false));   
+            return true;
+       }
+       else {
+            auto& evaluated = std::get<3>(fn_call_stack.top());
+            if(!evaluated) {
+                //If no function name exists, it must have been an expression
+                //Fetch the type of this expression
+                if(!std::get<0>(fn_call_stack.top()).size()) {
+                    auto& fn_desig = res_stack.top();
+                    auto fn_type = fn_desig.type;
+                    if(!fn_desig.type.is_function_type()) {
+                        if(!(fn_desig.type.is_pointer_type() && fn_desig.type.resolve_type().is_function_type())) {
+                            sim_log_error("Function designator must be a function type or pointer to function type");
+                        }
+                        fn_type = fn_desig.type.resolve_type(); 
+                    }
+                    size_t num_args = fn_type.mod_list[0].fn_spec.size();
+                    std::get<2>(fn_call_stack.top()) = num_args;
+                }
+                evaluated = true;
+            }
+       } 
+    }
+
+    return false;
 }
 
 
@@ -235,6 +285,14 @@ void eval_expr::handle_assignment() {
     auto res2 = fetch_stack_node(res_stack);
     auto res1 = fetch_stack_node(res_stack);
 
+    if(res1.type.is_void()) {
+        sim_log_error("LHS of '=' cannot be void type");
+    }
+
+    if(res2.type.is_void()) {
+        sim_log_error("Cannot assign expression of type 'void' to anything");
+    }
+
     if(!res1.is_lvalue || !res1.type.is_modifiable()) {
         sim_log_error("LHS of '=' operator must be a modifiable l-value");
     }
@@ -320,11 +378,17 @@ void eval_expr::handle_indir() {
         }
     }
 
-    expr_result res{res_in.type.resolve_type()};
+    auto res_type = res_in.type.resolve_type();
+
+    if(res_type.is_void()) {
+        sim_log_error("'*' operator can only be used on a non void pointer type");
+    }
+
+    expr_result res{res_type};
     auto [base_type, is_signed] = res.type.get_simple_type();
     res.expr_id = res_in.expr_id;
 
-    if(!is_assignable()) {
+    if(!(is_assignable() || res_type.is_array_type() || res_type.is_function_type())) {
         res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::fetch_from_mem, res_in.expr_id, base_type, is_signed); 
     }
 
@@ -439,6 +503,82 @@ void eval_expr::handle_constant() {
     res_stack.push(res);
 }
 
+void eval_expr::handle_fn_call() {
+    auto [fn_name, num_args_found, num_args, _] = fetch_stack_node(fn_call_stack);
+
+    auto check_if_function_type = [] (auto& fn_type) {
+        if(!fn_type.is_function_type()) {
+            if(!fn_type.is_pointer_to_function()) {
+                sim_log_error("Function designator is not a function or pointer to function type");
+            }
+            fn_type = fn_type.resolve_type();
+        }
+    };
+
+    //This implies it's a function name
+    expr_result fn_desig{};
+    type_spec fn_type{};
+    bool is_fn_pointer = false;
+    if(fn_name.size()) {
+        auto& fn_info = fn_scope->fetch_var_info(fn_name);
+        fn_type = fn_info.type;
+        if(fn_type.is_pointer_to_function()) {
+            fn_desig.expr_id = fn_info.var_id;
+            is_fn_pointer = true;
+        }
+        check_if_function_type(fn_type);
+        num_args = fn_type.mod_list[0].fn_spec.size();    
+    }
+
+    if(num_args != num_args_found) {
+        sim_log_error("Number of arguments mentioned in function call is different from the fn declaration");
+    }
+
+    std::deque<expr_result> args;
+    while(num_args--) {
+        args.push_front(fetch_stack_node(res_stack));
+    }
+
+    if (!fn_name.size()) {
+        fn_desig = fetch_stack_node(res_stack);
+        fn_type = fn_desig.type;
+        check_if_function_type(fn_type);
+        is_fn_pointer = true;
+    }
+    
+    size_t type_index = 0;
+    for(auto& arg: args) {
+        if(arg.type.is_array_type() || arg.type.is_function_type()) {
+            arg.type.convert_to_pointer_type();   
+        }
+        arg.expr_id = type_spec::convert_type(fn_type.mod_list[0].fn_spec[type_index++], arg.expr_id, arg.type, fn_intf, !arg.is_constant);
+    }
+    //Once begin call frame is executed, only load_param call is allowed
+    //This carries on until we execute call_function
+    //Init the call frame and load the arguments
+    code_gen::call_code_gen(fn_intf, &Ifunc_translation::begin_call_frame, num_args_found);    
+    for(const auto& arg: args) {
+        if(arg.is_constant) {
+            auto [base_type, is_signed] = arg.type.get_simple_type();
+            code_gen::call_code_gen(fn_intf, &Ifunc_translation::load_param, arg.constant, base_type, is_signed);
+        }
+        else 
+            code_gen::call_code_gen(fn_intf, &Ifunc_translation::load_param, arg.expr_id);
+    }
+
+    auto [ret_type, is_signed] = fn_type.resolve_type().get_simple_type();
+
+    int ret_id;
+    if(!is_fn_pointer)
+        ret_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::call_function, fn_name, ret_type, is_signed);
+    else 
+        ret_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::call_function, fn_desig.expr_id, ret_type, is_signed);
+
+    expr_result res{ret_id, fn_type.resolve_type()};
+    res_stack.push(res);
+}
+
+
 void eval_expr::handle_node() {
     expr = cast_to_ast_expr(expr_node);
     if(expr->is_var()) {
@@ -469,6 +609,9 @@ void eval_expr::handle_node() {
             }
         }
     }
+    else if(expr->is_fn_call()) {
+        handle_fn_call();
+    }
     else {
         CRITICAL_ASSERT_NOW("Invalid expr_node encountered during handle_node evaluation");
     }
@@ -482,6 +625,8 @@ void eval_expr::main_loop() {
             expr_node = fetch_stack_node(op_stack);
         }
         else {
+            if (hook())
+                continue;
             if (expr_node->children.size()) {
                 auto child = fetch_child(expr_node);
                 op_stack.push(std::move(expr_node));

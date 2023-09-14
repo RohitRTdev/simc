@@ -1,68 +1,18 @@
-static char a;
 
+int printf(char* str, int con);
+int arr[3], some(int, int);
 
-int new_function() {
-    short *wait;
-    short (*val)[5];
-    int con;
-    *(*val++ + (++con + *wait--)) = 100;
-
-
-    return **(val+con);
-}
-
-void fn() {
-    void (*fn_ptr)(), new_var(int, char), goat(int, int);
-    fn_ptr = 1;
-
-    fn_ptr = new_var + 2;
+static int (*new_fn(int* val))(const char*, int) {
+    *val = *val + 1;
+    return &printf;
 }
 
 
-void* ptr_test() {
-    short int* val;
-    int john, wick;
-    long int solo;
-    char *  * const money;
-    val--;
-    **money = *val++ + solo;
-    john = **money + *++val;
-
-
-    long long b;
-    b = solo;
-
-    return --(*money);
-}
-
-short good_old_function() {
-    long int f;
-    unsigned char m;
-    short* j;
-    short b[2];
-    f = 66000;
-    j = &b;
-    j = &*j;
-
-    int* val;
-    val = &ptr_test; 
-    return (*j)++;
-
-}
-
-long long another_function() {
-    a = a + 1;
-    int b;
-    b = 2;
-    long* m;
-    void* j;
-    m = b;
-    b = m;
-    a = m;
-    b = a;
-    j = m;
-    unsigned int c;
-    c = b + a;
-
-    return c;
+unsigned long long fn(const char* str, int con) {
+    void (*fn_ptr)(int, char, int*, int [3], int [2][3], int some(char, char), char val,
+    short, unsigned long long), new_var(int, char), goat(int, int);
+    int returns_sum(int, int);
+    char test;
+    test = 'm';
+    return new_fn(&con)(str, con);
 }
