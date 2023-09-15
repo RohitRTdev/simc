@@ -144,10 +144,85 @@ bool eval_expr::hook() {
             }
        } 
     }
+    else if(expr->is_operator()) {
+        auto op = cast_to_ast_op(expr_node);
+        auto sym = std::get<operator_type>(op->tok->value);
+        switch(sym) {
+            case AND: {
+                if(expr->children.size() == 2) {
+                    int false_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::create_label);
+                    int end_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::create_label);
+
+                    logical_stack.push(std::make_tuple(false_id, end_id));
+                }
+                else if(expr->children.size() == 1) {
+                    auto res_expr_1 = fetch_stack_node(res_stack);
+
+                    if(!res_expr_1.type.is_integral()) {
+                        res_expr_1.convert_to_integral_type(fn_intf);
+                    }
+
+                    if(res_expr_1.is_constant) {
+                        if(std::stoi(std::string(res_expr_1.constant)) == 0) {
+                            //Jump to false end if constant is 0
+                            code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, std::get<0>(logical_stack.top()));
+                        }
+                    }
+                    else {
+                        //Branch if zero to the false end
+                        code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch_if_z, res_expr_1.expr_id, std::get<0>(logical_stack.top()));
+                    }
+                }
+                break;
+            }
+        }
+    }
 
     return false;
 }
 
+void eval_expr::handle_logical_op(operator_type op) {
+    auto res_expr_2 = fetch_stack_node(res_stack);
+
+    if(!res_expr_2.type.is_integral()) {
+        res_expr_2.convert_to_integral_type(fn_intf);
+    }
+
+    //Todo: Make sure we get the common type of the 2 expressions
+    //Right now we get the type of the 2nd expression
+    expr_result res{res_expr_2.type};
+
+    static const std::string_view pos_value = "1";
+    static const std::string_view neg_value = "0";
+    auto [false_id, end_id] = fetch_stack_node(logical_stack);
+    int tmp_id = 0; 
+    switch(op) {
+        case AND: {
+            if(res_expr_2.is_constant) {
+                bool is_zero = std::stoi(std::string(res_expr_2.constant)) == 0;
+                if(is_zero) {
+                    code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, false_id);
+                }
+            }
+            else {
+                code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch_if_z, res_expr_2.expr_id, false_id);
+            } 
+            tmp_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::create_temporary_value, res.type.base_type, res.type.is_signed);
+            code_gen::call_code_gen(fn_intf, &Ifunc_translation::set_value, tmp_id, pos_value);
+            code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, end_id);
+            code_gen::call_code_gen(fn_intf, &Ifunc_translation::insert_label, false_id);
+            code_gen::call_code_gen(fn_intf, &Ifunc_translation::set_value, tmp_id, neg_value);
+            code_gen::call_code_gen(fn_intf, &Ifunc_translation::insert_label, end_id);
+            break;
+        }
+        default: {
+            CRITICAL_ASSERT_NOW("handle_logical_op() called with invalid logical operator");
+        }
+    }
+
+    res.expr_id = tmp_id;
+    res_stack.push(res);
+}
 
 bool eval_expr::handle_pointer_arithmetic(expr_result& res1, expr_result& res2, operator_type op) {
     expr_result& res_p = res1, &res_i = res2;
@@ -652,6 +727,10 @@ void eval_expr::handle_node() {
             switch(sym) {
                 case EQUAL: {
                     handle_assignment();
+                    break;
+                }
+                case AND: {
+                    handle_logical_op(sym);
                     break;
                 }
                 default: {

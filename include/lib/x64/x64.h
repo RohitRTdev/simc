@@ -101,6 +101,7 @@ class x64_func : public Ifunc_translation {
     size_t bytes_moved;
     size_t param_offset;
     constexpr static const std::array<registers, NUM_CALL_REGS> reg_call_list = {RDI, RSI, RCX, RDX, R8, R9};
+    std::array<int, NUM_REGS - NUM_CALL_REGS> reg_non_call_list;
     constexpr static const std::array<char, NUM_TYPES> inst_suffix = {'b', 'w', 'l', 'q', 'q'};
 
     using param_stack_type = std::variant<int, std::tuple<std::string_view, c_type, bool>>; 
@@ -480,6 +481,8 @@ public:
     int declare_local_variable(std::string_view name, c_type type, bool is_signed) override;
     int declare_local_mem_variable(std::string_view name, size_t mem_var_size) override; 
     void free_result(int exp_id) override;
+    int create_temporary_value(c_type type, bool is_signed) override;
+    int set_value(int expr_id, std::string_view constant) override;
 
 //function
     int save_param(std::string_view name, c_type type, bool is_signed) override;

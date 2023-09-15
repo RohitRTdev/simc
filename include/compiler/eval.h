@@ -44,6 +44,21 @@ struct expr_result {
         expr_id = type_spec::convert_type(res2.type, expr_id, type, fn_intf, !is_constant);
     }
 
+    void convert_to_integral_type(Ifunc_translation* fn_intf) {
+        if(type.is_void()) {
+            sim_log_error("void type cannot be converted to integral type");
+        }
+        if(type.is_array_type() || type.is_function_type()) {
+            type.convert_to_pointer_type();
+        }
+        if(type.is_pointer_type()) {
+            type_spec int_type{};
+            int_type.base_type = C_INT;
+            int_type.is_signed = true;
+            expr_id = type_spec::convert_type(int_type, expr_id, type, fn_intf, !is_constant);
+        }
+    }
+
     void convert_to_ptrdiff(Ifunc_translation* fn_intf) {
         CRITICAL_ASSERT(type.is_pointer_type(), "convert_to_ptrdiff() called on non pointer type");
         type_spec final_type{};
@@ -65,6 +80,7 @@ class eval_expr {
     std::stack<expr_result> res_stack;
     std::stack<std::unique_ptr<ast>> op_stack;
     std::stack<std::tuple<std::string_view, size_t, size_t, bool>> fn_call_stack;
+    std::stack<std::tuple<int, int>> logical_stack;
 
     bool is_assignable() const;
     bool is_base_equal(const type_spec& type_1, const type_spec& type_2);
@@ -94,6 +110,7 @@ class eval_expr {
     void handle_fn_call();
     void handle_simple_unary_op(operator_type op);
     bool handle_pointer_arithmetic(expr_result& res1, expr_result& res2, operator_type op);
+    void handle_logical_op(operator_type op);
 
 
 public:

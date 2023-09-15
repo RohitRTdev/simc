@@ -14,9 +14,20 @@ x64_func::x64_func(std::string_view name, x64_tu* _parent, c_type ret_type, bool
 fn_name(name), parent(_parent), ret_label_id(0), m_is_signed(is_signed), m_ret_type(ret_type), call_index(0),
 param_offset(8) {
     //0 indicates reg is free
+    int i = 0;
     for(size_t reg_idx = 0; reg_idx < NUM_REGS; reg_idx++) {
+        bool in_call_list = false;
         reg_status_list[reg_idx] = 0;
         reg_no_clobber_list[reg_idx] = false;
+        for(auto reg: reg_call_list) {
+            if(reg == reg_idx) {
+                in_call_list = true;
+                break;
+            }
+        }
+        if(!in_call_list) {
+            reg_non_call_list[i++] = reg_idx;
+        }
     }
 }
 
@@ -200,6 +211,18 @@ int x64_func::declare_local_mem_variable(std::string_view name, size_t mem_var_s
     return var.id;
 }
 
+int x64_func::create_temporary_value(c_type type, bool is_signed) {
+    int reg = choose_free_reg(type, is_signed);
+    return reg_status_list[reg];
+}
+
+int x64_func::set_value(int expr_id, std::string_view constant) {
+    auto [reg, _, type] = unary_op_fetch(expr_id);
+    insert_code("mov{} ${}, %{}", type, constant, reg);
+
+    return reg_status_list[reg];
+}
+
 int x64_func::save_param(std::string_view name, c_type type, bool is_signed) {
     filter_type(type, is_signed);
     int id;
@@ -284,6 +307,9 @@ void x64_func::call_function_begin() {
     while(!param_stack.empty()) {
         push_to_stack(param_stack.top());
         param_stack.pop();
+    }
+    for(auto reg: reg_non_call_list) {
+        flush_register(reg);
     }
 }
 

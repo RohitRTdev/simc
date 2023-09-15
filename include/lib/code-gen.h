@@ -73,6 +73,8 @@ public:
     virtual int declare_local_variable(std::string_view name, c_type type, bool is_signed) = 0;
     virtual int declare_local_mem_variable(std::string_view name, size_t mem_var_size) = 0; 
     virtual void free_result(int exp_id) = 0;
+    virtual int create_temporary_value(c_type type, bool is_signed) = 0;
+    virtual int set_value(int expr_id, std::string_view constant) = 0;
 
 //function
     virtual int save_param(std::string_view name, c_type type, bool is_signed) = 0;
