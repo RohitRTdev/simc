@@ -148,7 +148,8 @@ bool eval_expr::hook() {
         auto op = cast_to_ast_op(expr_node);
         auto sym = std::get<operator_type>(op->tok->value);
         switch(sym) {
-            case AND: {
+            case AND: 
+            case OR: {
                 if(expr->children.size() == 2) {
                     int false_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::create_label);
                     int end_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::create_label);
@@ -163,14 +164,16 @@ bool eval_expr::hook() {
                     }
 
                     if(res_expr_1.is_constant) {
-                        if(std::stoi(std::string(res_expr_1.constant)) == 0) {
-                            //Jump to false end if constant is 0
+                        bool is_zero = std::stoi(std::string(res_expr_1.constant)) == 0; 
+                        if((sym == AND && is_zero) || (sym == OR && !is_zero)) {
+                            //Jump to false/true end if constant is 0/1(depending on context)
                             code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, std::get<0>(logical_stack.top()));
                         }
                     }
                     else {
                         //Branch if zero to the false end
-                        code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch_if_z, res_expr_1.expr_id, std::get<0>(logical_stack.top()));
+                        void (Ifunc_translation::*branch_op)(int, int) = (sym == AND) ? &Ifunc_translation::branch_if_z : &Ifunc_translation::branch_if_nz;
+                        code_gen::call_code_gen(fn_intf, branch_op, res_expr_1.expr_id, std::get<0>(logical_stack.top()));
                     }
                 }
                 break;
@@ -194,25 +197,47 @@ void eval_expr::handle_logical_op(operator_type op) {
 
     static const std::string_view pos_value = "1";
     static const std::string_view neg_value = "0";
-    auto [false_id, end_id] = fetch_stack_node(logical_stack);
+    
+    int false_id = 0, end_id = 0;
+    if (op == AND || op == OR) {
+        std::tie(false_id, end_id) = fetch_stack_node(logical_stack);
+    }
     int tmp_id = 0; 
-    switch(op) {
-        case AND: {
-            if(res_expr_2.is_constant) {
-                bool is_zero = std::stoi(std::string(res_expr_2.constant)) == 0;
-                if(is_zero) {
-                    code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, false_id);
-                }
+   
+    if(res_expr_2.is_constant) {
+        bool is_zero = std::stoi(std::string(res_expr_2.constant)) == 0; 
+        if(op == AND || op == OR) {
+            bool do_jmp = (op == AND && is_zero) || (op == OR && !is_zero);
+            if(do_jmp) {
+                code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, false_id);
             }
-            else {
-                code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch_if_z, res_expr_2.expr_id, false_id);
-            } 
+        }
+        else if(op == NOT) {
+            res.is_constant = true;
+            res.constant = is_zero ? pos_value : neg_value;
+        }
+    }
+    else if(op == AND || op == OR) {
+        void (Ifunc_translation::*branch_op)(int, int) = (op == AND) ? &Ifunc_translation::branch_if_z : &Ifunc_translation::branch_if_nz;
+        code_gen::call_code_gen(fn_intf, branch_op, res_expr_2.expr_id, false_id);
+    } 
+    switch(op) {
+        case AND: 
+        case OR: {
+            std::string_view first_val = op == AND ? pos_value : neg_value;
+            std::string_view second_val = op == AND ? neg_value : pos_value;
             tmp_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::create_temporary_value, res.type.base_type, res.type.is_signed);
-            code_gen::call_code_gen(fn_intf, &Ifunc_translation::set_value, tmp_id, pos_value);
+            code_gen::call_code_gen(fn_intf, &Ifunc_translation::set_value, tmp_id, first_val);
             code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, end_id);
             code_gen::call_code_gen(fn_intf, &Ifunc_translation::insert_label, false_id);
-            code_gen::call_code_gen(fn_intf, &Ifunc_translation::set_value, tmp_id, neg_value);
+            code_gen::call_code_gen(fn_intf, &Ifunc_translation::set_value, tmp_id, second_val);
             code_gen::call_code_gen(fn_intf, &Ifunc_translation::insert_label, end_id);
+            break;
+        }
+        case NOT: {
+            if(!res_expr_2.is_constant) {
+                tmp_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::if_eq, res_expr_2.expr_id, neg_value);
+            }
             break;
         }
         default: {
@@ -575,6 +600,10 @@ void eval_expr::handle_unary_op(operator_type op) {
             handle_addr();
             break;
         }
+        case NOT: {
+            handle_logical_op(op);
+            break;
+        }
         case INCREMENT:  
         case DECREMENT: { 
             handle_inc_dec(op, false);
@@ -729,7 +758,8 @@ void eval_expr::handle_node() {
                     handle_assignment();
                     break;
                 }
-                case AND: {
+                case AND:
+                case OR: {
                     handle_logical_op(sym);
                     break;
                 }

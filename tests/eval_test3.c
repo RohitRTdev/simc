@@ -14,7 +14,7 @@ int another_fn() {
     c = 1;
     b = 1;
     int test;
-    test = (b && ((--c && c+1) && c)) + c;
+    test = !(b || c && b) + ((b && ((--c && c+1) && c)) || !2) + !(12 && 1123123);
     return test;
 }
 
