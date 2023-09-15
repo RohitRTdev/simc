@@ -216,7 +216,8 @@ static void reduce_fn_call_expr(state_machine* inst) {
         fn_call->attach_node(std::move(prev_expr));
 
     inst->parser_stack.pop(); //Remove '('
-    fn_call->attach_node(inst->fetch_parser_stack()); //Attach function designator
+    //Attach function designator
+    static_cast<ast_fn_call*>(const_cast<ast_expr*>(cast_to_ast_expr(fn_call)))->fn_designator = inst->fetch_parser_stack();
 
     inst->parser_stack.push(std::move(fn_call));
 }
@@ -243,11 +244,12 @@ static void reduce_expr_rb(state_machine* inst) {
 }
 
 static void reduce_expr_empty_fn(state_machine* inst) {
+    sim_log_debug("Reducing empty fn call expression");
     if(inst->state_stack.top() == FN_CALL_EXPR_REDUCE && is_ast_expr_lb(inst->parser_stack.top())) {
         inst->state_stack.pop();
         inst->parser_stack.pop(); //Remove '('
         auto fn_call = create_ast_fn_call();
-        fn_call->attach_node(inst->fetch_parser_stack());
+        static_cast<ast_fn_call*>(const_cast<ast_expr*>(cast_to_ast_expr(fn_call)))->fn_designator = inst->fetch_parser_stack();
         inst->parser_stack.push(std::move(fn_call));
     }
     else 

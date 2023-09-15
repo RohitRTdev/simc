@@ -189,3 +189,10 @@ int x64_func::post_inc(int id, c_type type, bool is_signed, size_t inc_count, bo
 int x64_func::post_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) {
     return inc_common(id, type, is_signed, inc_count, false, false, is_mem, is_global);
 }
+
+int x64_func::negate(int id) {
+    auto [reg, _, type] = unary_op_fetch(id);
+
+    insert_code("neg{} %{}", type, reg);
+    return reg_status_list[reg];
+}

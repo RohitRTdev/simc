@@ -269,7 +269,6 @@ static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_li
 }
 
 static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation* fn, std::string_view fn_name) {
-
     std::stack<std::unique_ptr<ast>> stmt_stack;
     std::optional<var_info> fn_decl;
     code_gen::eval_only = false;
@@ -315,9 +314,9 @@ static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation
 
 void eval_fn_def(std::unique_ptr<ast> fn_def) {
     auto fn_args = eval_decl_list(fetch_child(fn_def), true);
-    auto fn_intf = current_scope->add_function_definition(fn_args.back(), std::vector<std::string_view>(fn_args.begin(), fn_args.begin() + fn_args.size() - 1));
+    auto [fn_intf, fn_scope] = current_scope->add_function_definition(fn_args.back(), std::vector<std::string_view>(fn_args.begin(), fn_args.begin() + fn_args.size() - 1));
 
-    create_new_scope(fn_intf);
+    current_scope = fn_scope;
     eval_stmt_list(fetch_child(fn_def), fn_intf, fn_args.back());
     revert_to_old_scope();
 }

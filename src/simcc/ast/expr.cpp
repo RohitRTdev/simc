@@ -12,6 +12,8 @@ ast_op::ast_op(const token* tok, bool unary, bool postfix, bool lr) : ast_expr(E
     set_precedence(tok);   
 }
 
+ast_fn_call::ast_fn_call() : ast_expr(EXPR_TYPE::FN_CALL) 
+{}
 
 void ast_op::set_precedence(const token* tok) {
     if(is_unary && !is_postfix) {
@@ -73,8 +75,8 @@ std::unique_ptr<ast> create_ast_expr_con(const token* tok) {
 }
 
 std::unique_ptr<ast> create_ast_fn_call() {
-    ast* node = static_cast<ast*>(new ast_expr(EXPR_TYPE::FN_CALL));
-    return std::make_unique<ast_expr>(EXPR_TYPE::FN_CALL);
+    ast* node = static_cast<ast*>(new ast_fn_call());
+    return std::unique_ptr<ast>(node);
 }
 
 std::unique_ptr<ast> create_ast_punctuator(const token* tok) {
@@ -105,6 +107,10 @@ bool ast_expr::is_rb() const {
 
 bool ast_expr::is_comma() const {
     return type == EXPR_TYPE::PUNC && tok->is_operator_comma();
+}
+
+bool ast_expr::is_fn_call() const {
+    return type == EXPR_TYPE::FN_CALL;
 }
 
 bool is_ast_expr_lb(const std::unique_ptr<ast>& node) {

@@ -51,6 +51,8 @@ int x64_tu::declare_global_mem_variable(std::string_view name, bool is_static, s
     c_var var{};
     var.name = name;
     var.mem_var_size = mem_var_size; 
+    var.type = C_LONG;
+    var.is_signed = false;
     var.is_static = is_static;
     globals.push_back(var);
 
@@ -97,8 +99,11 @@ void x64_tu::generate_code() {
     }
     for(auto& [fn, var] : fn_list) {
         fn->generate_code();
-        if(!globals[var].is_static)
-            add_inst_to_code(fmt::format(LINE(".global {}"), fn->fetch_fn_name()));
+        if(!globals[var].is_static) {
+            std::string_view name = fn->fetch_fn_name();
+            add_inst_to_code(fmt::format(LINE(".global {}"), name));
+            add_inst_to_code(fmt::format(LINE(".type {}, @function"), name));
+        }
         add_inst_to_code(fn->fetch_code());
         add_inst_to_code(LINE());
     }

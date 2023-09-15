@@ -31,7 +31,7 @@ int scope::declare_variable(const var_info& var) {
     auto [phy_type, is_signed] = var.type.get_simple_type(); 
     if(is_global_scope()) {
         if(mem_var_size) {
-            return std::get<tu_intf_type>(intf)->declare_global_mem_variable(var.name, var.stor_spec.is_stor_static(), mem_var_size.value());
+            return std::get<tu_intf_type>(intf)->declare_global_mem_variable(var.name, var.stor_spec.is_stor_static(), *mem_var_size);
         }
         else {
             return std::get<tu_intf_type>(intf)->declare_global_variable(var.name, phy_type, is_signed, var.stor_spec.is_stor_static());
@@ -39,7 +39,7 @@ int scope::declare_variable(const var_info& var) {
     }
     else {
         if(mem_var_size) {
-            return std::get<fn_intf_type>(intf)->declare_local_mem_variable(var.name, mem_var_size.value());
+            return std::get<fn_intf_type>(intf)->declare_local_mem_variable(var.name, *mem_var_size);
         }
         else {
             return std::get<fn_intf_type>(intf)->declare_local_variable(var.name, phy_type, is_signed);
@@ -47,10 +47,10 @@ int scope::declare_variable(const var_info& var) {
     }
 }
 
-bool scope::redefine_symbol_check(std::string_view symbol, const type_spec& type) const {
+bool scope::redefine_symbol_check(std::string_view symbol, const type_spec& type, bool no_redefine) const {
     for(auto& var: variables) {
         if(var.name == symbol) {
-            if(!var.is_defined) {
+            if(!no_redefine && !var.is_defined) {
                 if(!(var.type == type)) {
                     sim_log_error("Current definition of symbol:{} does not match earlier declaration", symbol);
                 }
@@ -113,12 +113,38 @@ void scope::add_variable(int id, std::string_view name, const type_spec& type, c
     }
 }
 
-Ifunc_translation* scope::add_function_definition(std::string_view fn_name, const std::vector<std::string_view>& fn_args) {
+void scope::add_param_variable(int id, std::string_view name, const type_spec& type) {
+    redefine_symbol_check(name, type, true);
+    var_info var{};
+    var.name = name;
+    var.type = type;
+    var.var_id = id;
+
+    variables.push_back(var);
+}
+
+std::pair<Ifunc_translation*, scope*> scope::add_function_definition(std::string_view fn_name, const std::vector<std::string_view>& fn_args) {
     auto& fn = fetch_var_info(fn_name);
     fn.is_defined = true;
     fn.args = fn_args;
 
     auto [base_type, is_signed] = fn.type.resolve_type().get_simple_type();
 
-    return std::get<tu_intf_type>(intf)->add_function(fn_name, base_type, is_signed, fn.stor_spec.is_stor_static());
+    auto fn_intf = std::get<tu_intf_type>(intf)->add_function(fn_name, base_type, is_signed, fn.stor_spec.is_stor_static());
+    auto fn_scope = new scope(this, fn_intf);
+
+    //Declare the argument list into the new function scope
+    auto arg_index = 0;
+    for(const auto& arg: fn.type.mod_list[0].fn_spec) {
+        type_spec tmp_arg = arg;
+        if(tmp_arg.is_function_type() || tmp_arg.is_array_type()) {
+            tmp_arg.convert_to_pointer_type();
+        }
+        auto [sim_type, is_sign] = arg.get_simple_type();
+        int id = fn_intf->save_param(fn_args[arg_index], sim_type, is_sign);
+        fn_scope->add_param_variable(id, fn.args[arg_index], tmp_arg);
+        arg_index++;
+    }
+
+    return std::make_pair(fn_intf, fn_scope);
 }

@@ -1,49 +1,28 @@
-static char a;
 
-void* ptr_test() {
-    short int* val;
-    int john, wick;
-    long int solo;
-    char *  * const money;
-    val--;
-    **money = *val++ + solo;
-    john = **money + *++val;
+int printf(char* str, int con);
+int arr[3], some(int, int);
 
-
-    long long b;
-    b = solo;
-
-    return --(*money);
+static int (*new_fn(int* val))(const char*, int) {
+    *val = *val + (1 && 5);
+    return &printf;
 }
 
-short good_old_function() {
-    long int f;
-    unsigned char m;
-    short* j;
-    short b[2];
-    f = 66000;
-    j = &b;
-    j = &*j;
 
-    int* val;
-    val = &ptr_test; 
-    return (*j)++;
-
-}
-
-long long another_function() {
-    a = a + 1;
+int another_fn() {
     int b;
-    b = 2;
-    long* m;
-    void* j;
-    m = b;
-    b = m;
-    a = m;
-    b = a;
-    j = m;
-    unsigned int c;
-    c = b + a;
+    char c;
+    c = 1;
+    b = 1;
+    int test;
+    test = !(b || c && b) + ((b && ((--c && c+1) && c)) || !2) + !(12 && 1123123);
+    return test;
+}
 
-    return c;
+unsigned long long fn(const char* str, int con) {
+    int returns_sum(int, int);
+    char test;
+    int val;
+    long long val1, val2;
+    
+    return new_fn(&val)(str, another_fn());
 }

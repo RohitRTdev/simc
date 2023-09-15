@@ -22,5 +22,7 @@ All the executables(simcc, sime, code-gen) will be created on the build/bin dire
 ./simcc <some-file-name>
 ```
 
-At this point, the compiler simply tokenizes the input and creates an ast(abstract syntax tree)
-The AST and tokens which are created is only visible if you built the compiler in DEBUG configuration(CMAKE_BUILD_TYPE=Debug(This is the default for now))
+Currently, the compiler generates x64 code in att syntax and is made to be compatible only with gcc toolchain.<br>
+The compiler generates position independent code. So if you want to compile to machine code, use gcc and don't use the -fno-pic option.<br>
+The compiler is a long way from feature complete, but it is usable as of now.
+

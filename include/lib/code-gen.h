@@ -73,6 +73,16 @@ public:
     virtual int declare_local_variable(std::string_view name, c_type type, bool is_signed) = 0;
     virtual int declare_local_mem_variable(std::string_view name, size_t mem_var_size) = 0; 
     virtual void free_result(int exp_id) = 0;
+    virtual int create_temporary_value(c_type type, bool is_signed) = 0;
+    virtual int set_value(int expr_id, std::string_view constant) = 0;
+
+//function
+    virtual int save_param(std::string_view name, c_type type, bool is_signed) = 0;
+    virtual void begin_call_frame(size_t num_args) = 0;
+    virtual void load_param(int exp_id) = 0;
+    virtual void load_param(std::string_view constant, c_type type, bool is_signed) = 0;
+    virtual int call_function(int exp_id, c_type ret_type, bool is_signed) = 0;
+    virtual int call_function(std::string_view name, c_type ret_type, bool is_signed) = 0;
 
 //Assign variable
     virtual int assign_var(int var_id, int id) = 0; 
@@ -99,16 +109,30 @@ public:
     virtual int pre_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) = 0;
     virtual int post_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) = 0;
     virtual int post_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) = 0;
+    virtual int negate(int id) = 0;
     
 //Type conversion
     virtual int type_cast(int exp_id, c_type cast_type, bool cast_sign) = 0;
 
+//Conditional operation
+    virtual int if_gt(int id1, int id2) = 0;
+    virtual int if_lt(int id1, int id2) = 0;
+    virtual int if_eq(int id1, int id2) = 0;
+    virtual int if_neq(int id1, int id2) = 0;
+    virtual int if_gt(int id1, std::string_view constant) = 0;
+    virtual int if_lt(int id1, std::string_view constant) = 0;
+    virtual int if_eq(int id1, std::string_view constant) = 0;
+    virtual int if_neq(int id1, std::string_view constant) = 0;
+
 //Branch operation
     virtual int create_label() = 0;
-    virtual void add_label(int label_id) = 0;
+    virtual void insert_label(int label_id) = 0;
     virtual void branch_return(int exp_id) = 0;
     virtual void fn_return(int exp_id) = 0;
     virtual void fn_return(std::string_view constant) = 0;
+    virtual void branch(int label_id) = 0;
+    virtual void branch_if_z(int expr_id, int label_id) = 0;
+    virtual void branch_if_nz(int expr_id, int label_id) = 0;
 
     virtual void generate_code() = 0;
 

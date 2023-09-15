@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <stack>
 #include <array>
 #include <tuple>
 #include <vector>
@@ -9,7 +10,8 @@
 #include "lib/code-gen.h"
 
 #define ALIGN(val, align) (((abs(val)-1) & ~((align)-1))+align)
-#define NUM_REGS 6
+#define NUM_REGS 8
+#define NUM_CALL_REGS 6
 
 extern const std::vector<std::array<std::string, NUM_REGS>> regs;
 enum registers {
@@ -18,7 +20,9 @@ enum registers {
     RCX,
     RDX,
     RSI,
-    RDI
+    RDI,
+    R8,
+    R9
 };
 
 
@@ -92,9 +96,24 @@ class x64_func : public Ifunc_translation {
     int ret_label_id;
     c_type m_ret_type;
     bool m_is_signed;
+    size_t num_call_args;
+    size_t call_index;
+    size_t bytes_moved;
+    size_t param_offset;
+    constexpr static const std::array<registers, NUM_CALL_REGS> reg_call_list = {RDI, RSI, RCX, RDX, R8, R9};
+    std::array<int, NUM_REGS - NUM_CALL_REGS> reg_non_call_list;
     constexpr static const std::array<char, NUM_TYPES> inst_suffix = {'b', 'w', 'l', 'q', 'q'};
 
+    using param_stack_type = std::variant<int, std::tuple<std::string_view, c_type, bool>>; 
+    std::stack<param_stack_type> param_stack;
+
     using op_type = std::tuple<int, int, c_type>; 
+
+    int advance_param_offset() {
+        const int param_alignment = 8;
+        param_offset += param_alignment;
+        return param_offset;
+    }
 
     int advance_offset(c_type type) {
         int alignment = base_type_size(type);
@@ -257,6 +276,9 @@ class x64_func : public Ifunc_translation {
     }
 
     void flush_register(int reg_idx) {
+        if(!reg_status_list[reg_idx])
+            return;
+
         int offset = 0;
         bool found_existing_cache = false;
         for(auto& loc: id_list) {
@@ -300,8 +322,6 @@ class x64_func : public Ifunc_translation {
     void transfer_to_reg(enum registers reg_idx, int exp_id) {
         if(reg_status_list[reg_idx] == exp_id)
             return;
-
-        CRITICAL_ASSERT(!reg_no_clobber_list[reg_idx], "transfer_to_reg() failed as reg_idx:{} is in no_clobber_list", reg_idx);
         
         if(reg_status_list[reg_idx]) {
             flush_register(reg_idx);
@@ -330,13 +350,36 @@ class x64_func : public Ifunc_translation {
                 set_reg_type(reg_idx, loc.var_info.type, loc.var_info.is_signed);
                 
                 auto type = reg_type_list[reg_idx];
-                insert_code("mov{} {}(%rbp), %{}", type, std::to_string(loc.offset), reg_idx);
+                if(loc.var_info.mem_var_size)
+                    insert_code("lea{} {}(%rbp), %{}", C_LONG, std::to_string(loc.offset), reg_idx);
+                else
+                    insert_code("mov{} {}(%rbp), %{}", type, std::to_string(loc.offset), reg_idx);
                 return;
             }
         }
 
         CRITICAL_ASSERT_NOW("transfer_to_reg() couldn't find exp_id:{} in id_list or reg_status_list", exp_id);
     }
+
+    void push_to_stack(param_stack_type stack_object) {
+        auto update_offset = [&] () {
+            cur_offset -= 8;
+            bytes_moved += 8;
+        };
+        
+        if(std::holds_alternative<int>(stack_object)) {
+            auto [reg, _, type] = unary_op_fetch(std::get<int>(stack_object));
+            update_offset();
+            insert_code("push{} %{}", C_LONG, reg);
+            free_reg(reg);        
+        }
+        else {
+            auto [constant, type, is_signed] = std::get<1>(stack_object);
+            update_offset();
+            insert_code("push{} ${}", C_LONG, constant);
+        }
+    }
+
 
     op_type unary_op_fetch(int id) {
         int reg1 = fetch_result(id);
@@ -418,7 +461,18 @@ class x64_func : public Ifunc_translation {
         add_inst_to_code(fmt::format(_msg, inst_suffix[type], make_format_args(type, args)...));
     }
     
+    enum compare_op {
+        GT,
+        LT,
+        EQ,
+        NEQ
+    };
+
     int inc_common(int id, c_type type, bool is_signed, size_t inc_count, bool is_pre, bool inc, bool is_mem, bool is_global);
+    void call_function_begin();
+    void call_function_end();
+    int setup_ret_type(c_type ret_type, bool is_signed);
+    int if_common(int id1, std::variant<int, std::string_view> object, compare_op op);
 
 public:
     static int new_label_id;
@@ -427,6 +481,17 @@ public:
     int declare_local_variable(std::string_view name, c_type type, bool is_signed) override;
     int declare_local_mem_variable(std::string_view name, size_t mem_var_size) override; 
     void free_result(int exp_id) override;
+    int create_temporary_value(c_type type, bool is_signed) override;
+    int set_value(int expr_id, std::string_view constant) override;
+
+//function
+    int save_param(std::string_view name, c_type type, bool is_signed) override;
+    void begin_call_frame(size_t num_args);
+    void load_param(int exp_id) override;
+    void load_param(std::string_view constant, c_type type, bool is_signed) override;
+    int call_function(int exp_id, c_type ret_type, bool is_signed) override;
+    int call_function(std::string_view name, c_type ret_type, bool is_signed) override;
+
 
 //Assign variable
     int assign_var(int var_id1, int var_id2) override; 
@@ -453,15 +518,29 @@ public:
     int pre_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
     int post_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
     int post_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
+    int negate(int id) override;
 //Type conversion
     int type_cast(int exp_id, c_type cast_type, bool cast_sign) override;
-    
+
+//Conditional operation
+    int if_gt(int id1, int id2) override;
+    int if_lt(int id1, int id2) override;
+    int if_eq(int id1, int id2) override;
+    int if_neq(int id1, int id2) override;
+    int if_gt(int id1, std::string_view constant) override;
+    int if_lt(int id1, std::string_view constant) override;
+    int if_eq(int id1, std::string_view constant) override;
+    int if_neq(int id1, std::string_view constant) override;
+
 //Branch operation
     int create_label() override;
-    void add_label(int label_id) override;
+    void insert_label(int label_id) override;
     void branch_return(int exp_id) override;
     void fn_return(int exp_id) override;
     void fn_return(std::string_view constant) override;
+    void branch(int label_id) override;
+    void branch_if_z(int expr_id, int label_id) override;
+    void branch_if_nz(int expr_id, int label_id) override;
 
     void generate_code() override;
 

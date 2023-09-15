@@ -4,6 +4,7 @@
 #include "compiler/scope.h"
 #include "compiler/eval.h"
 #include "compiler/utils.h"
+#include "compiler/ast-ops.h"
 
 std::vector<std::string> eval_expr::const_storage;
 
@@ -98,6 +99,200 @@ void eval_expr::perform_arithmetic_conversion(expr_result& res1, expr_result& re
     }
 }
 
+bool eval_expr::hook() {
+    expr = cast_to_ast_expr(expr_node);
+    if(expr->is_fn_call()) {
+       auto fn_expr = static_cast<ast_fn_call*>(const_cast<ast_expr*>(expr));
+
+       if(fn_expr->fn_designator) {
+            size_t num_args_found = fn_expr->children.size();
+            
+            auto fn_desig = std::move(fn_expr->fn_designator);
+            std::string_view fn_name;
+
+            //It's a function name
+            if(cast_to_ast_expr(fn_desig)->is_var()) {
+                fn_name = std::get<std::string>(cast_to_ast_token(fn_desig)->tok->value);
+            }
+            else {
+                //It's an expression. Evaluate it like usual
+                op_stack.push(std::move(expr_node));
+                expr_node = std::move(fn_desig);
+            }
+
+            fn_call_stack.push(std::make_tuple(fn_name, num_args_found, 0, false));   
+            return true;
+       }
+       else {
+            auto& evaluated = std::get<3>(fn_call_stack.top());
+            if(!evaluated) {
+                //If no function name exists, it must have been an expression
+                //Fetch the type of this expression
+                if(!std::get<0>(fn_call_stack.top()).size()) {
+                    auto& fn_desig = res_stack.top();
+                    auto fn_type = fn_desig.type;
+                    if(!fn_desig.type.is_function_type()) {
+                        if(!(fn_desig.type.is_pointer_type() && fn_desig.type.resolve_type().is_function_type())) {
+                            sim_log_error("Function designator must be a function type or pointer to function type");
+                        }
+                        fn_type = fn_desig.type.resolve_type(); 
+                    }
+                    size_t num_args = fn_type.mod_list[0].fn_spec.size();
+                    std::get<2>(fn_call_stack.top()) = num_args;
+                }
+                evaluated = true;
+            }
+       } 
+    }
+    else if(expr->is_operator()) {
+        auto op = cast_to_ast_op(expr_node);
+        auto sym = std::get<operator_type>(op->tok->value);
+        switch(sym) {
+            case AND: 
+            case OR: {
+                if(expr->children.size() == 2) {
+                    int false_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::create_label);
+                    int end_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::create_label);
+
+                    logical_stack.push(std::make_tuple(false_id, end_id));
+                }
+                else if(expr->children.size() == 1) {
+                    auto res_expr_1 = fetch_stack_node(res_stack);
+
+                    if(!res_expr_1.type.is_integral()) {
+                        res_expr_1.convert_to_integral_type(fn_intf);
+                    }
+
+                    if(res_expr_1.is_constant) {
+                        bool is_zero = std::stoi(std::string(res_expr_1.constant)) == 0; 
+                        if((sym == AND && is_zero) || (sym == OR && !is_zero)) {
+                            //Jump to false/true end if constant is 0/1(depending on context)
+                            code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, std::get<0>(logical_stack.top()));
+                        }
+                    }
+                    else {
+                        //Branch if zero to the false end
+                        void (Ifunc_translation::*branch_op)(int, int) = (sym == AND) ? &Ifunc_translation::branch_if_z : &Ifunc_translation::branch_if_nz;
+                        code_gen::call_code_gen(fn_intf, branch_op, res_expr_1.expr_id, std::get<0>(logical_stack.top()));
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    return false;
+}
+
+void eval_expr::handle_logical_op(operator_type op) {
+    auto res_expr_2 = fetch_stack_node(res_stack);
+
+    if(!res_expr_2.type.is_integral()) {
+        res_expr_2.convert_to_integral_type(fn_intf);
+    }
+
+    //Todo: Make sure we get the common type of the 2 expressions
+    //Right now we get the type of the 2nd expression
+    expr_result res{res_expr_2.type};
+
+    static const std::string_view pos_value = "1";
+    static const std::string_view neg_value = "0";
+    
+    int false_id = 0, end_id = 0;
+    if (op == AND || op == OR) {
+        std::tie(false_id, end_id) = fetch_stack_node(logical_stack);
+    }
+    int tmp_id = 0; 
+   
+    if(res_expr_2.is_constant) {
+        bool is_zero = std::stoi(std::string(res_expr_2.constant)) == 0; 
+        if(op == AND || op == OR) {
+            bool do_jmp = (op == AND && is_zero) || (op == OR && !is_zero);
+            if(do_jmp) {
+                code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, false_id);
+            }
+        }
+        else if(op == NOT) {
+            res.is_constant = true;
+            res.constant = is_zero ? pos_value : neg_value;
+        }
+    }
+    else if(op == AND || op == OR) {
+        void (Ifunc_translation::*branch_op)(int, int) = (op == AND) ? &Ifunc_translation::branch_if_z : &Ifunc_translation::branch_if_nz;
+        code_gen::call_code_gen(fn_intf, branch_op, res_expr_2.expr_id, false_id);
+    } 
+    switch(op) {
+        case AND: 
+        case OR: {
+            std::string_view first_val = op == AND ? pos_value : neg_value;
+            std::string_view second_val = op == AND ? neg_value : pos_value;
+            tmp_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::create_temporary_value, res.type.base_type, res.type.is_signed);
+            code_gen::call_code_gen(fn_intf, &Ifunc_translation::set_value, tmp_id, first_val);
+            code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, end_id);
+            code_gen::call_code_gen(fn_intf, &Ifunc_translation::insert_label, false_id);
+            code_gen::call_code_gen(fn_intf, &Ifunc_translation::set_value, tmp_id, second_val);
+            code_gen::call_code_gen(fn_intf, &Ifunc_translation::insert_label, end_id);
+            break;
+        }
+        case NOT: {
+            if(!res_expr_2.is_constant) {
+                tmp_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::if_eq, res_expr_2.expr_id, neg_value);
+            }
+            break;
+        }
+        default: {
+            CRITICAL_ASSERT_NOW("handle_logical_op() called with invalid logical operator");
+        }
+    }
+
+    res.expr_id = tmp_id;
+    res_stack.push(res);
+}
+
+bool eval_expr::handle_pointer_arithmetic(expr_result& res1, expr_result& res2, operator_type op) {
+    expr_result& res_p = res1, &res_i = res2;
+    if(res1.type.is_pointer_type() && res2.type.is_integral()) {
+        res_p = res1;
+        res_i = res2;
+    }
+    else if(res2.type.is_pointer_type() && res1.type.is_integral()) {
+        res_p = res2;
+        res_i = res1;
+    }
+    else {
+        return false;
+    }
+
+    if(op != PLUS && op != MINUS) {
+        return false;
+    }
+
+    if(res_p.type.is_incomplete_type()) {
+        sim_log_error("Pointer arithmetic cannot be carried out on a pointer to an incomplete type");
+    }
+
+    sim_log_debug("Performing pointer arithmetic");
+    CRITICAL_ASSERT(!res_i.is_constant, "Pointer arithmetic with constant not yet supported");
+    res_i.convert_type(res_p, fn_intf);
+
+    std::string inc_count = std::to_string(res_p.type.get_pointer_base_type_size());
+    int res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::mul, res_i.expr_id, std::string_view(inc_count));
+    
+    int (Ifunc_translation::*op_var)(int, int); 
+    if(op == PLUS)
+        op_var = &Ifunc_translation::add;
+    else
+        op_var = &Ifunc_translation::sub;
+
+    res_id = code_gen::call_code_gen(fn_intf, op_var, res_p.expr_id, res_id);
+
+    expr_result res{res_p.type};
+    res.expr_id = res_id;
+
+    res_stack.push(res);
+    return true;
+}
+
 void eval_expr::handle_arithmetic_op(operator_type op) {
     
     int (Ifunc_translation::*op_vars)(int, int);
@@ -107,10 +302,35 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
     auto res2 = fetch_stack_node(res_stack);
     auto res1 = fetch_stack_node(res_stack);
 
-    if(!res1.type.is_type_operable(res2.type)) {
-        if(res1.type.is_modified_type() || res1.type.is_modified_type()) {
-            sim_log_error("Arithmetic operation requires both types to be integral and equal");
+    auto convert_to_ptr_type = [&] (expr_result& res) {
+        if(res.type.is_array_type() || res.type.is_function_type()) {
+            res.type.convert_to_pointer_type();
         }
+    };
+
+    //Convert to pointer type
+    convert_to_ptr_type(res1);
+    convert_to_ptr_type(res2);
+
+    if(handle_pointer_arithmetic(res1, res2, op))
+        return;
+
+
+    if(res1.type.is_pointer_type() && res2.type.is_pointer_type()) {
+        if(op != MINUS) {
+            sim_log_error("Arithmetic operation can have 2 pointer operands only if it is a subtraction");
+        }
+        res1.convert_to_ptrdiff(fn_intf);
+        res2.convert_to_ptrdiff(fn_intf);
+
+        int res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::sub, res1.expr_id, res2.expr_id);
+        expr_result res{res_id, res1.type};
+        res_stack.push(res);
+        return;
+    }
+
+    if(!res1.type.is_type_operable(res2.type)) {
+        sim_log_error("Arithmetic operation requires both operands to be of arithmetic types");
     }
 
     perform_arithmetic_conversion(res1, res2);
@@ -132,6 +352,33 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
             op_vars = &Ifunc_translation::mul; op_var_con = &Ifunc_translation::mul;
             break;
         }
+        case GT: {
+            is_commutative = true;
+            op_vars = &Ifunc_translation::if_gt; op_var_con = &Ifunc_translation::if_gt; 
+            if(res1.is_constant && !res2.is_constant) {
+                std::swap(res1, res2);
+                op_var_con = &Ifunc_translation::if_lt;
+            }
+            break;
+        }
+        case LT: {
+            is_commutative = true;
+            op_vars = &Ifunc_translation::if_lt; op_var_con = &Ifunc_translation::if_lt; 
+            if(res1.is_constant && !res2.is_constant) {
+                std::swap(res1, res2);
+                op_var_con = &Ifunc_translation::if_gt;
+            }
+
+            break;
+        }
+        case EQUAL_EQUAL: {
+            op_vars = &Ifunc_translation::if_eq; op_var_con = &Ifunc_translation::if_eq; 
+            break;
+        }
+        case NOT_EQUAL: {
+            op_vars = &Ifunc_translation::if_neq; op_var_con = &Ifunc_translation::if_neq; 
+            break;
+        } 
         default: {
             CRITICAL_ASSERT_NOW("handle_arithmetic_op called with invalid operator");
         }
@@ -157,16 +404,21 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
         }
     }
 
-    expr_result res{};
-    res.expr_id = res_id;
-    res.type = res1.type;
-
+    expr_result res{res_id, res1.type};
     res_stack.push(res);
 }
 
-void eval_expr::handle_assignment() {
+ void eval_expr::handle_assignment() {
     auto res2 = fetch_stack_node(res_stack);
     auto res1 = fetch_stack_node(res_stack);
+
+    if(res1.type.is_void()) {
+        sim_log_error("LHS of '=' cannot be void type");
+    }
+
+    if(res2.type.is_void()) {
+        sim_log_error("Cannot assign expression of type 'void' to anything");
+    }
 
     if(!res1.is_lvalue || !res1.type.is_modifiable()) {
         sim_log_error("LHS of '=' operator must be a modifiable l-value");
@@ -253,11 +505,17 @@ void eval_expr::handle_indir() {
         }
     }
 
-    expr_result res{res_in.type.resolve_type()};
+    auto res_type = res_in.type.resolve_type();
+
+    if(res_type.is_void()) {
+        sim_log_error("'*' operator can only be used on a non void pointer type");
+    }
+
+    expr_result res{res_type};
     auto [base_type, is_signed] = res.type.get_simple_type();
     res.expr_id = res_in.expr_id;
 
-    if(!is_assignable()) {
+    if(!(is_assignable() || res_type.is_array_type() || res_type.is_function_type())) {
         res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::fetch_from_mem, res_in.expr_id, base_type, is_signed); 
     }
 
@@ -272,9 +530,13 @@ void eval_expr::handle_inc_dec(operator_type op, bool is_postfix) {
         sim_log_error("Operand to a inc/dec operator must be a modifiable lvalue");
     }
 
+    if(in.type.is_incomplete_type()) {
+        sim_log_error("inc/dec operator cannot be applied to an incomplete type");
+    }
+
     expr_result res{in.type};
     auto [base_type, is_signed] = res.type.get_simple_type();
-    size_t inc_count = res.type.is_pointer_type() ? base_type_size(res.type.resolve_type().get_simple_type().first) : 1;
+    size_t inc_count = res.type.is_pointer_type() ? res.type.get_pointer_base_type_size() : 1; 
     bool is_mem = in.category == l_val_cat::INDIR; //If dereference or array subscript, force memory variable case
     bool is_global = in.category == l_val_cat::GLOBAL;
     auto ptr_mem = &Ifunc_translation::post_inc;
@@ -306,6 +568,28 @@ void eval_expr::handle_inc_dec(operator_type op, bool is_postfix) {
     res_stack.push(res);
 }
 
+void eval_expr::handle_simple_unary_op(operator_type op) {
+    auto in = fetch_stack_node(res_stack);
+    expr_result res{in.type};
+
+    CRITICAL_ASSERT(!in.is_constant, "Constants are not supported right now with unary op's");
+    switch(op) {
+        case PLUS: {
+            res.expr_id = in.expr_id;
+            break;
+        }
+        case MINUS: {
+            res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::negate, in.expr_id);
+            break;
+        }
+        default: {
+            CRITICAL_ASSERT_NOW("handle_unary_op() failed as invalid operator was passed");
+        }
+    }
+
+    res_stack.push(res);
+}
+
 void eval_expr::handle_unary_op(operator_type op) {
     switch(op) {
         case MUL: {
@@ -316,12 +600,18 @@ void eval_expr::handle_unary_op(operator_type op) {
             handle_addr();
             break;
         }
+        case NOT: {
+            handle_logical_op(op);
+            break;
+        }
         case INCREMENT:  
         case DECREMENT: { 
             handle_inc_dec(op, false);
             break;
         }
-        default: CRITICAL_ASSERT_NOW("handle_unary_op() called with invalid operator_type");
+        default: {
+            handle_simple_unary_op(op);
+        } 
     } 
 }
 
@@ -330,7 +620,15 @@ void eval_expr::handle_var() {
 
     int var_id = var.var_id;
     auto category = l_val_cat::LOCAL;
-    if(var.is_global) {
+    if(var.type.is_function_type()) {
+        if(!is_assignable()) {
+            var_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::get_address_of, var.name);
+        }
+        if(var.is_global) {
+            category = l_val_cat::GLOBAL;
+        }
+    }
+    else if(var.is_global) {
         if(!is_assignable()) {
             var_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::fetch_global_var, var.var_id);
         }
@@ -360,6 +658,82 @@ void eval_expr::handle_constant() {
     res_stack.push(res);
 }
 
+void eval_expr::handle_fn_call() {
+    auto [fn_name, num_args_found, num_args, _] = fetch_stack_node(fn_call_stack);
+
+    auto check_if_function_type = [] (auto& fn_type) {
+        if(!fn_type.is_function_type()) {
+            if(!fn_type.is_pointer_to_function()) {
+                sim_log_error("Function designator is not a function or pointer to function type");
+            }
+            fn_type = fn_type.resolve_type();
+        }
+    };
+
+    //This implies it's a function name
+    expr_result fn_desig{};
+    type_spec fn_type{};
+    bool is_fn_pointer = false;
+    if(fn_name.size()) {
+        auto& fn_info = fn_scope->fetch_var_info(fn_name);
+        fn_type = fn_info.type;
+        if(fn_type.is_pointer_to_function()) {
+            fn_desig.expr_id = fn_info.var_id;
+            is_fn_pointer = true;
+        }
+        check_if_function_type(fn_type);
+        num_args = fn_type.mod_list[0].fn_spec.size();    
+    }
+
+    if(num_args != num_args_found) {
+        sim_log_error("Number of arguments mentioned in function call is different from the fn declaration");
+    }
+
+    std::deque<expr_result> args;
+    while(num_args--) {
+        args.push_front(fetch_stack_node(res_stack));
+    }
+
+    if (!fn_name.size()) {
+        fn_desig = fetch_stack_node(res_stack);
+        fn_type = fn_desig.type;
+        check_if_function_type(fn_type);
+        is_fn_pointer = true;
+    }
+    
+    size_t type_index = 0;
+    for(auto& arg: args) {
+        if(arg.type.is_array_type() || arg.type.is_function_type()) {
+            arg.type.convert_to_pointer_type();   
+        }
+        arg.expr_id = type_spec::convert_type(fn_type.mod_list[0].fn_spec[type_index++], arg.expr_id, arg.type, fn_intf, !arg.is_constant);
+    }
+    //Once begin call frame is executed, only load_param call is allowed
+    //This carries on until we execute call_function
+    //Init the call frame and load the arguments
+    code_gen::call_code_gen(fn_intf, &Ifunc_translation::begin_call_frame, num_args_found);    
+    for(const auto& arg: args) {
+        if(arg.is_constant) {
+            auto [base_type, is_signed] = arg.type.get_simple_type();
+            code_gen::call_code_gen(fn_intf, &Ifunc_translation::load_param, arg.constant, base_type, is_signed);
+        }
+        else 
+            code_gen::call_code_gen(fn_intf, &Ifunc_translation::load_param, arg.expr_id);
+    }
+
+    auto [ret_type, is_signed] = fn_type.resolve_type().get_simple_type();
+
+    int ret_id;
+    if(!is_fn_pointer)
+        ret_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::call_function, fn_name, ret_type, is_signed);
+    else 
+        ret_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::call_function, fn_desig.expr_id, ret_type, is_signed);
+
+    expr_result res{ret_id, fn_type.resolve_type()};
+    res_stack.push(res);
+}
+
+
 void eval_expr::handle_node() {
     expr = cast_to_ast_expr(expr_node);
     if(expr->is_var()) {
@@ -384,11 +758,19 @@ void eval_expr::handle_node() {
                     handle_assignment();
                     break;
                 }
+                case AND:
+                case OR: {
+                    handle_logical_op(sym);
+                    break;
+                }
                 default: {
                     handle_arithmetic_op(sym);
                 }
             }
         }
+    }
+    else if(expr->is_fn_call()) {
+        handle_fn_call();
     }
     else {
         CRITICAL_ASSERT_NOW("Invalid expr_node encountered during handle_node evaluation");
@@ -403,6 +785,8 @@ void eval_expr::main_loop() {
             expr_node = fetch_stack_node(op_stack);
         }
         else {
+            if (hook())
+                continue;
             if (expr_node->children.size()) {
                 auto child = fetch_child(expr_node);
                 op_stack.push(std::move(expr_node));

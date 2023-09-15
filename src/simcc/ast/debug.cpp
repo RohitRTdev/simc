@@ -59,6 +59,17 @@ void ast_op::print() {
     level_space--;
 }
 
+void ast_fn_call::print() {
+    AST_PRINT("Printing function designator");
+    fn_designator->print();
+    if(children.size()) {
+        AST_PRINT("Printing function arguments");
+        level_space++;
+        print_child_nodes(children);
+        level_space--;
+    }
+}
+
 void ast_token::print() {
     tok->print();
 }
