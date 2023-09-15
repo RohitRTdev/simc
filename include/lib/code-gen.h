@@ -107,6 +107,7 @@ public:
     virtual int pre_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) = 0;
     virtual int post_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) = 0;
     virtual int post_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) = 0;
+    virtual int negate(int id) = 0;
     
 //Type conversion
     virtual int type_cast(int exp_id, c_type cast_type, bool cast_sign) = 0;
@@ -123,10 +124,13 @@ public:
 
 //Branch operation
     virtual int create_label() = 0;
-    virtual void add_label(int label_id) = 0;
+    virtual void insert_label(int label_id) = 0;
     virtual void branch_return(int exp_id) = 0;
     virtual void fn_return(int exp_id) = 0;
     virtual void fn_return(std::string_view constant) = 0;
+    virtual void branch(int label_id) = 0;
+    virtual void branch_if_z(int expr_id, int label_id) = 0;
+    virtual void branch_if_nz(int expr_id, int label_id) = 0;
 
     virtual void generate_code() = 0;
 

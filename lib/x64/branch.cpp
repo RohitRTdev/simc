@@ -4,8 +4,30 @@ int x64_func::create_label() {
     return new_label_id++;
 }
 
-void x64_func::add_label(int label_id) {
+void x64_func::insert_label(int label_id) {
     add_inst_to_code(fmt::format(LINE(".L{}:"), label_id));
+}
+
+void x64_func::branch(int label_id) {
+    add_inst_to_code(INSTRUCTION("jmp .L{}", label_id));
+}
+
+void x64_func::branch_if_z(int expr_id, int label_id) {
+    auto [reg, _, type] = unary_op_fetch(expr_id);
+
+    insert_code("test{} %{}, %{}", type, reg, reg);
+    add_inst_to_code(INSTRUCTION("je .L{}", label_id));
+
+    free_reg(reg);
+}
+
+void x64_func::branch_if_nz(int expr_id, int label_id) {
+    auto [reg, _, type] = unary_op_fetch(expr_id);
+
+    insert_code("test{} %{}, %{}", type, reg, reg);
+    add_inst_to_code(INSTRUCTION("jne .L{}", label_id));
+
+    free_reg(reg);
 }
 
 void x64_func::branch_return(int exp_id) {

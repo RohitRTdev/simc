@@ -468,6 +468,28 @@ void eval_expr::handle_inc_dec(operator_type op, bool is_postfix) {
     res_stack.push(res);
 }
 
+void eval_expr::handle_simple_unary_op(operator_type op) {
+    auto in = fetch_stack_node(res_stack);
+    expr_result res{in.type};
+
+    CRITICAL_ASSERT(!in.is_constant, "Constants are not supported right now with unary op's");
+    switch(op) {
+        case PLUS: {
+            res.expr_id = in.expr_id;
+            break;
+        }
+        case MINUS: {
+            res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::negate, in.expr_id);
+            break;
+        }
+        default: {
+            CRITICAL_ASSERT_NOW("handle_unary_op() failed as invalid operator was passed");
+        }
+    }
+
+    res_stack.push(res);
+}
+
 void eval_expr::handle_unary_op(operator_type op) {
     switch(op) {
         case MUL: {
@@ -483,7 +505,9 @@ void eval_expr::handle_unary_op(operator_type op) {
             handle_inc_dec(op, false);
             break;
         }
-        default: CRITICAL_ASSERT_NOW("handle_unary_op() called with invalid operator_type");
+        default: {
+            handle_simple_unary_op(op);
+        } 
     } 
 }
 

@@ -515,6 +515,7 @@ public:
     int pre_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
     int post_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
     int post_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
+    int negate(int id) override;
 //Type conversion
     int type_cast(int exp_id, c_type cast_type, bool cast_sign) override;
 
@@ -530,10 +531,13 @@ public:
 
 //Branch operation
     int create_label() override;
-    void add_label(int label_id) override;
+    void insert_label(int label_id) override;
     void branch_return(int exp_id) override;
     void fn_return(int exp_id) override;
     void fn_return(std::string_view constant) override;
+    void branch(int label_id) override;
+    void branch_if_z(int expr_id, int label_id) override;
+    void branch_if_nz(int expr_id, int label_id) override;
 
     void generate_code() override;
 

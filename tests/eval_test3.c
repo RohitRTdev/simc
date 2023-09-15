@@ -9,16 +9,14 @@ static int (*new_fn(int* val))(const char*, int) {
 
 
 unsigned long long fn(const char* str, int con) {
-    void (*fn_ptr)(int, char, int*, int [3], int [2][3], int some(char, char), char val,
-    short, unsigned long long), new_var(int, char), goat(int, int);
     int returns_sum(int, int);
     char test;
-    test = 'm';
     int val;
-    val = *str;
-    test = con > val;
-    test = con < val;
+    long long val1, val2;
+    val1 = 10;
+    val2 = 129;
+    test = val1 < ++val2;
     val = con == val;
-    val = (con != val) + test;
-    return new_fn(&con)(str, con);
+    val = 1 + test;
+    return new_fn(&val)(str, val);
 }
