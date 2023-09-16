@@ -5,7 +5,7 @@
 
 #define AST_PRINT( msg, ... ) (sim_log_debug(std::string(level_space, ' ') + std::string(msg) __VA_OPT__(,) __VA_ARGS__))
 
-const size_t level_increment = 2;
+const size_t level_increment = 3;
 size_t level_space = 0; 
 
 void token::print() const {
@@ -44,9 +44,9 @@ void ast_expr::print() {
     const static std::vector<std::string> expr_type_debug = {"Variable", "Constant", "Operator", "Punctuator", "Function call"}; 
     AST_PRINT("Expr node, type:{}", expr_type_debug[static_cast<int>(type)]);
     print_tokens({tok});
-    level_space++;
+    level_space += level_increment;
     print_child_nodes(children);
-    level_space--;
+    level_space -= level_increment;
 }
 
 void ast_op::print() {
@@ -54,9 +54,9 @@ void ast_op::print() {
     size_t op_index = is_postfix ? 2 : is_unary ? 0 : 1;
     AST_PRINT("Expr {} operator", op_type[op_index]);
     tok->print();
-    level_space++;
+    level_space += level_increment;
     print_child_nodes(children);
-    level_space--;
+    level_space -= level_increment;
 }
 
 void ast_fn_call::print() {
@@ -64,9 +64,9 @@ void ast_fn_call::print() {
     fn_designator->print();
     if(children.size()) {
         AST_PRINT("Printing function arguments");
-        level_space++;
+        level_space += level_increment;
         print_child_nodes(children);
-        level_space--;
+        level_space -= level_increment;
     }
 }
 
@@ -77,9 +77,9 @@ void ast_token::print() {
 void ast_decl::print() {
     AST_PRINT("Node: decl");
     print_tokens({ ident });
-    level_space++;
+    level_space += level_increment;
     print_child_nodes(children);
-    level_space--;
+    level_space -= level_increment;
 } 
 
 void ast_base_type::print() {
@@ -104,9 +104,9 @@ void ast_array_spec::print() {
 
 void ast::print_ast_list(std::string_view msg) {
     AST_PRINT(msg);
-    level_space++;
+    level_space += level_increment;
     print_child_nodes(children);
-    level_space--;
+    level_space -= level_increment;
 }
 
 void ast::print() {
@@ -117,6 +117,9 @@ void ast::print() {
         case AST_TYPE::NULL_STMT: print_ast_list("Node: null stmt"); break;
         case AST_TYPE::STMT_LIST: print_ast_list("Node: stmt list"); break;
         case AST_TYPE::EXPR_STMT: print_ast_list("Node: expr stmt"); break;
+        case AST_TYPE::IF: print_ast_list("Node: if"); break;
+        case AST_TYPE::ELSE_IF: print_ast_list("Node: else if"); break;
+        case AST_TYPE::ELSE: print_ast_list("Node: else"); break;
         case AST_TYPE::PTR_LIST: print_ast_list("Node: ptr list"); break;
         case AST_TYPE::ARRAY_SPEC_LIST: print_ast_list("Node: array list"); break;
         case AST_TYPE::PARAM_LIST: print_ast_list("Node: param list"); break;

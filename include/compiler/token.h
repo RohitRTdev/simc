@@ -119,6 +119,8 @@ public:
     bool is_keyword_unsigned() const;
     bool is_keyword_char() const;
     bool is_keyword_void() const;
+    bool is_keyword_if() const;
+    bool is_keyword_else_if() const;
     bool is_operator_comma() const;
     bool is_operator_lb() const;
     bool is_operator_rb() const;

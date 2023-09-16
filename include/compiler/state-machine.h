@@ -50,6 +50,17 @@ enum parser_states {
     BASE_TYPE_CHECK_STMT_1,
     BASE_TYPE_CHECK_STMT_2,
 
+    //Compound stmt
+    EXPECT_COMPOUND_STMT,
+    EXPECT_SINGLE_STMT,
+
+    //If stmt
+    EXPECT_STMT_IF,
+    EXPECT_IF_LB,
+    EXPECT_ELSE_IF,
+    EXPECT_ELSE,
+    REDUCE_IF_STMT,
+
     //Expr
     EXPECT_EXPR_UOP,
     EXPECT_EXPR_VAR,
@@ -72,7 +83,8 @@ enum parser_states {
     STMT_LIST_REDUCE,
     LB_EXPR_REDUCE,
     FN_CALL_EXPR_REDUCE,
-    EXPR_CONDITION_REDUCE,
+    STMT_REDUCE,
+    IF_STMT_REDUCE,
     
     FN_DEF_REDUCE,
     DECL_LB_REDUCE,

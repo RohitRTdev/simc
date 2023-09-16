@@ -54,7 +54,8 @@ bool ast::is_stmt() const {
         case AST_TYPE::RETURN:
         case AST_TYPE::NULL_STMT: 
         case AST_TYPE::DECL_STMT:
-        case AST_TYPE::EXPR_STMT: return true;
+        case AST_TYPE::EXPR_STMT: 
+        case AST_TYPE::IF: return true;
     }
 
     return false;
@@ -62,6 +63,18 @@ bool ast::is_stmt() const {
 
 bool ast::is_stmt_list() const {
     return type == AST_TYPE::STMT_LIST;
+}
+
+bool ast::is_if() const {
+    return type == AST_TYPE::IF;
+}
+
+bool ast::is_else_if() const {
+    return type == AST_TYPE::ELSE_IF;
+}
+
+bool ast::is_else() const {
+    return type == AST_TYPE::ELSE;
 }
 
 bool ast::is_token() const {

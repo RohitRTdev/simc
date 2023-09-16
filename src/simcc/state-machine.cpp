@@ -182,5 +182,9 @@ void state_machine::start() {
         
     }
 
+    if(cur_state != EXPECT_STOR_SPEC) {
+        sim_log_error("Program structured incorrectly");
+    }
+
 
 }
