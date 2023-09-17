@@ -59,6 +59,17 @@ static inline std::unique_ptr<ast> create_ast_stmt_list() {
     return std::make_unique<ast>(AST_TYPE::STMT_LIST);
 }
 
+static inline std::unique_ptr<ast> create_ast_if() {
+    return std::make_unique<ast>(AST_TYPE::IF);
+}
+
+static inline std::unique_ptr<ast> create_ast_else_if() {
+    return std::make_unique<ast>(AST_TYPE::ELSE_IF);
+}
+
+static inline std::unique_ptr<ast> create_ast_else() {
+    return std::make_unique<ast>(AST_TYPE::ELSE);
+}
 static inline std::unique_ptr<ast> create_ast_fn_def() {
     return std::make_unique<ast>(AST_TYPE::FN_DEF);
 }

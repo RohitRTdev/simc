@@ -21,7 +21,10 @@ enum class AST_TYPE {
     DECL_STMT,  
     RETURN,
     TOKEN,
-    EXPR
+    EXPR,
+    IF,
+    ELSE_IF,
+    ELSE
 };
 
 struct ast {
@@ -46,6 +49,9 @@ public:
     bool is_token() const;
     bool is_expr() const; 
     bool is_prog() const;
+    bool is_if() const;
+    bool is_else_if() const;
+    bool is_else() const;
     bool is_fn_def() const;
     bool is_null_stmt() const;
     bool is_ret_stmt() const;

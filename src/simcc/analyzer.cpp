@@ -268,8 +268,85 @@ static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_li
     return fn_args;
 }
 
+static std::unique_ptr<ast> eval_if_stmt(std::unique_ptr<ast> stmt, Ifunc_translation* fn, 
+std::stack<std::unique_ptr<ast>>& stmt_stack, std::stack<std::tuple<int, int, bool>>& if_stack,
+std::unique_ptr<ast> cur_stmt_list) {
+    
+    auto prepare_stmt_list_jump = [&] (std::unique_ptr<ast> node) {
+        auto stmt_list = fetch_child(node);
+        if (node->is_if())
+            cur_stmt_list->attach_node(std::move(node)); //Reattach if stmt back to stmt list
+        else
+            cur_stmt_list->attach_node(std::move(stmt));
+        stmt_stack.push(std::move(cur_stmt_list));
+        create_new_scope();
+        return stmt_list;
+    };
+
+    auto handle_branch_jump = [&] (std::unique_ptr<ast> node) {
+        auto expr = fetch_child(node);
+        auto res = eval_expr(std::move(expr), fn, current_scope).eval();
+        bool is_end = false;
+        if((node->is_if() && node->children.size() == 1) || (!node->is_if() && !stmt->children.size())) {
+            is_end = true;
+        }
+        
+        int next_id = 0;
+        //If we reached last branch, then jump to end
+        if(!node->is_if() && is_end) {
+            code_gen::call_code_gen(fn, &Ifunc_translation::branch_if_z, res.expr_id, std::get<1>(if_stack.top()));
+        }
+        else {
+            next_id = code_gen::call_code_gen(fn, &Ifunc_translation::create_label);
+            code_gen::call_code_gen(fn, &Ifunc_translation::branch_if_z, res.expr_id, next_id);
+        }
+        res.free(fn);
+
+        if(node->is_if()) {
+            int end_id = is_end ? next_id : code_gen::call_code_gen(fn, &Ifunc_translation::create_label);
+            if_stack.push(std::make_tuple(next_id, end_id, false));
+        }
+        else {
+            auto info = fetch_stack_node(if_stack);
+            std::get<0>(info) = next_id;
+            if_stack.push(info);
+        }
+
+        return prepare_stmt_list_jump(std::move(node));
+    };
+    
+    if (!stmt->children.size()) {
+        auto [_, end_id, __] = fetch_stack_node(if_stack);
+        code_gen::call_code_gen(fn, &Ifunc_translation::insert_label, end_id);
+        return cur_stmt_list;
+    }
+
+    if(stmt->children[0]->is_expr()) {
+        return handle_branch_jump(std::move(stmt));
+    }
+    
+    //Jump to end for first if branch
+    bool& evaluated = std::get<2>(if_stack.top());
+    if(!evaluated) {
+    //    code_gen::call_code_gen(fn, &Ifunc_translation::branch, std::get<1>(if_stack.top()));
+        evaluated = true;
+    }
+   
+    //Handle else if and else blocks
+    auto child = fetch_child(stmt);
+    code_gen::call_code_gen(fn, &Ifunc_translation::branch, std::get<1>(if_stack.top()));
+    code_gen::call_code_gen(fn, &Ifunc_translation::insert_label, std::get<0>(if_stack.top()));
+    if(child->is_else_if()) {
+        return handle_branch_jump(std::move(child));
+    }
+    else {
+        return prepare_stmt_list_jump(std::move(child));
+    }
+}
+
 static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation* fn, std::string_view fn_name) {
     std::stack<std::unique_ptr<ast>> stmt_stack;
+    std::stack<std::tuple<int, int, bool>> if_stack;
     std::optional<var_info> fn_decl;
     code_gen::eval_only = false;
     while(!stmt_stack.empty() || cur_stmt_list->children.size()) {
@@ -290,6 +367,9 @@ static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation
         }
         else if(stmt->is_expr_stmt()) {
             eval_expr_stmt(std::move(stmt), fn);
+        }
+        else if(stmt->is_if()) {
+            cur_stmt_list = eval_if_stmt(std::move(stmt), fn, stmt_stack, if_stack, std::move(cur_stmt_list));
         }
         else if(stmt->is_ret_stmt()) {
             if(!fn_decl)
