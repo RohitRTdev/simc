@@ -8,12 +8,13 @@ int** new_fn(int,int val) {
 int main() {
     int a, b, c;
 
+    d[a] = &a;
     short e[1][2];
     a = 11;
     b = 23;
     c = 35;
-    b = (((a)),b,d[1]);
-    a = new_fn(d[0], (1, e[1][1]));
+    b = (((a)),b,d[a]);
+    a = new_fn(d[a], (1, e[a][a+1]));
 
     if(a < b) {
         a = a+b;

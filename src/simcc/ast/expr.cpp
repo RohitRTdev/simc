@@ -128,6 +128,11 @@ bool ast_expr::is_fn_call() const {
     return type == EXPR_TYPE::FN_CALL;
 }
 
+bool ast_expr::is_array_subscript() const {
+    return type == EXPR_TYPE::ARRAY_SUB;
+}
+
+
 bool is_ast_expr_lb(const std::unique_ptr<ast>& node) {
     return node->is_expr() && cast_to_ast_expr(node)->is_lb();
 }

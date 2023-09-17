@@ -140,6 +140,7 @@ struct ast_expr : ast_token {
     bool is_rb() const;
     bool is_comma() const;
     bool is_fn_call() const;
+    bool is_array_subscript() const;
     bool is_lsb() const;
     bool is_rsb() const;
 

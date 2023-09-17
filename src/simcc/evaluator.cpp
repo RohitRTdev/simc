@@ -250,18 +250,15 @@ void eval_expr::handle_logical_op(operator_type op) {
 }
 
 bool eval_expr::handle_pointer_arithmetic(expr_result& res1, expr_result& res2, operator_type op) {
-    expr_result& res_p = res1, &res_i = res2;
-    if(res1.type.is_pointer_type() && res2.type.is_integral()) {
-        res_p = res1;
-        res_i = res2;
-    }
-    else if(res2.type.is_pointer_type() && res1.type.is_integral()) {
-        res_p = res2;
-        res_i = res1;
-    }
-    else {
+    
+    if (!(res1.type.is_pointer_type() && res2.type.is_integral()) &&
+        !(res1.type.is_integral() && res2.type.is_pointer_type())) {
         return false;
     }
+    
+    expr_result& res_p = res1.type.is_pointer_type() ? res1 : res2;
+    expr_result& res_i = res2.type.is_integral() ? res2 : res1;
+    
 
     if(op != PLUS && op != MINUS) {
         return false;
@@ -490,6 +487,24 @@ void eval_expr::handle_addr() {
     }
 
     res_stack.push(res);
+}
+
+void eval_expr::handle_array_subscript() {
+    auto res1 = fetch_stack_node(res_stack);
+    auto res2 = fetch_stack_node(res_stack);
+
+    if(res1.type.is_convertible_to_pointer_type()) {
+        res1.type.convert_to_pointer_type();
+    }
+
+    if(res2.type.is_convertible_to_pointer_type()) {
+        res2.type.convert_to_pointer_type();
+    }
+    
+    if(!handle_pointer_arithmetic(res1, res2, PLUS)) {
+        sim_log_error("[] operator requires operands to be pointer type and integral type");
+    }
+    handle_indir();
 }
 
 void eval_expr::handle_indir() {
@@ -784,6 +799,9 @@ void eval_expr::handle_node() {
     }
     else if(expr->is_fn_call()) {
         handle_fn_call();
+    }
+    else if(expr->is_array_subscript()) {
+        handle_array_subscript();
     }
     else {
         CRITICAL_ASSERT_NOW("Invalid expr_node encountered during handle_node evaluation");
