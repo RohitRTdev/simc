@@ -83,7 +83,8 @@ static void reduce_stmt(state_machine* inst) {
     switch(inst->state_stack.top()) {
         case RETURN_STMT_REDUCE: reduce_ret_stmt(inst); inst->state_stack.pop(); break;
         case STMT_LIST_REDUCE:
-        case FN_DEF_REDUCE: {
+        case FN_DEF_REDUCE: 
+        case STMT_REDUCE: {
             if(inst->parser_stack.top()->is_expr()) {
                 auto expr = create_ast_expr_stmt();
                 expr->attach_node(inst->fetch_parser_stack());
@@ -929,6 +930,5 @@ std::unique_ptr<ast> parse() {
     sim_log_debug("Printing AST");
     prog->print();
 #endif
-    std::exit(-1);
     return prog;
 }
