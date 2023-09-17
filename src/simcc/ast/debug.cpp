@@ -41,7 +41,8 @@ static void print_tokens(std::vector<const token*> args) {
 }
 
 void ast_expr::print() {
-    const static std::vector<std::string> expr_type_debug = {"Variable", "Constant", "Operator", "Punctuator", "Function call"}; 
+    const static std::vector<std::string> expr_type_debug = {"Variable", "Constant", "Operator", "Punctuator", 
+                                                            "Function call", "Array subscript"}; 
     AST_PRINT("Expr node, type:{}", expr_type_debug[static_cast<int>(type)]);
     print_tokens({tok});
     level_space += level_increment;
@@ -61,7 +62,9 @@ void ast_op::print() {
 
 void ast_fn_call::print() {
     AST_PRINT("Printing function designator");
+    level_space += level_increment;
     fn_designator->print();
+    level_space -= level_increment;
     if(children.size()) {
         AST_PRINT("Printing function arguments");
         level_space += level_increment;

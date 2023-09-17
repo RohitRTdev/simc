@@ -124,7 +124,8 @@ enum class EXPR_TYPE {
     CON,
     OP,
     PUNC,
-    FN_CALL
+    FN_CALL,
+    ARRAY_SUB
 };
 
 struct ast_expr : ast_token {
@@ -139,6 +140,9 @@ struct ast_expr : ast_token {
     bool is_rb() const;
     bool is_comma() const;
     bool is_fn_call() const;
+    bool is_array_subscript() const;
+    bool is_lsb() const;
+    bool is_rsb() const;
 
 #ifdef SIMDEBUG
     virtual void print() override;
@@ -176,12 +180,15 @@ std::unique_ptr<ast> create_ast_postfix_op(const token* tok);
 std::unique_ptr<ast> create_ast_expr_var(const token* tok); 
 std::unique_ptr<ast> create_ast_expr_con(const token* tok); 
 std::unique_ptr<ast> create_ast_punctuator(const token* tok); 
+std::unique_ptr<ast> create_ast_array_subscript();
 std::unique_ptr<ast> create_ast_fn_call(); 
 
 bool is_ast_expr_lb(const std::unique_ptr<ast>& node); 
 bool is_ast_expr_rb(const std::unique_ptr<ast>& node); 
 bool is_ast_expr_comma(const std::unique_ptr<ast>& node); 
 bool is_ast_expr_operator(const std::unique_ptr<ast>& node); 
+bool is_ast_expr_lsb(const std::unique_ptr<ast>& node);
+bool is_ast_expr_rsb(const std::unique_ptr<ast>& node);
 
 const ast_op* cast_to_ast_op(const std::unique_ptr<ast>& node); 
 const ast_expr* cast_to_ast_expr(const std::unique_ptr<ast>& node); 

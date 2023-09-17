@@ -158,7 +158,8 @@ bool token::is_binary_operator() const {
         case AND:
         case OR:
         case EQUAL:
-        case MUL: return true;
+        case MUL: 
+        case COMMA: return true;
     }
 
     return false;
