@@ -61,7 +61,9 @@ void ast_op::print() {
 
 void ast_fn_call::print() {
     AST_PRINT("Printing function designator");
+    level_space += level_increment;
     fn_designator->print();
+    level_space -= level_increment;
     if(children.size()) {
         AST_PRINT("Printing function arguments");
         level_space += level_increment;

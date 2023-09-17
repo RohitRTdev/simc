@@ -103,6 +103,7 @@ class eval_expr {
     void handle_constant();
     void handle_arithmetic_op(operator_type op);
     void handle_assignment();
+    void handle_comma_expr();
     void handle_unary_op(operator_type op);
     void handle_indir();
     void handle_inc_dec(operator_type op, bool is_postfix);

@@ -346,14 +346,19 @@ class x64_func : public Ifunc_translation {
                 if(!loc.is_var) {
                     loc.cached = false;
                 }
-                reg_status_list[reg_idx] = exp_id;
+
+                if(loc.is_var) {
+                    if(loc.var_info.mem_var_size)
+                        insert_code("lea{} {}(%rbp), %{}", C_LONG, std::to_string(loc.offset), reg_idx);
+                    else
+                        insert_code("mov{} {}(%rbp), %{}", loc.var_info.type, std::to_string(loc.offset), reg_idx);
+                    reg_status_list[reg_idx] = new_id++;
+                }
+                else {
+                    insert_code("mov{} {}(%rbp), %{}", loc.var_info.type, std::to_string(loc.offset), reg_idx);
+                    reg_status_list[reg_idx] = exp_id;
+                }
                 set_reg_type(reg_idx, loc.var_info.type, loc.var_info.is_signed);
-                
-                auto type = reg_type_list[reg_idx];
-                if(loc.var_info.mem_var_size)
-                    insert_code("lea{} {}(%rbp), %{}", C_LONG, std::to_string(loc.offset), reg_idx);
-                else
-                    insert_code("mov{} {}(%rbp), %{}", type, std::to_string(loc.offset), reg_idx);
                 return;
             }
         }

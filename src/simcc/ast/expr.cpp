@@ -40,7 +40,9 @@ void ast_op::set_precedence(const token* tok) {
         case BIT_OR: precedence = 7; break;
         case AND: precedence = 6; break;    
         case OR: precedence = 5; break;
-        case EQUAL: precedence = 3; break;   
+        case EQUAL: precedence = 3; break;  
+        case COMMA: precedence = 1; break; 
+        default: CRITICAL_ASSERT_NOW("Invalid operator given to set_precedence()");
     }
 }
 
@@ -114,19 +116,19 @@ bool ast_expr::is_fn_call() const {
 }
 
 bool is_ast_expr_lb(const std::unique_ptr<ast>& node) {
-    return node->is_expr() && cast_to_ast_expr(const_cast<std::unique_ptr<ast>&>(node))->is_lb();
+    return node->is_expr() && cast_to_ast_expr(node)->is_lb();
 }
 
 bool is_ast_expr_rb(const std::unique_ptr<ast>& node) {
-    return node->is_expr() && cast_to_ast_expr(const_cast<std::unique_ptr<ast>&>(node))->is_rb();
+    return node->is_expr() && cast_to_ast_expr(node)->is_rb();
 }
 
 bool is_ast_expr_comma(const std::unique_ptr<ast>& node) {
-    return node->is_expr() && cast_to_ast_expr(const_cast<std::unique_ptr<ast>&>(node))->is_comma();
+    return node->is_expr() && cast_to_ast_expr(node)->is_comma();
 }
 
 bool is_ast_expr_operator(const std::unique_ptr<ast>& node) {
-    return node->is_expr() && cast_to_ast_expr(const_cast<std::unique_ptr<ast>&>(node))->is_operator();
+    return node->is_expr() && cast_to_ast_expr(node)->is_operator();
 }
 
 const ast_expr* cast_to_ast_expr(const std::unique_ptr<ast>& node) {

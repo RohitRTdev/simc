@@ -733,6 +733,15 @@ void eval_expr::handle_fn_call() {
     res_stack.push(res);
 }
 
+void eval_expr::handle_comma_expr() {
+    auto res_in = fetch_stack_node(res_stack);
+    auto _ = fetch_stack_node(res_stack);
+
+    _.free(fn_intf);
+    expr_result res{res_in.expr_id, res_in.type};
+
+    res_stack.push(res);
+}
 
 void eval_expr::handle_node() {
     expr = cast_to_ast_expr(expr_node);
@@ -761,6 +770,10 @@ void eval_expr::handle_node() {
                 case AND:
                 case OR: {
                     handle_logical_op(sym);
+                    break;
+                }
+                case COMMA: {
+                    handle_comma_expr();
                     break;
                 }
                 default: {

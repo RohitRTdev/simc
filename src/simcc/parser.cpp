@@ -161,8 +161,29 @@ static void reduce_expr(state_machine* inst, bool stop_at_lb = false, bool stop_
     inst->parser_stack.push(std::move(reduced_expr));
 }
 
+static void reduce_expr_comma(state_machine* inst) {
+    sim_log_debug("Performing comma reduction");
+    if(inst->state_stack.top() == FN_CALL_EXPR_REDUCE) {
+        reduce_expr(inst, true, true);
+    
+        //Shift comma as punctuator
+        inst->parser_stack.push(create_ast_punctuator(inst->cur_token()));
+        inst->switch_state(EXPECT_EXPR_UOP_S); 
+    }
+    else {
+        sim_log_error("',' appeared in invalid context");
+    }
+}
+
 static void reduce_expr_bop(state_machine* inst) {
     sim_log_debug("Performing binary op reduction");
+    
+    if (inst->cur_token()->is_operator_comma()) {
+        if (inst->state_stack.top() == FN_CALL_EXPR_REDUCE) {
+            reduce_expr_comma(inst);
+            return;
+        }
+    }
     auto cur_op = create_ast_binary_op(inst->cur_token());
     auto cur_op_ptr = cast_to_ast_op(cur_op);
     CRITICAL_ASSERT(is_ast_expr_operator(cur_op), "Non operator expression found during binary op evaluation");
@@ -219,20 +240,7 @@ static void reduce_expr_postfix(state_machine* inst) {
     inst->parser_stack.push(std::move(cur_op));
 }
 
-static void reduce_expr_comma(state_machine* inst) {
-    
-    sim_log_debug("Performing comma reduction");
-    if(inst->state_stack.top() == FN_CALL_EXPR_REDUCE) {
-        reduce_expr(inst, true, true);
-    
-        //Shift comma
-        inst->parser_stack.push(create_ast_punctuator(inst->cur_token()));
-        inst->switch_state(EXPECT_EXPR_UOP_S);
-    }
-    else { 
-        sim_log_error("',' found outside of a function call expression.");
-    }
-}
+
 
 static void reduce_fn_call_expr(state_machine* inst) {
     sim_log_debug("Performing fn call reduction");
@@ -839,8 +847,7 @@ static void parse_expr() {
     parser.define_shift_state("EXPECT_EXPR_FN_LB", EXPECT_EXPR_UOP_S, &token::is_operator_lb, EXPECT_EXPR_RB, create_ast_punctuator, nullptr, FN_CALL_EXPR_REDUCE);
     
     //Terminal components in an expression
-    parser.define_special_state("EXPECT_EXPR_RB", &token::is_operator_rb, reduce_expr_rb, EXPECT_EXPR_COMMA); 
-    parser.define_special_state("EXPECT_EXPR_COMMA", &token::is_operator_comma, reduce_expr_comma, EXPECT_EXPR_SC); 
+    parser.define_special_state("EXPECT_EXPR_RB", &token::is_operator_rb, reduce_expr_rb, EXPECT_EXPR_SC); 
     parser.define_special_state("EXPECT_EXPR_SC", &token::is_operator_sc, reduce_expr_stmt, PARSER_ERROR,  
     "Expected expression to terminate with ')' or ',' or ';'");
 
