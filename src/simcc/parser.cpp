@@ -121,7 +121,7 @@ static void reduce_stmt_list(state_machine* inst) {
     }
 }
 
-static void reduce_expr(state_machine* inst, bool stop_at_lb = false, bool stop_at_comma = false) {
+static void reduce_expr(state_machine* inst, bool stop_at_lb = false, bool stop_at_comma = false, bool stop_at_lsb = false) {
     if(inst->parser_stack.empty() || !inst->parser_stack.top()->is_expr())
         return;
 
@@ -132,7 +132,10 @@ static void reduce_expr(state_machine* inst, bool stop_at_lb = false, bool stop_
     auto expr_eval = [&] {
         auto& top = inst->parser_stack.top();
         if(top->is_expr()) {
-            return !(top->is_token() && cast_to_ast_token(top)->tok->is_operator_rb()) && (stop_at_lb ? !is_ast_expr_lb(inst->parser_stack.top()) : true) && (stop_at_comma ? !is_ast_expr_comma(inst->parser_stack.top()) : true);
+            return !(top->is_token() && cast_to_ast_token(top)->tok->is_operator_rb()) 
+            && (stop_at_lb ? !is_ast_expr_lb(inst->parser_stack.top()) : true)
+            && (stop_at_comma ? !is_ast_expr_comma(inst->parser_stack.top()) : true)
+            && (stop_at_lsb ? !is_ast_expr_lsb(inst->parser_stack.top()) : true);
         }
         return false;
     };
@@ -189,7 +192,10 @@ static void reduce_expr_bop(state_machine* inst) {
     CRITICAL_ASSERT(is_ast_expr_operator(cur_op), "Non operator expression found during binary op evaluation");
     auto reduced_expr = inst->fetch_parser_stack();
     
-    while(inst->parser_stack.top()->is_expr() && !is_ast_expr_comma(inst->parser_stack.top()) && !is_ast_expr_lb(inst->parser_stack.top())) {
+    while(inst->parser_stack.top()->is_expr() && 
+    !is_ast_expr_comma(inst->parser_stack.top()) && 
+    !is_ast_expr_lb(inst->parser_stack.top()) && 
+    !is_ast_expr_lsb(inst->parser_stack.top())) {
         auto expr = inst->fetch_parser_stack();
         CRITICAL_ASSERT(is_ast_expr_operator(expr) && expr->children.size() == 0, "Unreduced expr operator found during binary op reduction"); 
          
@@ -240,7 +246,32 @@ static void reduce_expr_postfix(state_machine* inst) {
     inst->parser_stack.push(std::move(cur_op));
 }
 
+static void reduce_expr_rsb(state_machine* inst) {
+    sim_log_debug("Reducing array subscript expression");
+    if (inst->state_stack.top() != ARRAY_SUBSCRIPT_REDUCE) {
+        sim_log_error("Found ']' in wrong context");
+    }
 
+    reduce_expr(inst, true, false, true);
+
+    if(is_ast_expr_lsb(inst->parser_stack.top())) {
+        sim_log_error("array subscript [] cannot be empty");
+    }
+
+    auto expr_1 = inst->fetch_parser_stack();
+    
+    CRITICAL_ASSERT(is_ast_expr_lsb(inst->parser_stack.top()), "reduce_expr_rsb() called in wrong context!");
+    inst->parser_stack.pop(); //Remove '['
+    auto expr_2 = inst->fetch_parser_stack(); 
+
+    auto array_sub = create_ast_array_subscript();
+    array_sub->attach_node(std::move(expr_1));
+    array_sub->attach_node(std::move(expr_2));
+
+    inst->parser_stack.push(std::move(array_sub));
+    inst->state_stack.pop();
+    inst->switch_state(EXPECT_EXPR_POP);
+}
 
 static void reduce_fn_call_expr(state_machine* inst) {
     sim_log_debug("Performing fn call reduction");
@@ -843,11 +874,13 @@ static void parse_expr() {
     
     //After an expression
     parser.define_state("EXPECT_EXPR_POP", EXPECT_EXPR_POP, &token::is_postfix_operator, EXPECT_EXPR_BOP, false, reduce_expr_postfix);
-    parser.define_state("EXPECT_EXPR_BOP", EXPECT_EXPR_UOP_S, &token::is_binary_operator, EXPECT_EXPR_FN_LB, false, reduce_expr_bop); //reduce function for bop
-    parser.define_shift_state("EXPECT_EXPR_FN_LB", EXPECT_EXPR_UOP_S, &token::is_operator_lb, EXPECT_EXPR_RB, create_ast_punctuator, nullptr, FN_CALL_EXPR_REDUCE);
-    
+    parser.define_state("EXPECT_EXPR_BOP", EXPECT_EXPR_UOP_S, &token::is_binary_operator, EXPECT_EXPR_FN_LB, false, reduce_expr_bop);
+    parser.define_shift_state("EXPECT_EXPR_FN_LB", EXPECT_EXPR_UOP_S, &token::is_operator_lb, EXPECT_EXPR_LSB, create_ast_punctuator, nullptr, FN_CALL_EXPR_REDUCE);
+    parser.define_shift_state("EXPECT_EXPR_LSB", EXPECT_EXPR_UOP_S, &token::is_operator_lsb, EXPECT_EXPR_RB, create_ast_punctuator, nullptr, ARRAY_SUBSCRIPT_REDUCE);
+
     //Terminal components in an expression
-    parser.define_special_state("EXPECT_EXPR_RB", &token::is_operator_rb, reduce_expr_rb, EXPECT_EXPR_SC); 
+    parser.define_special_state("EXPECT_EXPR_RB", &token::is_operator_rb, reduce_expr_rb, EXPECT_EXPR_RSB); 
+    parser.define_special_state("EXPECT_EXPR_RSB", &token::is_operator_rsb, reduce_expr_rsb, EXPECT_EXPR_SC);
     parser.define_special_state("EXPECT_EXPR_SC", &token::is_operator_sc, reduce_expr_stmt, PARSER_ERROR,  
     "Expected expression to terminate with ')' or ',' or ';'");
 

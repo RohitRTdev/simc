@@ -81,6 +81,11 @@ std::unique_ptr<ast> create_ast_fn_call() {
     return std::unique_ptr<ast>(node);
 }
 
+std::unique_ptr<ast> create_ast_array_subscript() {
+    ast* node = static_cast<ast*>(new ast_expr(EXPR_TYPE::ARRAY_SUB));
+    return std::unique_ptr<ast>(node);
+}
+
 std::unique_ptr<ast> create_ast_punctuator(const token* tok) {
     ast* node = static_cast<ast*>(new ast_expr(EXPR_TYPE::PUNC, tok));
 
@@ -111,6 +116,14 @@ bool ast_expr::is_comma() const {
     return type == EXPR_TYPE::PUNC && tok->is_operator_comma();
 }
 
+bool ast_expr::is_lsb() const {
+    return type == EXPR_TYPE::PUNC && tok->is_operator_lsb();
+}
+
+bool ast_expr::is_rsb() const {
+    return type == EXPR_TYPE::PUNC && tok->is_operator_rsb();
+}
+
 bool ast_expr::is_fn_call() const {
     return type == EXPR_TYPE::FN_CALL;
 }
@@ -125,6 +138,14 @@ bool is_ast_expr_rb(const std::unique_ptr<ast>& node) {
 
 bool is_ast_expr_comma(const std::unique_ptr<ast>& node) {
     return node->is_expr() && cast_to_ast_expr(node)->is_comma();
+}
+
+bool is_ast_expr_lsb(const std::unique_ptr<ast>& node) {
+    return node->is_expr() && cast_to_ast_expr(node)->is_lsb();
+}
+
+bool is_ast_expr_rsb(const std::unique_ptr<ast>& node) {
+    return node->is_expr() && cast_to_ast_expr(node)->is_rsb();
 }
 
 bool is_ast_expr_operator(const std::unique_ptr<ast>& node) {
