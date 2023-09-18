@@ -61,6 +61,11 @@ enum parser_states {
     EXPECT_ELSE,
     REDUCE_IF_STMT,
 
+    //While stmt
+    EXPECT_STMT_WHILE,
+    EXPECT_WHILE_LB,
+    REDUCE_WHILE_STMT,
+
     //Expr
     EXPECT_EXPR_UOP,
     EXPECT_EXPR_VAR,
@@ -87,6 +92,7 @@ enum parser_states {
     ARRAY_SUBSCRIPT_REDUCE,
     STMT_REDUCE,
     IF_STMT_REDUCE,
+    WHILE_STMT_REDUCE,
     
     FN_DEF_REDUCE,
     DECL_LB_REDUCE,

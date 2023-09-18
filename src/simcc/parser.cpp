@@ -36,8 +36,34 @@ static void switch_after_reduce_stmt(state_machine* inst) {
         case STMT_LIST_REDUCE:
         case FN_DEF_REDUCE: inst->switch_state(EXPECT_STMT_LIST); break;
         case IF_STMT_REDUCE: inst->switch_state(EXPECT_ELSE_IF); break;
+        case WHILE_STMT_REDUCE: {
+            inst->switch_state(REDUCE_WHILE_STMT);
+            break;
+        }
         default: sim_log_error("Found statement in invalid context");
     }
+}
+
+static void reduce_while_stmt(state_machine* inst) {
+    sim_log_debug("Reducing while stmt");
+
+    CRITICAL_ASSERT(inst->state_stack.top() == WHILE_STMT_REDUCE, "reduce_while_stmt() called with wrong state");
+    auto stmt_list = inst->fetch_parser_stack();
+    inst->parser_stack.pop(); //Remove ')'
+    auto expr = inst->fetch_parser_stack();
+    
+    auto ident = inst->fetch_parser_stack();
+    CRITICAL_ASSERT(ident->is_token() && cast_to_ast_token(ident)->tok->is_keyword_while(), "Non while token found in stack during call to reduce_while_stmt()");
+    CRITICAL_ASSERT(expr->is_expr() && stmt_list->is_stmt_list(), "Found erroneous tokens in stack during call to reduce_while_stmt()");
+
+    auto node = create_ast_while();
+    node->attach_node(std::move(stmt_list));
+    node->attach_node(std::move(expr));
+
+    inst->parser_stack.push(std::move(node));
+    inst->state_stack.pop();
+
+    switch_after_reduce_stmt(inst);
 }
 
 static void reduce_if_stmt(state_machine* inst) {
@@ -313,12 +339,19 @@ static void reduce_expr_rb(state_machine* inst) {
             break;
         }
         case FN_CALL_EXPR_REDUCE: reduce_fn_call_expr(inst); inst->state_stack.pop(); inst->switch_state(EXPECT_EXPR_POP); break;
-        case IF_STMT_REDUCE: {
+        case IF_STMT_REDUCE: 
+        case WHILE_STMT_REDUCE: {
             sim_log_debug("Performing expr condition reduction"); 
             reduce_expr(inst, true, false);
             auto& top = inst->parser_stack.top();
-            if (top->is_token() && cast_to_ast_token(top)->tok->is_operator_lb())
-                sim_log_error("if statement must have condition");
+            if (top->is_token() && cast_to_ast_token(top)->tok->is_operator_lb()) {
+                if (inst->state_stack.top() == IF_STMT_REDUCE) {
+                    sim_log_error("if statement must have condition");
+                }
+                else {
+                    sim_log_error("while statement must have condition");
+                }
+            }
             auto expr = inst->fetch_parser_stack();
             inst->parser_stack.pop(); //Remove '('
             inst->switch_state(EXPECT_COMPOUND_STMT); 
@@ -842,12 +875,19 @@ static void parse_compound_stmt() {
 }
 
 static void parse_if_stmt() {
-    parser.define_state("EXPECT_STMT_IF", EXPECT_IF_LB, &token::is_keyword_if, EXPECT_NULL_STMT_SC, true, nullptr, nullptr, IF_STMT_REDUCE);
+    parser.define_state("EXPECT_STMT_IF", EXPECT_IF_LB, &token::is_keyword_if, EXPECT_STMT_WHILE, true, nullptr, nullptr, IF_STMT_REDUCE);
     parser.define_state("EXPECT_IF_LB", EXPECT_EXPR_UOP, &token::is_operator_lb, PARSER_ERROR, true, nullptr, 
     "Expected '(' after 'if' keyword");
     parser.define_state("EXPECT_ELSE_IF", EXPECT_IF_LB, &token::is_keyword_else_if, EXPECT_ELSE, true);
     parser.define_state("EXPECT_ELSE", EXPECT_COMPOUND_STMT, &token::is_keyword_else, REDUCE_IF_STMT, true);
     parser.define_reduce_state("REDUCE_IF_STMT", PARSER_ERROR, reduce_if_stmt);
+}
+
+static void parse_while_stmt() {
+    parser.define_state("EXPECT_STMT_WHILE", EXPECT_WHILE_LB, &token::is_keyword_while, EXPECT_NULL_STMT_SC, true, nullptr, nullptr, WHILE_STMT_REDUCE);
+    parser.define_state("EXPECT_WHILE_LB", EXPECT_EXPR_UOP, &token::is_operator_lb, PARSER_ERROR, true, nullptr,
+    "Expected '(' after while keyword");
+    parser.define_reduce_state("REDUCE_WHILE_STMT", PARSER_ERROR, reduce_while_stmt);
 }
 
 static void parse_stmt_list() {
@@ -949,6 +989,7 @@ void parse_init() {
     parse_stmt_list();
     parse_compound_stmt();
     parse_if_stmt();
+    parse_while_stmt();
     parse_expr();
 }
 

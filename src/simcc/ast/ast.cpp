@@ -55,7 +55,8 @@ bool ast::is_stmt() const {
         case AST_TYPE::NULL_STMT: 
         case AST_TYPE::DECL_STMT:
         case AST_TYPE::EXPR_STMT: 
-        case AST_TYPE::IF: return true;
+        case AST_TYPE::IF: 
+        case AST_TYPE::WHILE: return true;
     }
 
     return false;
@@ -63,6 +64,10 @@ bool ast::is_stmt() const {
 
 bool ast::is_stmt_list() const {
     return type == AST_TYPE::STMT_LIST;
+}
+
+bool ast::is_while() const {
+    return type == AST_TYPE::WHILE;
 }
 
 bool ast::is_if() const {

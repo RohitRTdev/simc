@@ -59,6 +59,10 @@ static inline std::unique_ptr<ast> create_ast_stmt_list() {
     return std::make_unique<ast>(AST_TYPE::STMT_LIST);
 }
 
+static inline std::unique_ptr<ast> create_ast_while() {
+    return std::make_unique<ast>(AST_TYPE::WHILE);
+}
+
 static inline std::unique_ptr<ast> create_ast_if() {
     return std::make_unique<ast>(AST_TYPE::IF);
 }
