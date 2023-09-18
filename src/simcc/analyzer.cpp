@@ -267,6 +267,44 @@ static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_li
     return fn_args;
 }
 
+static std::unique_ptr<ast> eval_while_stmt(std::unique_ptr<ast> stmt, Ifunc_translation* fn, 
+std::stack<std::unique_ptr<ast>>& stmt_stack, std::stack<std::tuple<int, int, bool>>& if_stack,
+std::unique_ptr<ast> cur_stmt_list, std::stack<std::tuple<bool, bool, bool>>& branch_status) {
+
+    //stmt list has been evaluated
+    if(!stmt->children.size()) {
+        auto [start_id, end_id, _] = fetch_stack_node(if_stack);
+        code_gen::call_code_gen(fn, &Ifunc_translation::branch, start_id);
+        code_gen::call_code_gen(fn, &Ifunc_translation::insert_label, end_id);
+        return cur_stmt_list;
+    }
+
+    int start_id = code_gen::call_code_gen(fn, &Ifunc_translation::create_label);
+    int end_id = code_gen::call_code_gen(fn, &Ifunc_translation::create_label); 
+    code_gen::call_code_gen(fn, &Ifunc_translation::insert_label, start_id);
+    auto expr = fetch_child(stmt);
+    auto res = eval_expr(std::move(expr), fn, current_scope).eval();
+
+    if(res.is_constant) {
+        if(res.constant == "0") {
+            code_gen::call_code_gen(fn, &Ifunc_translation::branch, end_id);
+        }
+    }
+    else {
+        code_gen::call_code_gen(fn, &Ifunc_translation::branch_if_z, res.expr_id, end_id);
+    }
+    res.free(fn);
+
+    if_stack.push(std::make_tuple(start_id, end_id, false));
+    auto stmt_list = fetch_child(stmt);
+    cur_stmt_list->attach_node(std::move(stmt)); //Reattach node
+
+    stmt_stack.push(std::move(cur_stmt_list));
+    branch_status.push(std::make_tuple(true, std::get<1>(branch_status.top()), std::get<2>(branch_status.top())));
+
+    create_new_scope();
+    return stmt_list;
+}
 static std::unique_ptr<ast> eval_if_stmt(std::unique_ptr<ast> stmt, Ifunc_translation* fn, 
 std::stack<std::unique_ptr<ast>>& stmt_stack, std::stack<std::tuple<int, int, bool>>& if_stack,
 std::unique_ptr<ast> cur_stmt_list, std::stack<std::tuple<bool, bool, bool>>& branch_status) {
@@ -392,6 +430,9 @@ static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation
         }
         else if(stmt->is_expr_stmt()) {
             eval_expr_stmt(std::move(stmt), fn);
+        }
+        else if(stmt->is_while()) {
+            cur_stmt_list = eval_while_stmt(std::move(stmt), fn, stmt_stack, if_stack, std::move(cur_stmt_list), branch_status);
         }
         else if(stmt->is_if()) {
             cur_stmt_list = eval_if_stmt(std::move(stmt), fn, stmt_stack, if_stack, std::move(cur_stmt_list), branch_status);
