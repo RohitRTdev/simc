@@ -1,18 +1,16 @@
 int main() {
-    int a;
+    unsigned int a;
     short b;
     a = 26;
     b = 5;
 
     a = a / b;
     a = a % b;
-    a = a % 3;
-    a = 10 / b;
-    a = a & b;
-    a = a ^ b;
-    a = 3 & b;
-    b = a | 10;
-    a = b | a;
-
+    a = a >> b;
+    a = a << 3;
+    a = a >> 1;
+    b = 4 << b;
+    a = 3 >> a;
+    a = a << b;
     return a;
 }

@@ -453,8 +453,10 @@ class x64_func : public Ifunc_translation {
         set_reg_type(reg_idx, type, is_signed);
     }
 
-    int load_constant(std::string_view constant, c_type type, bool is_signed) {
-        int reg = choose_free_reg(type, is_signed);
+    int load_constant(std::string_view constant, c_type type, bool is_signed, int pref_reg = 0) {
+        int reg = pref_reg;
+        if(!reg)
+            reg = choose_free_reg(type, is_signed);
         insert_code("mov{} ${}, %{}", type, constant, reg);
 
         return reg;
@@ -522,6 +524,7 @@ class x64_func : public Ifunc_translation {
     int if_common(int id1, std::variant<int, std::string_view> object, compare_op op);
     int div_common(int id1, std::variant<int, std::string_view> object, bool is_div, bool in_order = true);
     int and_or_xor_common(int id1, std::variant<int, std::string_view> object, bool is_and, bool is_or);
+    int shift_common(int id1, std::variant<int, std::string_view> object, bool is_left, bool in_order = true);
 
 public:
     static int new_label_id;
@@ -576,6 +579,12 @@ public:
     int bit_xor(int id1, int id2) override;
     int bit_xor(int id1, std::string_view constant) override;
     int bit_not(int id) override;
+    int sl(int id1, int id2) override;
+    int sl(int id1, std::string_view constant) override;
+    int sl(std::string_view constant, int id) override;
+    int sr(int id1, int id2) override;
+    int sr(int id1, std::string_view constant) override;
+    int sr(std::string_view constant, int id) override;
     int pre_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
     int pre_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
     int post_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
