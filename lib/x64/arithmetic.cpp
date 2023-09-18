@@ -1,6 +1,7 @@
 #include "lib/x64/x64.h"
 
 int x64_func::add(int id1, int id2) {
+    insert_comment("add");
     auto [reg1, reg2, type] = binary_op_fetch(id1, id2);
 
     insert_code("add{} %{}, %{}", type, reg2, reg1);
@@ -10,6 +11,7 @@ int x64_func::add(int id1, int id2) {
 }
 
 int x64_func::add(int id, std::string_view constant) {
+    insert_comment("add constant");
     auto [reg1, _, type] = unary_op_fetch(id);
 
     insert_code("add{} ${}, %{}", type, constant, reg1);
@@ -18,7 +20,7 @@ int x64_func::add(int id, std::string_view constant) {
 }
 
 int x64_func::sub(int id1, int id2) {
-
+    insert_comment("sub");
     auto [reg1, reg2, type] = binary_op_fetch(id1, id2);
 
     insert_code("sub{} %{}, %{}", type, reg2, reg1);
@@ -28,6 +30,7 @@ int x64_func::sub(int id1, int id2) {
 }
 
 int x64_func::sub(int id, std::string_view constant) {
+    insert_comment("sub constant");
     auto [reg1, _, type] = unary_op_fetch(id);
 
     insert_code("sub{} ${}, %{}", type, constant, reg1);
@@ -36,6 +39,7 @@ int x64_func::sub(int id, std::string_view constant) {
 }
 
 int x64_func::sub(std::string_view constant, int id) {
+    insert_comment("sub from constant");
     auto [reg1, _, type] = unary_op_fetch(id);
     reg_no_clobber_list[reg1] = true;
     int reg = choose_free_reg(type, sign_list[reg1]);
@@ -47,7 +51,7 @@ int x64_func::sub(std::string_view constant, int id) {
 }
 
 int x64_func::mul(int id1, int id2) {
-
+    insert_comment("mul");
     auto [reg1, reg2, type] = binary_op_fetch(id1, id2);
 
     bool is_signed = sign_list[reg1];
@@ -69,6 +73,7 @@ int x64_func::mul(int id1, int id2) {
 
 int x64_func::mul(int id1, std::string_view constant) {
     auto [type, is_signed] = fetch_result_type(id1);
+    insert_comment("mul constant");
     free_preferred_register(RAX, type, is_signed);
     reg_no_clobber_list[RAX] = true;
     int reg1 = fetch_result(id1);
@@ -85,7 +90,116 @@ int x64_func::mul(int id1, std::string_view constant) {
     return reg_status_list[RAX];
 }
 
+
+int x64_func::div_common(int id1, std::variant<int, std::string_view> object, bool is_div, bool in_order) {
+    auto [type, is_signed] = fetch_result_type(id1);
+   
+    insert_comment(is_div ? "div" : "modulo");
+    free_preferred_register(RDX, type, is_signed);
+    reg_no_clobber_list[RDX] = true;
+    
+
+    auto [reg1, reg2] = arg_fetch(id1, type, is_signed, object, in_order, [&] (int reg1) {
+        if(reg1 != RAX) {
+            transfer_to_reg(RAX, reg_status_list[reg1]);
+        }
+        reg_no_clobber_list[RAX] = true;
+    });
+
+    insert_code("mov{} $0, %{}", type, RDX);
+    if(is_signed) {
+        insert_code("idiv{} %{}", type, reg2);
+    }
+    else {
+        insert_code("div{} %{}", type, reg2);
+    }
+
+    free_reg(reg2);
+    reg_no_clobber_list[RDX] = reg_no_clobber_list[RAX] = false;
+    if(is_div) {
+        //Quotient stored in RAX
+        free_reg(RDX);
+        return reg_status_list[RAX];
+    }
+    else {
+        //Remainder stored in RDX
+        free_reg(RAX);
+        return reg_status_list[RDX];
+    }
+}
+
+int x64_func::div(int id1, int id2) {
+    return div_common(id1, id2, true);
+}
+
+int x64_func::div(int id1, std::string_view constant) {
+    return div_common(id1, constant, true);
+}
+
+int x64_func::div(std::string_view constant, int id) {
+    return div_common(id, constant, true, false);
+}
+
+int x64_func::modulo(int id1, int id2) {
+    return div_common(id1, id2, false);
+}
+
+int x64_func::modulo(int id1, std::string_view constant) {
+    return div_common(id1, constant, false);
+}
+
+int x64_func::modulo(std::string_view constant, int id) {
+    return div_common(id, constant, false, false);
+}
+
+int x64_func::and_or_xor_common(int id1, std::variant<int, std::string_view> object, bool is_and, bool is_or) {
+    auto [type, is_signed] = fetch_result_type(id1);
+    
+    std::string inst = is_and ? "and" : is_or ? "or" : "xor";
+    insert_comment(inst);
+    auto [reg1, reg2] = arg_fetch(id1, type, is_signed, object, true);
+    
+    insert_code(inst + "{} %{}, %{}", type, reg2, reg1);
+    free_reg(reg2);
+    reg_no_clobber_list[reg1] = false;
+    
+    return reg_status_list[reg1];
+}
+
+int x64_func::bit_and(int id1, int id2) {
+    return and_or_xor_common(id1, id2, true, false);
+}
+
+int x64_func::bit_and(int id1, std::string_view constant) {
+    return and_or_xor_common(id1, constant, true, false);
+}
+
+int x64_func::bit_or(int id1, int id2) {
+    return and_or_xor_common(id1, id2, false, true);
+}
+
+int x64_func::bit_or(int id1, std::string_view constant) {
+    return and_or_xor_common(id1, constant, false, true);
+}
+
+int x64_func::bit_xor(int id1, int id2) {
+    return and_or_xor_common(id1, id2, false, false);
+}
+
+int x64_func::bit_xor(int id1, std::string_view constant) {
+    return and_or_xor_common(id1, constant, false, false);
+}
+
+int x64_func::bit_not(int id) {
+    insert_comment("not");
+    auto [reg, _, type] = unary_op_fetch(id);
+    insert_code("not{} %{}", type, reg);
+
+    return reg_status_list[reg];
+}
+
 int x64_func::type_cast(int exp_id, c_type cast_type, bool cast_sign) {
+    insert_comment("type-cast");
     auto [reg1, _, type] = unary_op_fetch(exp_id);
     bool is_signed = sign_list[reg1];
 
@@ -118,6 +232,7 @@ int x64_func::type_cast(int exp_id, c_type cast_type, bool cast_sign) {
 //Common function to handle pre/post/inc/dec cases
 int x64_func::inc_common(int id, c_type type, bool is_signed, size_t _inc_count, bool is_pre, bool inc, bool is_mem, bool is_global) {
     filter_type(type, is_signed);
+    insert_comment(is_pre ? (inc ? "pre-inc" : "pre-dec") : (inc ? "post-inc" : "post-dec"));
     auto pos = fetch_var(id, true);
     std::string inst;
     std::string inc_count = std::to_string(_inc_count);

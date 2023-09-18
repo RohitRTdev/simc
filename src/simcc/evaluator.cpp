@@ -349,6 +349,30 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
             op_vars = &Ifunc_translation::mul; op_var_con = &Ifunc_translation::mul;
             break;
         }
+        case DIV: {
+            is_commutative = false;
+            op_vars = &Ifunc_translation::div; op_var_con = &Ifunc_translation::div;
+            op_con_var = &Ifunc_translation::div;
+            break;
+        }
+        case MODULO: {
+            is_commutative = false;
+            op_vars = &Ifunc_translation::modulo; op_var_con = &Ifunc_translation::modulo;
+            op_con_var = &Ifunc_translation::modulo;
+            break;
+        }
+        case AMPER: {
+            op_vars = &Ifunc_translation::bit_and; op_var_con = &Ifunc_translation::bit_and;
+            break;
+        }
+        case BIT_OR: {
+            op_vars = &Ifunc_translation::bit_or; op_var_con = &Ifunc_translation::bit_or;
+            break;
+        }
+        case BIT_XOR: {
+            op_vars = &Ifunc_translation::bit_xor; op_var_con = &Ifunc_translation::bit_xor;
+            break;            
+        }
         case GT: {
             is_commutative = true;
             op_vars = &Ifunc_translation::if_gt; op_var_con = &Ifunc_translation::if_gt; 
@@ -596,6 +620,9 @@ void eval_expr::handle_simple_unary_op(operator_type op) {
         case MINUS: {
             res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::negate, in.expr_id);
             break;
+        }
+        case BIT_NOT: {
+            res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::bit_not, in.expr_id);
         }
         default: {
             CRITICAL_ASSERT_NOW("handle_unary_op() failed as invalid operator was passed");
