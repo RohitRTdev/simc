@@ -1,6 +1,8 @@
 #include "lib/x64/x64.h"
 
 int x64_func::if_common(int id1, std::variant<int, std::string_view> object, compare_op op) {
+    static constexpr const char* op_name[4] = {"if_gt", "if_lt", "if_eq", "if_neq"};
+    insert_comment(op_name[op]);
     static constexpr const char* op_suffix[4] = {"g", "l", "e", "ne"};
     auto [reg1, _, type]  = unary_op_fetch(id1);
     bool is_signed = sign_list[reg1];

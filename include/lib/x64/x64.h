@@ -488,6 +488,12 @@ class x64_func : public Ifunc_translation {
         return std::make_pair(reg1, reg2);
     }
 
+    void insert_comment(std::string_view comment) {
+    #ifdef SIMDEBUG
+        add_inst_to_code(fmt::format(LINE("/*{}*/"), comment));
+    #endif
+    }
+
     std::string_view make_format_args(c_type type, std::string_view constant) {
         return constant;
     }

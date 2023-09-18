@@ -34,6 +34,8 @@ param_offset(8) {
 int x64_func::assign_var(int var_id, int id) {
     auto opt = fetch_var(var_id); 
     CRITICAL_ASSERT(opt, "assign_var() called with invalid variable id:{}", var_id);
+    insert_comment("assign to var");
+    
     auto& var = *opt;
     int offset = var.offset;
     int reg = fetch_result(id);
@@ -50,6 +52,7 @@ int x64_func::assign_var(int var_id, int id) {
 int x64_func::assign_var(int var_id, std::string_view constant) {
     auto opt = fetch_var(var_id); 
     CRITICAL_ASSERT(opt, "assign_var() called with invalid variable id:{}", var_id);
+    insert_comment("assign constant to var");
     auto& var = *opt; 
     auto type = var.var_info.type;
     int offset = var.offset;
@@ -59,6 +62,7 @@ int x64_func::assign_var(int var_id, std::string_view constant) {
 }
 
 int x64_func::assign_to_mem(int id1, int id2) {
+    insert_comment("assign to mem");
     int reg1 = fetch_result(id1);
     reg_no_clobber_list[reg1] = true;
     int reg2 = fetch_result(id2);
@@ -76,6 +80,7 @@ int x64_func::assign_to_mem(int id1, int id2) {
 }
 
 int x64_func::assign_to_mem(int id, std::string_view constant, c_type type) {
+    insert_comment("assign constant to mem");
     int reg = fetch_result(id);
 
     filter_type(type);
@@ -89,6 +94,7 @@ int x64_func::assign_to_mem(int id, std::string_view constant, c_type type) {
 }
 
 int x64_func::fetch_from_mem(int id, c_type type, bool is_signed) {
+    insert_comment("fetch from mem");    
     auto [reg, _, _type] = unary_op_fetch(id);
     filter_type(type, is_signed);
     insert_code("mov{} (%{}), %{}", type, get_register_string(C_LONG, reg), reg);
@@ -99,6 +105,7 @@ int x64_func::fetch_from_mem(int id, c_type type, bool is_signed) {
 
 int x64_func::fetch_from_mem(std::string_view constant, c_type type, bool is_signed) {
     filter_type(type, is_signed);
+    insert_comment("fetch from mem constant");    
     int reg = choose_free_reg(type, is_signed);
     insert_code("mov{} ${}, %{}", type, constant, reg);
     insert_code("mov{} (%{}), %{}", type, get_register_string(C_LONG, reg), reg);
@@ -110,6 +117,7 @@ int x64_func::fetch_global_var(int id) {
     auto& var = parent->fetch_global_variable(id);
     auto type = var.type;
 
+    insert_comment("fetch global var");    
     int reg = choose_free_reg(type, var.is_signed);
     if(var.mem_var_size)
         insert_code("lea{} {}(%rip), %{}", type, var.name, reg);
@@ -122,6 +130,7 @@ int x64_func::fetch_global_var(int id) {
 int x64_func::assign_global_var(int id, int expr_id) {
     auto& var = parent->fetch_global_variable(id);
     auto type = var.type;
+    insert_comment("assign global var");    
 
     int reg = fetch_result(expr_id);
     insert_code("mov{} %{}, {}(%rip)", type, reg, var.name);
@@ -132,6 +141,7 @@ int x64_func::assign_global_var(int id, int expr_id) {
 int x64_func::assign_global_var(int id, std::string_view constant) {
     auto& var = parent->fetch_global_variable(id);
     auto type = var.type;
+    insert_comment("assign constant to global var");    
 
     add_inst_to_code(INSTRUCTION("mov{} ${}, {}(%rip)", inst_suffix[type], 
     constant, var.name));
@@ -149,6 +159,7 @@ int x64_func::get_address_of(std::string_view constant) {
 
 int x64_func::get_address_of(int id, bool is_mem, bool is_global) {
     auto pos = fetch_var(id);
+    insert_comment("get address");
     if(is_global) {
         auto& var = parent->fetch_global_variable(id);
         int reg = choose_free_reg(C_LONG, false);
@@ -217,6 +228,7 @@ int x64_func::create_temporary_value(c_type type, bool is_signed) {
 }
 
 int x64_func::set_value(int expr_id, std::string_view constant) {
+    insert_comment("set value");
     auto [reg, _, type] = unary_op_fetch(expr_id);
     insert_code("mov{} ${}, %{}", type, constant, reg);
 
@@ -250,6 +262,7 @@ void x64_func::begin_call_frame(size_t num_args) {
     //Save all the registers
     bytes_moved = 0;
     int stack_args = num_args - reg_call_list.size();
+    insert_comment("begin call frame");
     
     if(stack_args <= 0) {
         //No need to free up all registers if no stack variables need to be allocated
