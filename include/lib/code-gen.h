@@ -105,6 +105,12 @@ public:
     virtual int sub(std::string_view constant, int id) = 0;
     virtual int mul(int id1, int id2) = 0;
     virtual int mul(int id1, std::string_view constant) = 0;
+    virtual int div(int id1, std::string_view constant) = 0;
+    virtual int div(int id1, int id2) = 0;
+    virtual int div(std::string_view constant, int id) = 0;
+    virtual int modulo(int id1, int id2) = 0;
+    virtual int modulo(int id1, std::string_view constant) = 0;
+    virtual int modulo(std::string_view constant, int id) = 0;
     virtual int pre_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) = 0;
     virtual int pre_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) = 0;
     virtual int post_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) = 0;

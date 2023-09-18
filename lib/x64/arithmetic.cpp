@@ -85,6 +85,84 @@ int x64_func::mul(int id1, std::string_view constant) {
     return reg_status_list[RAX];
 }
 
+int x64_func::div_common(int id1, std::variant<int, std::string_view> object, bool is_div, bool in_order) {
+    auto [type, is_signed] = fetch_result_type(id1);
+    free_preferred_register(RDX, type, is_signed);
+    reg_no_clobber_list[RDX] = true;
+    
+    int reg1 = 0;
+    if(!in_order) {
+        reg1 = choose_free_reg(type, is_signed);
+        insert_code("mov{} ${}, %{}", type, std::get<1>(object), reg1);
+    }
+    else {
+        reg1 = std::get<0>(unary_op_fetch(id1));
+    }
+    
+    if(reg1 != RAX) {
+        transfer_to_reg(RAX, reg_status_list[reg1]);
+    }
+    reg_no_clobber_list[RAX] = true;
+    int reg2 = 0;
+    if(in_order) {
+        if(std::holds_alternative<int>(object)) {
+            reg2 = fetch_result(std::get<0>(object));
+        }
+        else {
+            reg2 = choose_free_reg(type, is_signed);
+            insert_code("mov{} ${}, %{}", type, std::get<1>(object), reg2);
+        }
+    }
+    else {
+        reg2 = fetch_result(id1);
+    }
+
+    insert_code("mov{} $0, %{}", type, RDX);
+    if(is_signed) {
+        insert_code("idiv{} %{}", type, reg2);
+    }
+    else {
+        insert_code("div{} %{}", type, reg2);
+    }
+
+    free_reg(reg2);
+    reg_no_clobber_list[RDX] = reg_no_clobber_list[RAX] = false;
+    if(is_div) {
+        //Quotient stored in RAX
+        free_reg(RDX);
+        return reg_status_list[RAX];
+    }
+    else {
+        //Remainder stored in RDX
+        free_reg(RAX);
+        return reg_status_list[RDX];
+    }
+}
+
+int x64_func::div(int id1, int id2) {
+    return div_common(id1, id2, true);
+}
+
+int x64_func::div(int id1, std::string_view constant) {
+    return div_common(id1, constant, true);
+}
+
+int x64_func::div(std::string_view constant, int id) {
+    return div_common(id, constant, true, false);
+}
+
+int x64_func::modulo(int id1, int id2) {
+    return div_common(id1, id2, false);
+}
+
+int x64_func::modulo(int id1, std::string_view constant) {
+    return div_common(id1, constant, false);
+}
+
+int x64_func::modulo(std::string_view constant, int id) {
+    return div_common(id, constant, false, false);
+}
+
 int x64_func::type_cast(int exp_id, c_type cast_type, bool cast_sign) {
     auto [reg1, _, type] = unary_op_fetch(exp_id);
     bool is_signed = sign_list[reg1];

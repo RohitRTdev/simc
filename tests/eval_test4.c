@@ -48,7 +48,6 @@ int main() {
         return new_fn(b, b);
     }
     
-    return b;
 
     if(a < b) {
         a = a+b;

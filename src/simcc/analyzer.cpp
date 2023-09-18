@@ -362,6 +362,7 @@ static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation
     std::stack<std::tuple<bool, bool, bool>> branch_status; //is_if, is_eval_only, is_nested_in_if
     std::optional<var_info> fn_decl;
     code_gen::eval_only = false;
+    bool ret_encountered = false;
 
     branch_status.push(std::make_tuple(false, false, false));
     while(!stmt_stack.empty() || cur_stmt_list->children.size()) {
@@ -401,6 +402,7 @@ static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation
             eval_ret_stmt(std::move(stmt), fn, *fn_decl, std::get<0>(branch_status.top()) || std::get<2>(branch_status.top()));
             code_gen::eval_only = true;
             std::get<1>(branch_status.top()) = true;
+            ret_encountered = true;
         }
         else if(stmt->is_null_stmt())
             continue;
@@ -408,7 +410,7 @@ static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation
             CRITICAL_ASSERT_NOW("Invalid statement encountered during evaluation");
     }
 
-    if(!code_gen::eval_only) {
+    if(!ret_encountered) {
         auto& fn_info = current_scope->fetch_var_info(fn_name);
         if(!fn_info.type.resolve_type().is_void()) {
             sim_log_error("Function with non void return type is not returning any expression");

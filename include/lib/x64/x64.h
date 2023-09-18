@@ -478,6 +478,7 @@ class x64_func : public Ifunc_translation {
     void call_function_end();
     int setup_ret_type(c_type ret_type, bool is_signed);
     int if_common(int id1, std::variant<int, std::string_view> object, compare_op op);
+    int div_common(int id1, std::variant<int, std::string_view> object, bool is_div, bool in_order = true);
 
 public:
     static int new_label_id;
@@ -519,6 +520,12 @@ public:
     int sub(std::string_view constant, int id) override;
     int mul(int id1, int id2) override;
     int mul(int id1, std::string_view constant) override;
+    int div(int id1, int id2) override;
+    int div(int id1, std::string_view constant) override;
+    int div(std::string_view constant, int id) override;
+    int modulo(int id1, int id2) override;
+    int modulo(int id1, std::string_view constant) override;
+    int modulo(std::string_view constant, int id) override;
     int pre_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
     int pre_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
     int post_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;

@@ -349,6 +349,18 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
             op_vars = &Ifunc_translation::mul; op_var_con = &Ifunc_translation::mul;
             break;
         }
+        case DIV: {
+            is_commutative = false;
+            op_vars = &Ifunc_translation::div; op_var_con = &Ifunc_translation::div;
+            op_con_var = &Ifunc_translation::div;
+            break;
+        }
+        case MODULO: {
+            is_commutative = false;
+            op_vars = &Ifunc_translation::modulo; op_var_con = &Ifunc_translation::modulo;
+            op_con_var = &Ifunc_translation::modulo;
+            break;
+        }
         case GT: {
             is_commutative = true;
             op_vars = &Ifunc_translation::if_gt; op_var_con = &Ifunc_translation::if_gt; 
