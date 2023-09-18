@@ -45,7 +45,6 @@ static void eval_ret_stmt(std::unique_ptr<ast> ret_stmt, Ifunc_translation* fn, 
     }
 
     auto res = eval_expr(std::move(ret_stmt->children[0]), fn, current_scope).eval();
-
     if(ret_type.is_void() && !res.type.is_void()) {
         sim_log_error("Function with void return type, returning an expression");
     }
@@ -55,9 +54,11 @@ static void eval_ret_stmt(std::unique_ptr<ast> ret_stmt, Ifunc_translation* fn, 
     }
 
     res.convert_type(expr_result(ret_type), fn);
-
     if(is_branch) {
-        CRITICAL_ASSERT_NOW("branch return not supported right now");
+        if(res.is_constant)
+            code_gen::call_code_gen(fn, &Ifunc_translation::branch_return, res.constant);
+        else
+            code_gen::call_code_gen(fn, &Ifunc_translation::branch_return, res.expr_id);
     }
     else {
         if(res.is_constant)
@@ -68,8 +69,6 @@ static void eval_ret_stmt(std::unique_ptr<ast> ret_stmt, Ifunc_translation* fn, 
 }
 
 using base_type_res = std::tuple<c_type, bool, cv_info>;
-    void convert_to_pointer_type();
-
 static base_type_res forge_base_type(std::unique_ptr<ast_base_type> base_type) {
     c_type phy_type = C_INT;
 
@@ -270,7 +269,7 @@ static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_li
 
 static std::unique_ptr<ast> eval_if_stmt(std::unique_ptr<ast> stmt, Ifunc_translation* fn, 
 std::stack<std::unique_ptr<ast>>& stmt_stack, std::stack<std::tuple<int, int, bool>>& if_stack,
-std::unique_ptr<ast> cur_stmt_list) {
+std::unique_ptr<ast> cur_stmt_list, std::stack<std::tuple<bool, bool, bool>>& branch_status) {
     
     auto prepare_stmt_list_jump = [&] (std::unique_ptr<ast> node) {
         auto stmt_list = fetch_child(node);
@@ -279,8 +278,22 @@ std::unique_ptr<ast> cur_stmt_list) {
         else
             cur_stmt_list->attach_node(std::move(stmt));
         stmt_stack.push(std::move(cur_stmt_list));
+
+        //It is an 'if' branch and inherits eval_status from it's parent
+        branch_status.push(std::make_tuple(true, std::get<1>(branch_status.top()), std::get<2>(branch_status.top())));
         create_new_scope();
         return stmt_list;
+    };
+
+    auto indirect_branch = [&] (const expr_result& res, int label_id) {
+        if(res.is_constant) {
+            if(res.constant == "0") {
+                code_gen::call_code_gen(fn, &Ifunc_translation::branch, label_id);
+            }
+        }
+        else {
+            code_gen::call_code_gen(fn, &Ifunc_translation::branch_if_z, res.expr_id, label_id);
+        }
     };
 
     auto handle_branch_jump = [&] (std::unique_ptr<ast> node) {
@@ -294,11 +307,11 @@ std::unique_ptr<ast> cur_stmt_list) {
         int next_id = 0;
         //If we reached last branch, then jump to end
         if(!node->is_if() && is_end) {
-            code_gen::call_code_gen(fn, &Ifunc_translation::branch_if_z, res.expr_id, std::get<1>(if_stack.top()));
+            indirect_branch(res, std::get<1>(if_stack.top()));
         }
         else {
             next_id = code_gen::call_code_gen(fn, &Ifunc_translation::create_label);
-            code_gen::call_code_gen(fn, &Ifunc_translation::branch_if_z, res.expr_id, next_id);
+            indirect_branch(res, next_id);
         }
         res.free(fn);
 
@@ -328,7 +341,6 @@ std::unique_ptr<ast> cur_stmt_list) {
     //Jump to end for first if branch
     bool& evaluated = std::get<2>(if_stack.top());
     if(!evaluated) {
-    //    code_gen::call_code_gen(fn, &Ifunc_translation::branch, std::get<1>(if_stack.top()));
         evaluated = true;
     }
    
@@ -347,18 +359,30 @@ std::unique_ptr<ast> cur_stmt_list) {
 static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation* fn, std::string_view fn_name) {
     std::stack<std::unique_ptr<ast>> stmt_stack;
     std::stack<std::tuple<int, int, bool>> if_stack;
+    std::stack<std::tuple<bool, bool, bool>> branch_status; //is_if, is_eval_only, is_nested_in_if
     std::optional<var_info> fn_decl;
     code_gen::eval_only = false;
+
+    branch_status.push(std::make_tuple(false, false, false));
     while(!stmt_stack.empty() || cur_stmt_list->children.size()) {
         if(!cur_stmt_list->children.size()) {
             cur_stmt_list = fetch_stack_node(stmt_stack);
             revert_to_old_scope();
+            auto [is_if, is_eval_only, _] = fetch_stack_node(branch_status);
+            if(!is_if) {
+                std::get<1>(branch_status.top()) = is_eval_only;
+            }
+            code_gen::eval_only = std::get<1>(branch_status.top());
             continue;
         }
         auto stmt = fetch_child(cur_stmt_list);
 
         if(stmt->is_stmt_list()) {
             stmt_stack.push(std::move(cur_stmt_list));
+            
+            //Eval and branch status doesn't change when we go to inner branch
+            branch_status.push(std::make_tuple(false, code_gen::eval_only, 
+            std::get<0>(branch_status.top()) || std::get<2>(branch_status.top()))); 
             cur_stmt_list = std::move(stmt);
             create_new_scope();
         }
@@ -369,13 +393,14 @@ static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation
             eval_expr_stmt(std::move(stmt), fn);
         }
         else if(stmt->is_if()) {
-            cur_stmt_list = eval_if_stmt(std::move(stmt), fn, stmt_stack, if_stack, std::move(cur_stmt_list));
+            cur_stmt_list = eval_if_stmt(std::move(stmt), fn, stmt_stack, if_stack, std::move(cur_stmt_list), branch_status);
         }
         else if(stmt->is_ret_stmt()) {
             if(!fn_decl)
                 fn_decl = current_scope->fetch_var_info(fn_name);
-            eval_ret_stmt(std::move(stmt), fn, *fn_decl);
+            eval_ret_stmt(std::move(stmt), fn, *fn_decl, std::get<0>(branch_status.top()) || std::get<2>(branch_status.top()));
             code_gen::eval_only = true;
+            std::get<1>(branch_status.top()) = true;
         }
         else if(stmt->is_null_stmt())
             continue;

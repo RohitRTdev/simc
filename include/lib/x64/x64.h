@@ -541,6 +541,7 @@ public:
     int create_label() override;
     void insert_label(int label_id) override;
     void branch_return(int exp_id) override;
+    void branch_return(std::string_view constant) override;
     void fn_return(int exp_id) override;
     void fn_return(std::string_view constant) override;
     void branch(int label_id) override;

@@ -658,7 +658,7 @@ static void reduce_decl_list(state_machine* inst) {
             decl_stmt->attach_node(std::move(decl_list));
             inst->parser_stack.push(std::move(decl_stmt));
  
-            inst->switch_state(EXPECT_STMT_CRB); break;
+            inst->switch_state(EXPECT_STMT_LIST); break;
         }
     }
 }
@@ -852,7 +852,7 @@ static void parse_if_stmt() {
 
 static void parse_stmt_list() {
 
-    parser.define_state("EXPECT_STMT_LIST", EXPECT_STMT_LIST, &token::is_operator_clb, EXPECT_STMT_CRB, true, nullptr, nullptr, EXPECT_STMT_LIST);
+    parser.define_state("EXPECT_STMT_LIST", EXPECT_STMT_LIST, &token::is_operator_clb, EXPECT_STMT_CRB, true, nullptr, nullptr, STMT_LIST_REDUCE);
     parser.define_state("EXPECT_STMT", EXPECT_EXPR_UOP, &token::is_keyword_return, EXPECT_STMT_IF, false, nullptr, nullptr, RETURN_STMT_REDUCE);
     parser.define_special_state("EXPECT_STMT_SC", &token::is_operator_sc, reduce_stmt, PARSER_ERROR, 
     "Expected statement list to end with }}");

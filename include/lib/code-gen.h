@@ -128,6 +128,7 @@ public:
     virtual int create_label() = 0;
     virtual void insert_label(int label_id) = 0;
     virtual void branch_return(int exp_id) = 0;
+    virtual void branch_return(std::string_view constant) = 0;
     virtual void fn_return(int exp_id) = 0;
     virtual void fn_return(std::string_view constant) = 0;
     virtual void branch(int label_id) = 0;

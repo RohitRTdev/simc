@@ -8,23 +8,64 @@ int** new_fn(int,int val) {
 int main() {
     int a, b, c;
 
-    d[a] = &a;
-    short e[1][2];
-    a = 11;
-    b = 23;
-    c = 35;
-    b = (((a)),b,d[a]);
-    a = new_fn(d[a], (1, e[a][a+1]));
+    {
+        int some;
+        some = 10;
+        {
+            if(some) {
+                int four;
+                four = 5;
+                {
+                    return 2;
+                }
+                return four;
+                four++;
+            }
+            else {
+                int my;
+                my = 2;
+                {
+                    {
+                        if(1) {
+                            return my+2;
+                        }
+                        return my+1;
+                    }
+                    int my;
+                    return my;
+                    my++;
+                }
+                return 5;
+                my++;
+            }
+            return 1;
+        }
+
+        {
+
+        }
+        some = 1;
+        return new_fn(b, b);
+    }
+    
+    return b;
 
     if(a < b) {
         a = a+b;
     }
     else if(a!=b)
-        if(b == 0)a++;
-        else if(0)a--;
+        if(b == 0) { 
+            a++;
+            return 1;
+            a--;
+            int should_no_get_initialized;
+            should_no_get_initialized = 3;
+        }
+        else if(74)a--;
         else {
             a = a + 2;
             int five;
+            return five;
             five = 2;
         }
 
