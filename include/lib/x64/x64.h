@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <stack>
+#include <functional>
 #include <array>
 #include <tuple>
 #include <vector>
@@ -452,6 +453,41 @@ class x64_func : public Ifunc_translation {
         set_reg_type(reg_idx, type, is_signed);
     }
 
+    int load_constant(std::string_view constant, c_type type, bool is_signed) {
+        int reg = choose_free_reg(type, is_signed);
+        insert_code("mov{} ${}, %{}", type, constant, reg);
+
+        return reg;
+    }
+
+    std::pair<int, int> arg_fetch(int id1, c_type type, bool is_signed, std::variant<int, std::string_view> object, bool in_order, 
+    std::function<void (int)>&& lambda = [&] (int reg) {}) {
+        int reg1 = 0;
+        if(!in_order) {
+            reg1 = load_constant(std::get<1>(object), type, is_signed);
+        }
+        else {
+            reg1 = std::get<0>(unary_op_fetch(id1));
+        }
+
+        lambda(reg1);
+
+        int reg2 = 0;
+        if(in_order) {
+            if(std::holds_alternative<int>(object)) {
+                reg2 = fetch_result(std::get<0>(object));
+            }
+            else {
+                reg2 = load_constant(std::get<1>(object), type, is_signed);
+            }
+        }
+        else {
+            reg2 = fetch_result(id1);
+        }
+
+        return std::make_pair(reg1, reg2);
+    }
+
     std::string_view make_format_args(c_type type, std::string_view constant) {
         return constant;
     }
@@ -479,6 +515,7 @@ class x64_func : public Ifunc_translation {
     int setup_ret_type(c_type ret_type, bool is_signed);
     int if_common(int id1, std::variant<int, std::string_view> object, compare_op op);
     int div_common(int id1, std::variant<int, std::string_view> object, bool is_div, bool in_order = true);
+    int and_or_xor_common(int id1, std::variant<int, std::string_view> object, bool is_and, bool is_or);
 
 public:
     static int new_label_id;
@@ -526,6 +563,13 @@ public:
     int modulo(int id1, int id2) override;
     int modulo(int id1, std::string_view constant) override;
     int modulo(std::string_view constant, int id) override;
+    int bit_and(int id1, int id2) override;
+    int bit_and(int id1, std::string_view constant) override;
+    int bit_or(int id1, int id2) override;
+    int bit_or(int id1, std::string_view constant) override;
+    int bit_xor(int id1, int id2) override;
+    int bit_xor(int id1, std::string_view constant) override;
+    int bit_not(int id) override;
     int pre_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
     int pre_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;
     int post_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) override;

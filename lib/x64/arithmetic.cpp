@@ -85,37 +85,19 @@ int x64_func::mul(int id1, std::string_view constant) {
     return reg_status_list[RAX];
 }
 
+
 int x64_func::div_common(int id1, std::variant<int, std::string_view> object, bool is_div, bool in_order) {
     auto [type, is_signed] = fetch_result_type(id1);
     free_preferred_register(RDX, type, is_signed);
     reg_no_clobber_list[RDX] = true;
     
-    int reg1 = 0;
-    if(!in_order) {
-        reg1 = choose_free_reg(type, is_signed);
-        insert_code("mov{} ${}, %{}", type, std::get<1>(object), reg1);
-    }
-    else {
-        reg1 = std::get<0>(unary_op_fetch(id1));
-    }
-    
-    if(reg1 != RAX) {
-        transfer_to_reg(RAX, reg_status_list[reg1]);
-    }
-    reg_no_clobber_list[RAX] = true;
-    int reg2 = 0;
-    if(in_order) {
-        if(std::holds_alternative<int>(object)) {
-            reg2 = fetch_result(std::get<0>(object));
+
+    auto [reg1, reg2] = arg_fetch(id1, type, is_signed, object, in_order, [&] (int reg1) {
+        if(reg1 != RAX) {
+            transfer_to_reg(RAX, reg_status_list[reg1]);
         }
-        else {
-            reg2 = choose_free_reg(type, is_signed);
-            insert_code("mov{} ${}, %{}", type, std::get<1>(object), reg2);
-        }
-    }
-    else {
-        reg2 = fetch_result(id1);
-    }
+        reg_no_clobber_list[RAX] = true;
+    });
 
     insert_code("mov{} $0, %{}", type, RDX);
     if(is_signed) {
@@ -161,6 +143,50 @@ int x64_func::modulo(int id1, std::string_view constant) {
 
 int x64_func::modulo(std::string_view constant, int id) {
     return div_common(id, constant, false, false);
+}
+
+int x64_func::and_or_xor_common(int id1, std::variant<int, std::string_view> object, bool is_and, bool is_or) {
+    auto [type, is_signed] = fetch_result_type(id1);
+    
+    auto [reg1, reg2] = arg_fetch(id1, type, is_signed, object, true);
+    
+    std::string inst = is_and ? "and" : is_or ? "or" : "xor";
+    insert_code(inst + "{} %{}, %{}", type, reg2, reg1);
+    free_reg(reg2);
+    reg_no_clobber_list[reg1] = false;
+    
+    return reg_status_list[reg1];
+}
+
+int x64_func::bit_and(int id1, int id2) {
+    return and_or_xor_common(id1, id2, true, false);
+}
+
+int x64_func::bit_and(int id1, std::string_view constant) {
+    return and_or_xor_common(id1, constant, true, false);
+}
+
+int x64_func::bit_or(int id1, int id2) {
+    return and_or_xor_common(id1, id2, false, true);
+}
+
+int x64_func::bit_or(int id1, std::string_view constant) {
+    return and_or_xor_common(id1, constant, false, true);
+}
+
+int x64_func::bit_xor(int id1, int id2) {
+    return and_or_xor_common(id1, id2, false, false);
+}
+
+int x64_func::bit_xor(int id1, std::string_view constant) {
+    return and_or_xor_common(id1, constant, false, false);
+}
+
+int x64_func::bit_not(int id) {
+    auto [reg, _, type] = unary_op_fetch(id);
+    insert_code("not{} %{}", type, reg);
+
+    return reg_status_list[reg];
 }
 
 int x64_func::type_cast(int exp_id, c_type cast_type, bool cast_sign) {

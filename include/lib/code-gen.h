@@ -15,6 +15,7 @@
 #define LINE(msg) msg "\n"
 #define INSTRUCTION( msg, ... ) fmt::format("\t" LINE(msg) __VA_OPT__(,) __VA_ARGS__)
 
+
 enum c_type {
     C_CHAR,
     C_SHORT,
@@ -111,6 +112,13 @@ public:
     virtual int modulo(int id1, int id2) = 0;
     virtual int modulo(int id1, std::string_view constant) = 0;
     virtual int modulo(std::string_view constant, int id) = 0;
+    virtual int bit_and(int id1, int id2) = 0;
+    virtual int bit_and(int id1, std::string_view constant) = 0;
+    virtual int bit_or(int id1, int id2) = 0;
+    virtual int bit_or(int id1, std::string_view constant) = 0;
+    virtual int bit_xor(int id1, int id2) = 0;
+    virtual int bit_xor(int id1, std::string_view constant) = 0;
+    virtual int bit_not(int id) = 0;
     virtual int pre_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) = 0;
     virtual int pre_dec(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) = 0;
     virtual int post_inc(int id, c_type type, bool is_signed, size_t inc_count, bool is_mem, bool is_global) = 0;
