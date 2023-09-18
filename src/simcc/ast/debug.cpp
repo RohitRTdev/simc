@@ -120,6 +120,7 @@ void ast::print() {
         case AST_TYPE::NULL_STMT: print_ast_list("Node: null stmt"); break;
         case AST_TYPE::STMT_LIST: print_ast_list("Node: stmt list"); break;
         case AST_TYPE::EXPR_STMT: print_ast_list("Node: expr stmt"); break;
+        case AST_TYPE::WHILE: print_ast_list("Node: while"); break;
         case AST_TYPE::IF: print_ast_list("Node: if"); break;
         case AST_TYPE::ELSE_IF: print_ast_list("Node: else if"); break;
         case AST_TYPE::ELSE: print_ast_list("Node: else"); break;

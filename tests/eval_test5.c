@@ -1,18 +1,28 @@
+void test() {
+
+}
+
+int printf(const char*, int);
+
 int main() {
-    int a;
+    unsigned int a;
     short b;
-    a = 26;
-    b = 5;
 
-    a = a / b;
-    a = a % b;
-    a = a % 3;
-    a = 10 / b;
-    a = a & b;
-    a = a ^ b;
-    a = 3 & b;
-    b = a | 10;
-    a = b | a;
+    char arr[4];
+    int con;
+    con = 0;
+    arr[con] = '%';
+    arr[con+1] = 'd';
+    arr[con+2] = '\n';
+    arr[con+3] = '\0';    
+    a = 1;
+    b = 25;
 
+
+    if(a) {
+        while(a < b)
+            printf(arr, a++);
+            printf(arr, b+1);
+    }
     return a;
 }

@@ -373,6 +373,18 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
             op_vars = &Ifunc_translation::bit_xor; op_var_con = &Ifunc_translation::bit_xor;
             break;            
         }
+        case SHIFT_LEFT: {
+            is_commutative = false;
+            op_vars = &Ifunc_translation::sl; op_var_con = &Ifunc_translation::sl;
+            op_con_var = &Ifunc_translation::sl;
+            break;
+        }
+        case SHIFT_RIGHT: {
+            is_commutative = false;
+            op_vars = &Ifunc_translation::sr; op_var_con = &Ifunc_translation::sr;
+            op_con_var = &Ifunc_translation::sr;
+            break;
+        }
         case GT: {
             is_commutative = true;
             op_vars = &Ifunc_translation::if_gt; op_var_con = &Ifunc_translation::if_gt; 

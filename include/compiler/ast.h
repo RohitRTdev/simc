@@ -24,7 +24,8 @@ enum class AST_TYPE {
     EXPR,
     IF,
     ELSE_IF,
-    ELSE
+    ELSE,
+    WHILE
 };
 
 struct ast {
@@ -49,6 +50,7 @@ public:
     bool is_token() const;
     bool is_expr() const; 
     bool is_prog() const;
+    bool is_while() const;
     bool is_if() const;
     bool is_else_if() const;
     bool is_else() const;

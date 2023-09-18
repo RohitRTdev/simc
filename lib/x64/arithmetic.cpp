@@ -198,6 +198,63 @@ int x64_func::bit_not(int id) {
     return reg_status_list[reg];
 }
 
+int x64_func::shift_common(int id1, std::variant<int, std::string_view> object, bool is_left, bool in_order) {
+    auto [type, is_signed] = fetch_result_type(id1);
+
+    std::string inst = is_left ? "sal" : (is_signed ? "sar" : "shr");
+    insert_comment(inst);
+    int reg1 = 0;
+    if(in_order) {
+        if(std::holds_alternative<int>(object)) {
+            transfer_to_reg(RCX, std::get<0>(object));
+        }
+        else {
+            free_preferred_register(RCX, type, is_signed);
+            load_constant(std::get<1>(object), type, is_signed, RCX);    
+        }
+        reg_no_clobber_list[RCX] = true;
+        reg1 = fetch_result(id1);
+    }
+    else {
+        transfer_to_reg(RCX, id1);
+        reg_no_clobber_list[RCX] = true;
+        if(std::holds_alternative<int>(object)) {
+            reg1 = fetch_result(std::get<0>(object));
+        }
+        else {
+            reg1 = load_constant(std::get<1>(object), type, is_signed);
+        }
+    }
+
+    insert_code(inst + "{} %{}, %{}", type, get_register_string(C_CHAR, RCX), reg1);
+    free_reg(RCX);
+    return reg_status_list[reg1];
+}
+
+int x64_func::sl(int id1, int id2) {
+    return shift_common(id1, id2, true);
+}
+
+int x64_func::sl(int id1, std::string_view constant) {
+    return shift_common(id1, constant, true);
+}
+
+int x64_func::sl(std::string_view constant, int id) {
+    return shift_common(id, constant, true, false);
+}
+
+int x64_func::sr(int id1, int id2) {
+    return shift_common(id1, id2, false);
+}
+
+int x64_func::sr(int id1, std::string_view constant) {
+    return shift_common(id1, constant, false);
+}
+
+int x64_func::sr(std::string_view constant, int id) {
+    return shift_common(id, constant, false, false);
+}
+
 int x64_func::type_cast(int exp_id, c_type cast_type, bool cast_sign) {
     insert_comment("type-cast");
     auto [reg1, _, type] = unary_op_fetch(exp_id);
@@ -227,6 +284,8 @@ int x64_func::type_cast(int exp_id, c_type cast_type, bool cast_sign) {
 
     return reg_status_list[reg1];
 }
+
+
 
 
 //Common function to handle pre/post/inc/dec cases

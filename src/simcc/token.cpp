@@ -9,6 +9,10 @@ bool token::is_keyword_if() const {
     return type == KEYWORD && std::get<keyword_type>(value) == IF;
 }
 
+bool token::is_keyword_while() const {
+    return type == KEYWORD && std::get<keyword_type>(value) == WHILE;
+}
+
 bool token::is_keyword_else_if() const {
     return type == KEYWORD && std::get<keyword_type>(value) == ELSE_IF;
 }
