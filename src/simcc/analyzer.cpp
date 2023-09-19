@@ -149,7 +149,9 @@ static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_li
             forged_base = forge_base_type(std::move(base_type));
             base_type_init = true;
         }
+
         array = function = false;
+        std::unique_ptr<ast> init_expr;
         auto decl = fetch_child(decl_list);
         while(!decl->children.empty()) {
             auto child = fetch_child(decl);
@@ -223,6 +225,10 @@ static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_li
                 array = false;
                 function = true;
             }
+            else if(child->is_expr()) {
+                //This declaration has an initializer
+                init_expr = std::move(child);
+            }
 
         }
 
@@ -252,7 +258,7 @@ static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_li
                 fn_args.push_back(name);
             }
             bool is_global = current_scope->is_global_scope();
-            current_scope->add_variable(0, name, res, stor_spec, is_global);
+            current_scope->add_variable(name, res, stor_spec, std::move(init_expr), is_global);
         }
         else {
             //Only top level fn arguments should get pushed to list
