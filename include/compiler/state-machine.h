@@ -23,6 +23,7 @@ enum parser_states {
     EXPECT_DECL_IDENT,
     EXPECT_DECL_LB,
     EXPECT_DECL_LSB,
+    EXPECT_DECL_EQ,
     EXPECT_FN_LB,
     EXPECT_FN_RB,
     EXPECT_DECL_RB,
@@ -93,7 +94,7 @@ enum parser_states {
     STMT_REDUCE,
     IF_STMT_REDUCE,
     WHILE_STMT_REDUCE,
-    
+    DECL_EXPR_REDUCE,
     FN_DEF_REDUCE,
     DECL_LB_REDUCE,
     PARAM_LIST_REDUCE,

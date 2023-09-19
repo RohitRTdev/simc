@@ -1,4 +1,5 @@
 #include "compiler/ast.h"
+#include "compiler/ast-ops.h"
 #include "debug-api.h"
 
 ast_expr::ast_expr(EXPR_TYPE _type) : ast_token(nullptr, true), type(_type)
@@ -155,6 +156,10 @@ bool is_ast_expr_rsb(const std::unique_ptr<ast>& node) {
 
 bool is_ast_expr_operator(const std::unique_ptr<ast>& node) {
     return node->is_expr() && cast_to_ast_expr(node)->is_operator();
+}
+
+bool is_ast_decl_equal(const std::unique_ptr<ast>& node) {
+    return node->is_token() && cast_to_ast_token(node)->tok->is_operator_eq();
 }
 
 const ast_expr* cast_to_ast_expr(const std::unique_ptr<ast>& node) {

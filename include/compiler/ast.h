@@ -191,6 +191,7 @@ bool is_ast_expr_comma(const std::unique_ptr<ast>& node);
 bool is_ast_expr_operator(const std::unique_ptr<ast>& node); 
 bool is_ast_expr_lsb(const std::unique_ptr<ast>& node);
 bool is_ast_expr_rsb(const std::unique_ptr<ast>& node);
+bool is_ast_decl_equal(const std::unique_ptr<ast>& node);
 
 const ast_op* cast_to_ast_op(const std::unique_ptr<ast>& node); 
 const ast_expr* cast_to_ast_expr(const std::unique_ptr<ast>& node); 

@@ -9,8 +9,7 @@ int main() {
     short b;
 
     char arr[4];
-    int con;
-    con = 0;
+    int con = 
     arr[con] = '%';
     arr[con+1] = 'd';
     arr[con+2] = '\n';
