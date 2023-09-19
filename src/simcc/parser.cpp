@@ -154,11 +154,15 @@ static void reduce_expr(state_machine* inst, bool stop_at_lb = false, bool stop_
     sim_log_debug("Reducing expression");
 
     auto reduced_expr = inst->fetch_parser_stack();
+    if(is_ast_pure_operator(reduced_expr)) {
+        sim_log_error("Invalid expression");
+    }
 
     auto expr_eval = [&] {
         auto& top = inst->parser_stack.top();
         if(top->is_expr()) {
-            return !(top->is_token() && cast_to_ast_token(top)->tok->is_operator_rb()) 
+            return !(top->is_token() && cast_to_ast_token(top)->tok->is_operator_rb())
+            && !is_ast_decl_equal(inst->parser_stack.top()) 
             && (stop_at_lb ? !is_ast_expr_lb(inst->parser_stack.top()) : true)
             && (stop_at_comma ? !is_ast_expr_comma(inst->parser_stack.top()) : true)
             && (stop_at_lsb ? !is_ast_expr_lsb(inst->parser_stack.top()) : true);
@@ -204,15 +208,33 @@ static void reduce_expr_comma(state_machine* inst) {
     }
 }
 
+static void reduce_decl_expr(state_machine* inst) {
+    sim_log_debug("Performing init expr reduction");
+    CRITICAL_ASSERT(inst->state_stack.top() == DECL_EXPR_REDUCE, "reduce_decl_expr() called in wrong context");
+    reduce_expr(inst);
+
+    if(is_ast_decl_equal(inst->parser_stack.top())) {
+        sim_log_error("Expected an expression as initializer after '='");
+    }
+
+    inst->state_stack.pop();
+    inst->stop_token_fetch();
+    inst->switch_state(EXPECT_DECL_COMMA);
+}
+
 static void reduce_expr_bop(state_machine* inst) {
-    sim_log_debug("Performing binary op reduction");
-    
     if (inst->cur_token()->is_operator_comma()) {
         if (inst->state_stack.top() == FN_CALL_EXPR_REDUCE) {
             reduce_expr_comma(inst);
             return;
         }
+        else if(inst->state_stack.top() == DECL_EXPR_REDUCE) {
+           reduce_decl_expr(inst); 
+           return;
+        }
     }
+
+    sim_log_debug("Performing binary op reduction");
     auto cur_op = create_ast_binary_op(inst->cur_token());
     auto cur_op_ptr = cast_to_ast_op(cur_op);
     CRITICAL_ASSERT(is_ast_expr_operator(cur_op), "Non operator expression found during binary op evaluation");
@@ -221,7 +243,8 @@ static void reduce_expr_bop(state_machine* inst) {
     while(inst->parser_stack.top()->is_expr() && 
     !is_ast_expr_comma(inst->parser_stack.top()) && 
     !is_ast_expr_lb(inst->parser_stack.top()) && 
-    !is_ast_expr_lsb(inst->parser_stack.top())) {
+    !is_ast_expr_lsb(inst->parser_stack.top()) &&
+    !is_ast_decl_equal(inst->parser_stack.top())) {
         auto expr = inst->fetch_parser_stack();
         CRITICAL_ASSERT(is_ast_expr_operator(expr) && expr->children.size() == 0, "Unreduced expr operator found during binary op reduction"); 
          
@@ -381,7 +404,16 @@ static void reduce_expr_stmt(state_machine* inst) {
         case STMT_LIST_REDUCE: 
         case FN_DEF_REDUCE:
         case STMT_REDUCE:
-        case RETURN_STMT_REDUCE: reduce_expr(inst, false, false); inst->switch_state(EXPECT_STMT_SC); inst->stop_token_fetch(); break;
+        case RETURN_STMT_REDUCE: {
+            reduce_expr(inst, false, false);
+            inst->switch_state(EXPECT_STMT_SC);
+            inst->stop_token_fetch();
+            break;
+        }
+        case DECL_EXPR_REDUCE: {
+            reduce_decl_expr(inst);
+            break;
+        }
         default: sim_log_error("';' found after expression in invalid context");
     }
 }
@@ -446,6 +478,12 @@ static void reduce_decl(state_machine* inst) {
     };
 
     sim_log_debug("Reducing declarator");
+    std::unique_ptr<ast> expr;
+    //Declaration has an initializer
+    if(inst->parser_stack.top()->is_expr()) {
+        expr = inst->fetch_parser_stack();
+        inst->parser_stack.pop(); //Remove '='
+    }
 
     auto decl = create_ast_decl(nullptr);
     while(run_until()) {
@@ -481,6 +519,17 @@ static void reduce_decl(state_machine* inst) {
                 sim_log_error("Abstract declarator only allowed in parameter type lists");
             }
         }
+    }
+
+    if(expr) {
+        switch(reduce_helper.base_reduce_context(inst)) {
+            case base_reduction_context::INTERNAL:
+            case base_reduction_context::EXTERNAL: break;
+            default: {
+                sim_log_error("Initializer expression found in wrong context");
+            }
+        }
+        decl->attach_back(std::move(expr));
     }
 
     inst->parser_stack.push(std::move(decl));
@@ -954,7 +1003,8 @@ static void parse_declaration() {
     parser.define_state("EXPECT_DECL_LB", BASE_TYPE_CHECK, &token::is_operator_lb, EXPECT_DECL_LSB, true);
 
     //States after declarator
-    parser.define_state("EXPECT_DECL_LSB", EXPECT_ARRAY_CONSTANT, &token::is_operator_lsb, EXPECT_FN_LB, true);
+    parser.define_state("EXPECT_DECL_LSB", EXPECT_ARRAY_CONSTANT, &token::is_operator_lsb, EXPECT_DECL_EQ, true);
+    parser.define_state("EXPECT_DECL_EQ", EXPECT_EXPR_UOP, &token::is_operator_eq, EXPECT_FN_LB, true, nullptr, nullptr, DECL_EXPR_REDUCE);
     parser.define_state("EXPECT_FN_LB", EXPECT_FN_RB, &token::is_operator_lb, EXPECT_DECL_RB, true, nullptr, nullptr, PARAM_LIST_REDUCE);
     parser.define_state("EXPECT_FN_RB", EXPECT_DECL_LSB, &token::is_operator_rb, EXPECT_STOR_SPEC, false, reduce_empty_param_list);
     parser.define_state("EXPECT_DECL_RB", EXPECT_DECL_LSB, &token::is_operator_rb, EXPECT_DECL_COMMA, false, reduce_decl_rb);

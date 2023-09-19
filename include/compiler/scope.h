@@ -5,6 +5,7 @@
 #include "lib/code-gen.h"
 #include "compiler/token.h"
 #include "compiler/type.h"
+#include "compiler/ast.h"
 
 struct var_info {
     std::string_view name;
@@ -13,6 +14,7 @@ struct var_info {
     decl_spec stor_spec;
     type_spec type;
     bool is_defined;
+    bool is_initialized;
     std::vector<std::string_view> args;
 };
 
@@ -27,6 +29,7 @@ class scope {
 
     int declare_variable(const var_info& var); 
     void add_param_variable(int id, std::string_view name, const type_spec& type);
+    void initialize_variable(var_info& var, std::unique_ptr<ast> init_expr);
 public:
     scope(scope* _parent); 
     scope(scope* _parent, tu_intf_type tu);
@@ -36,6 +39,6 @@ public:
 
     bool redefine_symbol_check(std::string_view symbol, const type_spec& type, bool no_redefine = false) const;
     var_info& fetch_var_info(std::string_view symbol);
-    void add_variable(int id, std::string_view name, const type_spec& type, const decl_spec& stor_spec, bool is_global = false); 
+    void add_variable(std::string_view name, const type_spec& type, const decl_spec& stor_spec, std::unique_ptr<ast> init_expr = std::unique_ptr<ast>(), bool is_global = false); 
     std::pair<Ifunc_translation*, scope*> add_function_definition(std::string_view fn_name, const std::vector<std::string_view>& fn_args);
 };

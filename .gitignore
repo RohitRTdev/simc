@@ -2,4 +2,5 @@
 build/*
 log/*
 gcc_tests/*
+write_a_c_compiler
 TODO

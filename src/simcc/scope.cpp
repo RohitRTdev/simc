@@ -1,6 +1,8 @@
 #include <optional>
 #include <variant>
 #include "compiler/scope.h"
+#include "compiler/eval.h"
+#include "compiler/utils.h"
 #include "debug-api.h"
 
 scope::scope(scope* _parent) : parent(_parent), intf(_parent->intf)
@@ -47,6 +49,37 @@ int scope::declare_variable(const var_info& var) {
     }
 }
 
+void scope::initialize_variable(var_info& var, std::unique_ptr<ast> init_expr) {
+    if(var.type.is_function_type()) {
+        sim_log_error("Function type cannot be initialized");
+    }
+
+    CRITICAL_ASSERT(!var.type.is_array_type(), "Array type initialization is not supported right now");
+
+    if(var.stor_spec.is_stor_extern()) {
+        sim_log_error("Extern declaration cannot be initialized");
+    }
+
+    if(is_global_scope()) {
+        //Expr must be computable at compile time
+        CRITICAL_ASSERT_NOW("Global variable initialization support not added right now");
+    }
+
+    sim_log_debug("Initializing variable with var_id:{}", var.var_id);
+    auto res = eval_expr(std::move(init_expr), std::get<1>(intf), this).eval();
+
+    res.expr_id = type_spec::convert_type(var.type, res.expr_id, res.type, std::get<1>(intf), !res.is_constant);
+    if(res.is_constant) {
+        code_gen::call_code_gen(std::get<1>(intf), &Ifunc_translation::assign_var, var.var_id, res.constant);
+    }
+    else {
+        code_gen::call_code_gen(std::get<1>(intf), &Ifunc_translation::assign_var, var.var_id, res.expr_id);
+    }
+    res.free(std::get<1>(intf));
+    var.is_initialized = true;
+}
+
+
 bool scope::redefine_symbol_check(std::string_view symbol, const type_spec& type, bool no_redefine) const {
     for(auto& var: variables) {
         if(var.name == symbol) {
@@ -82,7 +115,8 @@ var_info& scope::fetch_var_info(std::string_view symbol) {
     sim_log_error("Variable:{} seems to be undefined", symbol);
 }
 
-void scope::add_variable(int id, std::string_view name, const type_spec& type, const decl_spec& stor_spec, bool is_global) {
+void scope::add_variable(std::string_view name, const type_spec& type, const decl_spec& stor_spec,
+std::unique_ptr<ast> init_expr, bool is_global) {
     if(redefine_symbol_check(name, type)) {
         sim_log_debug("Found existing declaration for symbol");
         auto& var = fetch_var_info(name);
@@ -90,13 +124,16 @@ void scope::add_variable(int id, std::string_view name, const type_spec& type, c
 
         if(!var.type.is_function_type())
             var.var_id = declare_variable(var);
+        
+        if(init_expr) {
+            initialize_variable(var, std::move(init_expr));
+        }
     }
     else {
         var_info var{};
         var.name = name;
         var.type = type;
         var.stor_spec = stor_spec;
-        var.var_id = id;
         var.is_global = is_global;
 
         if(stor_spec.is_stor_extern() || type.is_function_type()) {
@@ -110,6 +147,9 @@ void scope::add_variable(int id, std::string_view name, const type_spec& type, c
         }
 
         variables.push_back(var);
+        if(init_expr) {
+            initialize_variable(var, std::move(init_expr));
+        }
     }
 }
 
