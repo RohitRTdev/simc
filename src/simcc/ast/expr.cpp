@@ -158,6 +158,19 @@ bool is_ast_expr_operator(const std::unique_ptr<ast>& node) {
     return node->is_expr() && cast_to_ast_expr(node)->is_operator();
 }
 
+bool is_ast_pure_operator(const std::unique_ptr<ast>& node) {
+    if(!is_ast_expr_operator(node))
+        return false;
+        
+    auto op = cast_to_ast_op(node);
+    if((op->is_unary || op->is_postfix) && op->children.size() < 1)
+        return true;
+    else if(op->children.size() < 2) 
+        return true;
+
+    return false;
+}
+
 bool is_ast_decl_equal(const std::unique_ptr<ast>& node) {
     return node->is_token() && cast_to_ast_token(node)->tok->is_operator_eq();
 }

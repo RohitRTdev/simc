@@ -318,7 +318,7 @@ void lex(const std::vector<char>& input) {
                 case ';': op = SEMICOLON; break;
                 case '{': op = CLB; break;
                 case '}': op = CRB; break;
-                case '~': op = BIT_XOR; break;
+                case '~': op = BIT_NOT; break;
                 case '*': op = MUL; break;
                 case '/': op = DIV; break;
                 case '%': op = MODULO; break;

@@ -249,6 +249,59 @@ void eval_expr::handle_logical_op(operator_type op) {
     res_stack.push(res);
 }
 
+std::string_view eval_expr::constant_fold(std::string_view num1_str, operator_type unary_op) {
+    int num1 = std::stoi(std::string(num1_str));
+
+    switch(unary_op) {
+        case PLUS: break;
+        case MINUS: num1 = - num1; break;
+        case BIT_NOT: num1 = ~num1; break;
+        default: {
+            CRITICAL_ASSERT_NOW("constant_fold_unary() called with invalid operator");
+        }
+    }
+
+    const_storage.push_back(std::to_string(num1));
+    return const_storage.back();
+}
+
+std::string_view eval_expr::constant_fold(std::string_view num1_str, std::string_view num2_str, operator_type binary_op) {
+    int num1 = std::stoi(std::string(num1_str));
+    int num2 = std::stoi(std::string(num2_str));
+
+    switch(binary_op) {
+        case PLUS: num1 += num2; break;
+        case MINUS: num1 -= num2; break;
+        case MUL: num1 *= num2; break;
+        case DIV: {
+            if(num2 != 0)
+                num1 /= num2;
+            break;
+        }
+        case MODULO: {
+            if(num2 != 0)
+                num1 %= num2;
+            break;
+        } 
+        case SHIFT_LEFT: num1 = num1 << num2 ; break;
+        case SHIFT_RIGHT: num1 = num1 >> num2; break;
+        case AMPER: num1 &= num2; break;
+        case BIT_OR: num1 |= num2; break;
+        case BIT_XOR: num1 ^= num2; break;
+        case GT: num1 = num1 > num2 ? 1 : 0; break;
+        case LT: num1 = num1 < num2 ? 1 : 0; break;
+        case EQUAL_EQUAL: num1 = num1 == num2 ? 1 : 0; break;
+        case NOT_EQUAL: num1 = num1 != num2 ? 1 : 0; break;
+        default: {
+            CRITICAL_ASSERT_NOW("constant_fold_bin() called with invalid operator");
+        }
+    }
+
+
+    const_storage.push_back(std::to_string(num1));
+    return const_storage.back();
+}
+
 bool eval_expr::handle_pointer_arithmetic(expr_result& res1, expr_result& res2, operator_type op) {
     
     if (!(res1.type.is_pointer_type() && res2.type.is_integral()) &&
@@ -269,23 +322,40 @@ bool eval_expr::handle_pointer_arithmetic(expr_result& res1, expr_result& res2, 
     }
 
     sim_log_debug("Performing pointer arithmetic");
-    CRITICAL_ASSERT(!res_i.is_constant, "Pointer arithmetic with constant not yet supported");
     res_i.convert_type(res_p, fn_intf);
 
+    int res_id = 0;
     std::string inc_count = std::to_string(res_p.type.get_pointer_base_type_size());
-    int res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::mul, res_i.expr_id, std::string_view(inc_count));
+    std::string_view addend;
+    if(res_i.is_constant) {
+        addend = constant_fold(res_i.constant, inc_count, MUL);
+    }
+    else {
+        res_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::mul, res_i.expr_id, std::string_view(inc_count));
+    }
     
     int (Ifunc_translation::*op_var)(int, int); 
-    if(op == PLUS)
+    int (Ifunc_translation::*op_var_con)(int, std::string_view);
+    int (Ifunc_translation::*op_con_var)(std::string_view, int);
+    if(op == PLUS) {
         op_var = &Ifunc_translation::add;
-    else
+        op_var_con = &Ifunc_translation::add;
+    }
+    else {
         op_var = &Ifunc_translation::sub;
+        op_var_con = &Ifunc_translation::sub;
+        op_con_var = &Ifunc_translation::sub;
+    }
 
-    res_id = code_gen::call_code_gen(fn_intf, op_var, res_p.expr_id, res_id);
+    if(res_i.is_constant) {
+        res_id = code_gen::call_code_gen(fn_intf, op_var_con, res_p.expr_id, addend);
+    }
+    else {
+        res_id = code_gen::call_code_gen(fn_intf, op_var, res_p.expr_id, res_id);
+    }
 
     expr_result res{res_p.type};
     res.expr_id = res_id;
-
     res_stack.push(res);
     return true;
 }
@@ -309,9 +379,10 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
     convert_to_ptr_type(res1);
     convert_to_ptr_type(res2);
 
-    if(handle_pointer_arithmetic(res1, res2, op))
+    if(res1.type.is_pointer_type() && res2.type.is_integral()) {
+        handle_pointer_arithmetic(res1, res2, op);
         return;
-
+    }
 
     if(res1.type.is_pointer_type() && res2.type.is_pointer_type()) {
         if(op != MINUS) {
@@ -417,11 +488,13 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
         }
     }
 
+    expr_result res{ res1.type };
     if(!res1.is_constant && !res2.is_constant) {
         res_id = code_gen::call_code_gen(fn_intf, op_vars, res1.expr_id, res2.expr_id);
     }
     else if(res1.is_constant && res2.is_constant) {
-        CRITICAL_ASSERT_NOW("Constant folding feature is not supported yet");
+        res.is_constant = true;
+        res.constant = constant_fold(res1.constant, res2.constant, op);
     }
     else {
         if(res1.is_constant) {
@@ -437,7 +510,7 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
         }
     }
 
-    expr_result res{res_id, res1.type};
+    res.expr_id = res_id;
     res_stack.push(res);
 }
 
@@ -565,9 +638,16 @@ void eval_expr::handle_indir() {
     expr_result res{res_type};
     auto [base_type, is_signed] = res.type.get_simple_type();
     res.expr_id = res_in.expr_id;
+    res.is_constant = res_in.is_constant;
+    res.constant = res_in.constant;
 
     if(!(is_assignable() || res_type.is_array_type() || res_type.is_function_type())) {
-        res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::fetch_from_mem, res_in.expr_id, base_type, is_signed); 
+        if(res_in.is_constant) {
+            res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::fetch_from_mem, res_in.constant, base_type, is_signed); 
+        }
+        else {
+            res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::fetch_from_mem, res_in.expr_id, base_type, is_signed); 
+        }
     }
 
     res.category = l_val_cat::INDIR;
@@ -623,21 +703,26 @@ void eval_expr::handle_simple_unary_op(operator_type op) {
     auto in = fetch_stack_node(res_stack);
     expr_result res{in.type};
 
-    CRITICAL_ASSERT(!in.is_constant, "Constants are not supported right now with unary op's");
-    switch(op) {
-        case PLUS: {
-            res.expr_id = in.expr_id;
-            break;
-        }
-        case MINUS: {
-            res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::negate, in.expr_id);
-            break;
-        }
-        case BIT_NOT: {
-            res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::bit_not, in.expr_id);
-        }
-        default: {
-            CRITICAL_ASSERT_NOW("handle_unary_op() failed as invalid operator was passed");
+    if(in.is_constant) {
+        res.is_constant = true;
+        res.constant = constant_fold(in.constant, op);
+    }
+    else {
+        switch(op) {
+            case PLUS: {
+                res.expr_id = in.expr_id;
+                break;
+            }
+            case MINUS: {
+                res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::negate, in.expr_id);
+                break;
+            }
+            case BIT_NOT: {
+                res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::bit_not, in.expr_id);
+            }
+            default: {
+                CRITICAL_ASSERT_NOW("handle_unary_op() failed as invalid operator was passed");
+            }
         }
     }
 
@@ -792,9 +877,8 @@ void eval_expr::handle_comma_expr() {
     auto _ = fetch_stack_node(res_stack);
 
     _.free(fn_intf);
-    expr_result res{res_in.expr_id, res_in.type};
-
-    res_stack.push(res);
+    res_in.is_lvalue = false;
+    res_stack.push(res_in);
 }
 
 void eval_expr::handle_node() {

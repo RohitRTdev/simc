@@ -463,7 +463,7 @@ class x64_func : public Ifunc_translation {
     }
 
     std::pair<int, int> arg_fetch(int id1, c_type type, bool is_signed, std::variant<int, std::string_view> object, bool in_order, 
-    std::function<void (int)>&& lambda = [&] (int reg) {}) {
+    std::function<void (int)>&& lambda = [] (int reg) {}) {
         int reg1 = 0;
         if(!in_order) {
             reg1 = load_constant(std::get<1>(object), type, is_signed);

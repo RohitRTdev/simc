@@ -154,6 +154,9 @@ static void reduce_expr(state_machine* inst, bool stop_at_lb = false, bool stop_
     sim_log_debug("Reducing expression");
 
     auto reduced_expr = inst->fetch_parser_stack();
+    if(is_ast_pure_operator(reduced_expr)) {
+        sim_log_error("Invalid expression");
+    }
 
     auto expr_eval = [&] {
         auto& top = inst->parser_stack.top();

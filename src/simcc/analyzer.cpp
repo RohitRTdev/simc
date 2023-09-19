@@ -494,6 +494,7 @@ void eval(std::unique_ptr<ast> prog) {
         }
     }
 
+    delete current_scope;
     tu->generate_code();
     asm_code = tu->fetch_code();
 }
