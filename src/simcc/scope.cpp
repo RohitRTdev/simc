@@ -60,22 +60,36 @@ void scope::initialize_variable(var_info& var, std::unique_ptr<ast> init_expr) {
         sim_log_error("Extern declaration cannot be initialized");
     }
 
-    if(is_global_scope()) {
-        //Expr must be computable at compile time
-        CRITICAL_ASSERT_NOW("Global variable initialization support not added right now");
-    }
 
     sim_log_debug("Initializing variable with var_id:{}", var.var_id);
-    auto res = eval_expr(std::move(init_expr), std::get<1>(intf), this).eval();
+    if(is_global_scope()) {
+        //Expr must be computable at compile time
+        code_gen::eval_only = true;
+        auto res = eval_expr(std::move(init_expr), nullptr, this).eval();
+        if(!res.is_constant) {
+            sim_log_error("Init expression is not compile time computable");
+        }
+        code_gen::eval_only = false;
+        var.init_value = res.constant;
+        if(!var.type.is_pointer_type() && res.type.is_pointer_type()) {
+            sim_log_error("Cannot assign pointer type to non pointer type at global scope");
+        }
 
-    res.expr_id = type_spec::convert_type(var.type, res.expr_id, res.type, std::get<1>(intf), !res.is_constant);
-    if(res.is_constant) {
-        code_gen::call_code_gen(std::get<1>(intf), &Ifunc_translation::assign_var, var.var_id, res.constant);
+        std::get<tu_intf_type>(intf)->init_variable(var.var_id, var.init_value);
     }
     else {
-        code_gen::call_code_gen(std::get<1>(intf), &Ifunc_translation::assign_var, var.var_id, res.expr_id);
+        auto res = eval_expr(std::move(init_expr), std::get<1>(intf), this).eval();
+
+        res.expr_id = type_spec::convert_type(var.type, res.expr_id, res.type, std::get<1>(intf), !res.is_constant);
+        if (res.is_constant) {
+            code_gen::call_code_gen(std::get<1>(intf), &Ifunc_translation::assign_var, var.var_id, res.constant);
+        }
+        else {
+            code_gen::call_code_gen(std::get<1>(intf), &Ifunc_translation::assign_var, var.var_id, res.expr_id);
+        }
+        res.free(std::get<1>(intf));
     }
-    res.free(std::get<1>(intf));
+    
     var.is_initialized = true;
 }
 
@@ -148,7 +162,7 @@ std::unique_ptr<ast> init_expr, bool is_global) {
 
         variables.push_back(var);
         if(init_expr) {
-            initialize_variable(var, std::move(init_expr));
+            initialize_variable(variables.back(), std::move(init_expr));
         }
     }
 }

@@ -1,10 +1,15 @@
 int printf(const char*, int);
 
+const int arr[4];
+const int d = 2;
+const char val = 2;
+int* global = -10;
+
 int main() {
     unsigned int a;
     short b;
 
-    a = 1;
+    a = ++global;
     char arr[4];
     const int con = -1;
     arr[0] = '%';

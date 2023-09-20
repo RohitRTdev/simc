@@ -89,6 +89,7 @@ class eval_expr {
     void perform_arithmetic_conversion(expr_result& res1, expr_result& res2);
     void perform_integer_promotion(expr_result& res1);
     void convert_type(expr_result& res1, expr_result& res2);
+    std::string_view arithmetic_with_symbol(std::string_view num1_str, std::string_view num2_str, operator_type binary_op);
     std::string_view constant_fold(std::string_view num1_str, std::string_view num2_str, operator_type binary_op);
     std::string_view constant_fold(std::string_view num1_str, operator_type unary_op);
 

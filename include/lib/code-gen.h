@@ -164,7 +164,7 @@ class Itranslation : public Itrbase {
 public:
     virtual Ifunc_translation* add_function(std::string_view name, c_type ret_type, bool is_signed, bool is_static) = 0; 
     virtual int declare_global_variable(std::string_view name, c_type type, bool is_signed, bool is_static) = 0;
-    virtual int declare_global_variable(std::string_view name, c_type type, bool is_signed, bool is_static, std::string_view constant) = 0;
+    virtual void init_variable(int var_id, std::string_view constant) = 0;
     virtual int declare_global_mem_variable(std::string_view name, bool is_static, size_t mem_var_size) = 0; 
     virtual void generate_code() = 0;
 

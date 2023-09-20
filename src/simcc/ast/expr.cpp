@@ -165,7 +165,7 @@ bool is_ast_pure_operator(const std::unique_ptr<ast>& node) {
     auto op = cast_to_ast_op(node);
     if((op->is_unary || op->is_postfix) && op->children.size() < 1)
         return true;
-    else if(op->children.size() < 2) 
+    else if(!op->is_unary && !op->is_postfix && op->children.size() < 2) 
         return true;
 
     return false;

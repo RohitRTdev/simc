@@ -38,13 +38,10 @@ int x64_tu::declare_global_variable(std::string_view name, c_type type, bool is_
     return ++global_var_id;
 }
 
-int x64_tu::declare_global_variable(std::string_view name, c_type type, bool is_signed, bool is_static, std::string_view constant) {
-    int var_id = declare_global_variable(name, type, is_signed, is_static);
-    globals[var_id-1].value = constant;
+void x64_tu::init_variable(int var_id, std::string_view constant) {
+    sim_log_debug("Initializing var:{} with value:{}", globals[var_id - 1].name, constant);
 
-    sim_log_debug("Initializing var:{} with value:{}", name, constant);
-
-    return var_id;
+    globals[var_id - 1].value = constant;
 }
 
 int x64_tu::declare_global_mem_variable(std::string_view name, bool is_static, size_t mem_var_size) {
@@ -73,21 +70,29 @@ Ifunc_translation* x64_tu::add_function(std::string_view name, c_type ret_type, 
 }
 
 void x64_tu::generate_code() {
-    static const char* global_type_names[] = {"long", "byte", "quad", "word"};
+    static const char* global_type_names[] = {"byte", "word", "long", "quad", "quad"};
     
     std::string bss_section;
     std::string data_section;
+
+    auto fetch_var_size = [] (const c_var& var) {
+        return var.mem_var_size.has_value() ? var.mem_var_size.value() : base_type_size(var.type);
+    };
     
     for(const auto& var : globals) {
         if(var.is_fn)
             continue;
         if(var.value.size()) {
-            data_section.append(fmt::format(LINE(".global {}"), var.name));
-            data_section.append(fmt::format(LINE("{}:\n\t.{} {}"), var.name, base_type_size(var.type), var.value));
+            if(!var.is_static) {
+                data_section.append(fmt::format(LINE(".global {}"), var.name));
+                data_section.append(fmt::format(LINE(".type {}, @object"), var.name));
+                data_section.append(fmt::format(LINE(".size {}, {}"), var.name, fetch_var_size(var)));
+            }
+            CRITICAL_ASSERT(!var.mem_var_size, "Initialization of memory variable not supported");
+            data_section.append(fmt::format(LINE("{}:\n\t.{} {}"), var.name, global_type_names[var.type], var.value));
         }
         else {
-            size_t var_size = var.mem_var_size.has_value() ? var.mem_var_size.value() : base_type_size(var.type);
-            bss_section.append(INSTRUCTION(".{}comm {}, {}", var.is_static ? "l" : "", var.name, var_size));
+            bss_section.append(INSTRUCTION(".{}comm {}, {}", var.is_static ? "l" : "", var.name, fetch_var_size(var)));
         }
     }
 

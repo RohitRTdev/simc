@@ -16,6 +16,7 @@ struct var_info {
     bool is_defined;
     bool is_initialized;
     std::vector<std::string_view> args;
+    std::string init_value; 
 };
 
 class scope {

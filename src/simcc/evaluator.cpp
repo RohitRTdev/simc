@@ -12,6 +12,7 @@ eval_expr::eval_expr(std::unique_ptr<ast> expr_start, Ifunc_translation* fn, sco
 fn_intf(fn), fn_scope(cur_scope) 
 {
     const_storage.clear();
+    const_storage.reserve(100);
 }
 
 expr_result eval_expr::eval() {
@@ -102,6 +103,11 @@ void eval_expr::perform_arithmetic_conversion(expr_result& res1, expr_result& re
 bool eval_expr::hook() {
     expr = cast_to_ast_expr(expr_node);
     if(expr->is_fn_call()) {
+
+       if(fn_scope->is_global_scope()) {
+            sim_log_error("Function call expression not allowed in global scope");
+       } 
+       
        auto fn_expr = static_cast<ast_fn_call*>(const_cast<ast_expr*>(expr));
 
        if(fn_expr->fn_designator) {
@@ -249,7 +255,51 @@ void eval_expr::handle_logical_op(operator_type op) {
     res_stack.push(res);
 }
 
+static bool check_if_symbol(std::string_view sym) {
+    try {
+        size_t idx = 0;
+        int value = std::stoi(std::string(sym), &idx);
+        return idx != sym.size();
+    }
+    catch(std::invalid_argument& _) {
+        return true;
+    }
+
+    return true;
+}
+
+std::string_view eval_expr::arithmetic_with_symbol(std::string_view num1_str, std::string_view num2_str, operator_type binary_op) {
+    auto sym1 = check_if_symbol(num1_str);
+    auto sym2 = check_if_symbol(num2_str);
+    if(!sym1 && !sym2)
+        return "";
+    
+    if(sym1 && sym2) {
+        sim_log_error("Arithmetic operation cannot be carried out on 2 symbols");
+    }
+
+    std::string_view sym = sym1 ? num1_str : num2_str;
+    std::string_view number = sym1 ? num2_str : num1_str;
+
+    if(binary_op != PLUS && binary_op != MINUS) {
+        sim_log_error("Symbols can only be added or subtracted");
+    }
+
+    if(binary_op == PLUS) {
+        const_storage.push_back(std::string(sym) + "+" + std::string(number));
+    }
+    else {
+        const_storage.push_back(std::string(sym) + "-" + std::string(number));
+    }
+
+    return const_storage.back();
+}
+
 std::string_view eval_expr::constant_fold(std::string_view num1_str, operator_type unary_op) {
+    if(check_if_symbol(num1_str)) {
+        sim_log_error("Only addition and subtraction operations can be carried out in symbols");
+    }
+
     int num1 = std::stoi(std::string(num1_str));
 
     switch(unary_op) {
@@ -266,6 +316,11 @@ std::string_view eval_expr::constant_fold(std::string_view num1_str, operator_ty
 }
 
 std::string_view eval_expr::constant_fold(std::string_view num1_str, std::string_view num2_str, operator_type binary_op) {
+    
+    std::string_view symbol_arithmetic = arithmetic_with_symbol(num1_str, num2_str, binary_op);
+    if(symbol_arithmetic != "")
+        return symbol_arithmetic;
+    
     int num1 = std::stoi(std::string(num1_str));
     int num2 = std::stoi(std::string(num2_str));
 
@@ -346,15 +401,21 @@ bool eval_expr::handle_pointer_arithmetic(expr_result& res1, expr_result& res2, 
         op_var_con = &Ifunc_translation::sub;
         op_con_var = &Ifunc_translation::sub;
     }
-
+    
+    expr_result res{res_p.type};
+    
     if(res_i.is_constant) {
-        res_id = code_gen::call_code_gen(fn_intf, op_var_con, res_p.expr_id, addend);
+        if(res_p.is_constant) {
+            res.is_constant = true;
+            res.constant = constant_fold(res_p.constant, addend, PLUS);
+        }
+        else 
+            res_id = code_gen::call_code_gen(fn_intf, op_var_con, res_p.expr_id, addend);
     }
     else {
         res_id = code_gen::call_code_gen(fn_intf, op_var, res_p.expr_id, res_id);
     }
 
-    expr_result res{res_p.type};
     res.expr_id = res_id;
     res_stack.push(res);
     return true;
@@ -514,7 +575,7 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
     res_stack.push(res);
 }
 
- void eval_expr::handle_assignment() {
+void eval_expr::handle_assignment() {
     auto res2 = fetch_stack_node(res_stack);
     auto res1 = fetch_stack_node(res_stack);
 
@@ -526,7 +587,7 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
         sim_log_error("Cannot assign expression of type 'void' to anything");
     }
 
-    if(!res1.is_lvalue || !res1.type.is_modifiable()) {
+    if(!res1.is_lvalue || !res1.type.is_modifiable() || res1.is_constant) {
         sim_log_error("LHS of '=' operator must be a modifiable l-value");
     }
 
@@ -594,6 +655,13 @@ void eval_expr::handle_addr() {
     else {
         res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::get_address_of, in.expr_id, is_mem, is_global);
     }
+    
+    if(fn_scope->is_global_scope()) {
+        if(in.category == l_val_cat::GLOBAL) {
+            res.is_constant = true;
+            res.constant = std::get<std::string>(in.var_token->value);
+        }
+    }
 
     res_stack.push(res);
 }
@@ -601,6 +669,12 @@ void eval_expr::handle_addr() {
 void eval_expr::handle_array_subscript() {
     auto res1 = fetch_stack_node(res_stack);
     auto res2 = fetch_stack_node(res_stack);
+
+    if(fn_scope->is_global_scope()) {
+        if((res1.is_constant && check_if_symbol(res1.constant)) || (res2.is_constant && check_if_symbol(res2.constant))) {
+            CRITICAL_ASSERT_NOW("Array subscript operation evaluation is currently not supported for compile time expression");
+        }
+    }
 
     if(res1.type.is_convertible_to_pointer_type()) {
         res1.type.convert_to_pointer_type();
@@ -635,8 +709,13 @@ void eval_expr::handle_indir() {
         sim_log_error("'*' operator can only be used on a non void pointer type");
     }
 
+    if(fn_scope->is_global_scope() && res_in.is_constant && check_if_symbol(res_in.constant)) {
+        sim_log_error("'*' operator cannot be used to evaluate symbol during compile time");
+    }
+
     expr_result res{res_type};
     auto [base_type, is_signed] = res.type.get_simple_type();
+
     res.expr_id = res_in.expr_id;
     res.is_constant = res_in.is_constant;
     res.constant = res_in.constant;
@@ -657,7 +736,7 @@ void eval_expr::handle_indir() {
 
 void eval_expr::handle_inc_dec(operator_type op, bool is_postfix) {
     auto in = fetch_stack_node(res_stack);
-    if(!in.is_lvalue || !in.type.is_modifiable()) {
+    if(!in.is_lvalue || !in.type.is_modifiable() || in.is_constant) {
         sim_log_error("Operand to a inc/dec operator must be a modifiable lvalue");
     }
 
@@ -756,6 +835,8 @@ void eval_expr::handle_unary_op(operator_type op) {
 
 void eval_expr::handle_var() {
     auto& var = fn_scope->fetch_var_info(std::get<std::string>(expr->tok->value));
+    
+    //Handles compile time computable expr case
 
     int var_id = var.var_id;
     auto category = l_val_cat::LOCAL;
@@ -773,7 +854,20 @@ void eval_expr::handle_var() {
         }
         category = l_val_cat::GLOBAL;
     }
+    
     expr_result res{var_id, var.type, expr->tok, true, category};
+    if(!is_assignable() && fn_scope->is_global_scope()) {
+        if(var.type.is_array_type() || var.type.is_function_type()) {
+            res.is_constant = true;
+            res.constant = var.name;
+        }
+        else if(var.type.is_const()) {
+            if(var.init_value != "") {
+                res.is_constant = true;
+                res.constant = var.init_value;
+            }
+        }
+    }
     res_stack.push(res);
 }
 
@@ -878,6 +972,10 @@ void eval_expr::handle_comma_expr() {
 
     _.free(fn_intf);
     res_in.is_lvalue = false;
+
+    if(fn_scope->is_global_scope()) {
+        res_in.is_constant = false;
+    }
     res_stack.push(res_in);
 }
 

@@ -229,6 +229,11 @@ bool type_spec::is_void() const {
     return !is_modified_type() && base_type == C_VOID;
 }
 
+bool type_spec::is_const() const {
+    return !is_function_type() && ((is_pointer_type() && mod_list[0].ptr_list[0].is_const)
+    || ((!is_modified_type() || is_array_type()) && cv.is_const));
+} 
+
 bool type_spec::is_type_convertible(type_spec& type) {
     if(type.is_array_type() || type.is_function_type()) {
         type.convert_to_pointer_type();
