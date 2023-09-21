@@ -303,6 +303,28 @@ std::string_view eval_expr::arithmetic_with_symbol(std::string_view num1_str, st
         sim_log_error("Symbols can only be added or subtracted");
     }
 
+    auto pos = std::find_if(sym.begin(), sym.end(), [] (char ch) {
+        return ch == '+' || ch == '-';
+    });
+    if(pos != sym.end()) {
+        auto _sym = std::string(sym).substr(0, pos - sym.begin());
+        auto _num = std::string(sym).substr(pos - sym.begin(), sym.end() - pos);
+        char op_sym = binary_op == PLUS ? '+' : '-';
+
+        int __num = binary_op == PLUS ? std::stoi(_num) + std::stoi(std::string(number)) : std::stoi(_num) - std::stoi(std::string(number));
+        if(__num < 0)
+            op_sym = '-';
+        else if(__num > 0)
+            op_sym = '+';
+        else if(__num == 0) {
+            const_storage.push_back(std::string(_sym));
+            return const_storage.back();
+        }
+        
+        const_storage.push_back(std::string(_sym) + op_sym + std::to_string(std::abs(__num)));
+        return const_storage.back();
+    }
+
     if(binary_op == PLUS) {
         const_storage.push_back(std::string(sym) + "+" + std::string(number));
     }
@@ -425,7 +447,7 @@ bool eval_expr::handle_pointer_arithmetic(expr_result& res1, expr_result& res2, 
     if(res_i.is_constant) {
         if(res_p.is_constant) {
             res.is_constant = true;
-            res.constant = constant_fold(res_p.constant, addend, PLUS);
+            res.constant = constant_fold(res_p.constant, addend, op);
         }
         else 
             res_id = code_gen::call_code_gen(fn_intf, op_var_con, res_p.expr_id, addend);

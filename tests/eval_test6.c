@@ -1,3 +1,8 @@
+long arr[10];
+
+const int* const gold = 1 + arr - 3 + 2; 
+int* val = gold;
+
 int main() {
     int sum = 0;
     int i = 0;
@@ -27,7 +32,7 @@ int another() {
     int i = 0;
     while (i < 10) {
         if ((sum / 2) * 2 != sum)
-            continue
+            continue;
         sum = sum + i;
         i = i + 1;
     }
