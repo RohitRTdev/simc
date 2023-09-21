@@ -40,6 +40,14 @@ static inline std::unique_ptr<ast> create_ast_null() {
     return std::make_unique<ast>(AST_TYPE::NULL_STMT);
 }
 
+static inline std::unique_ptr<ast> create_ast_break() {
+    return std::make_unique<ast>(AST_TYPE::BREAK);
+}
+
+static inline std::unique_ptr<ast> create_ast_continue() {
+    return std::make_unique<ast>(AST_TYPE::CONTINUE);
+}
+
 static inline std::unique_ptr<ast> create_ast_ptr_list() {
     return std::make_unique<ast>(AST_TYPE::PTR_LIST);
 }

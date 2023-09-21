@@ -13,6 +13,14 @@ bool token::is_keyword_while() const {
     return type == KEYWORD && std::get<keyword_type>(value) == WHILE;
 }
 
+bool token::is_keyword_break() const {
+    return type == KEYWORD && std::get<keyword_type>(value) == BREAK;
+}
+
+bool token::is_keyword_continue() const {
+    return type == KEYWORD && std::get<keyword_type>(value) == CONTINUE;
+}
+
 bool token::is_keyword_else_if() const {
     return type == KEYWORD && std::get<keyword_type>(value) == ELSE_IF;
 }

@@ -1,10 +1,19 @@
 int printf(const char*, int);
 
+const int arr[4];
+const int d = 2;
+const char val = 2;
+int where = 4;
+int* global = ((1 && (val - 2)) || arr) + &where;
+
+int new_fn();
+
 int main() {
     unsigned int a;
     short b;
 
-    a = 1;
+    new_fn();
+    a = ++global;
     char arr[4];
     const int con = -1;
     arr[0] = '%';
@@ -23,4 +32,8 @@ int main() {
             printf(arr, 1+1);
     }
     return a;
+}
+
+int new_fn() {
+    return 1;
 }

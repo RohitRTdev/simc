@@ -60,30 +60,47 @@ void scope::initialize_variable(var_info& var, std::unique_ptr<ast> init_expr) {
         sim_log_error("Extern declaration cannot be initialized");
     }
 
+    if(var.init_value != "") {
+        sim_log_error("Redefinition of variable:{}", var.name);
+    }
+    sim_log_debug("Initializing variable with var_id:{}", var.var_id);
     if(is_global_scope()) {
         //Expr must be computable at compile time
-        CRITICAL_ASSERT_NOW("Global variable initialization support not added right now");
-    }
+        code_gen::eval_only = true;
+        auto res = eval_expr(std::move(init_expr), nullptr, this).eval();
+        if(!res.is_constant) {
+            sim_log_error("Init expression is not compile time computable");
+        }
+        code_gen::eval_only = false;
+        var.init_value = res.constant;
+        if(!var.type.is_pointer_type() && res.type.is_pointer_type()) {
+            sim_log_error("Cannot assign pointer type to non pointer type at global scope");
+        }
 
-    sim_log_debug("Initializing variable with var_id:{}", var.var_id);
-    auto res = eval_expr(std::move(init_expr), std::get<1>(intf), this).eval();
-
-    res.expr_id = type_spec::convert_type(var.type, res.expr_id, res.type, std::get<1>(intf), !res.is_constant);
-    if(res.is_constant) {
-        code_gen::call_code_gen(std::get<1>(intf), &Ifunc_translation::assign_var, var.var_id, res.constant);
+        std::get<tu_intf_type>(intf)->init_variable(var.var_id, var.init_value);
     }
     else {
-        code_gen::call_code_gen(std::get<1>(intf), &Ifunc_translation::assign_var, var.var_id, res.expr_id);
+        auto res = eval_expr(std::move(init_expr), std::get<1>(intf), this).eval();
+
+        res.expr_id = type_spec::convert_type(var.type, res.expr_id, res.type, std::get<1>(intf), !res.is_constant);
+        if (res.is_constant) {
+            code_gen::call_code_gen(std::get<1>(intf), &Ifunc_translation::assign_var, var.var_id, res.constant);
+        }
+        else {
+            code_gen::call_code_gen(std::get<1>(intf), &Ifunc_translation::assign_var, var.var_id, res.expr_id);
+        }
+        res.free(std::get<1>(intf));
     }
-    res.free(std::get<1>(intf));
+    
     var.is_initialized = true;
 }
 
 
-bool scope::redefine_symbol_check(std::string_view symbol, const type_spec& type, bool no_redefine) const {
+bool scope::redefine_symbol_check(std::string_view symbol, const type_spec& type, const decl_spec& stor_spec, bool no_redefine) const {
     for(auto& var: variables) {
         if(var.name == symbol) {
-            if(!no_redefine && !var.is_defined) {
+            if(!no_redefine && (stor_spec.is_stor_extern() || type.is_function_type() || 
+            (stor_spec.is_stor_static() && (var.stor_spec.is_stor_static() || var.stor_spec.is_stor_extern())) || !var.is_defined)) {
                 if(!(var.type == type)) {
                     sim_log_error("Current definition of symbol:{} does not match earlier declaration", symbol);
                 }
@@ -117,7 +134,7 @@ var_info& scope::fetch_var_info(std::string_view symbol) {
 
 void scope::add_variable(std::string_view name, const type_spec& type, const decl_spec& stor_spec,
 std::unique_ptr<ast> init_expr, bool is_global) {
-    if(redefine_symbol_check(name, type)) {
+    if(redefine_symbol_check(name, type, stor_spec)) {
         sim_log_debug("Found existing declaration for symbol");
         auto& var = fetch_var_info(name);
         var.is_defined = true;
@@ -148,13 +165,13 @@ std::unique_ptr<ast> init_expr, bool is_global) {
 
         variables.push_back(var);
         if(init_expr) {
-            initialize_variable(var, std::move(init_expr));
+            initialize_variable(variables.back(), std::move(init_expr));
         }
     }
 }
 
 void scope::add_param_variable(int id, std::string_view name, const type_spec& type) {
-    redefine_symbol_check(name, type, true);
+    redefine_symbol_check(name, type, decl_spec{}, true);
     var_info var{};
     var.name = name;
     var.type = type;

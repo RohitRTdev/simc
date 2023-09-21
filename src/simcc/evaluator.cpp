@@ -8,10 +8,24 @@
 
 std::vector<std::string> eval_expr::const_storage;
 
+static bool check_if_symbol(std::string_view sym) {
+    try {
+        size_t idx = 0;
+        int value = std::stoi(std::string(sym), &idx);
+        return idx != sym.size();
+    }
+    catch (std::invalid_argument& _) {
+        return true;
+    }
+
+    return true;
+}
+
 eval_expr::eval_expr(std::unique_ptr<ast> expr_start, Ifunc_translation* fn, scope* cur_scope) : expr_node(std::move(expr_start)), 
 fn_intf(fn), fn_scope(cur_scope) 
 {
     const_storage.clear();
+    const_storage.reserve(100);
 }
 
 expr_result eval_expr::eval() {
@@ -113,6 +127,9 @@ bool eval_expr::hook() {
             //It's a function name
             if(cast_to_ast_expr(fn_desig)->is_var()) {
                 fn_name = std::get<std::string>(cast_to_ast_token(fn_desig)->tok->value);
+                if(!check_if_symbol(fn_name)) {
+                    sim_log_error("Invalid function name found as function designator");
+                }
             }
             else {
                 //It's an expression. Evaluate it like usual
@@ -154,7 +171,7 @@ bool eval_expr::hook() {
                     int false_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::create_label);
                     int end_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::create_label);
 
-                    logical_stack.push(std::make_tuple(false_id, end_id));
+                    logical_stack.push(std::make_tuple(false_id, end_id, std::nullopt));
                 }
                 else if(expr->children.size() == 1) {
                     auto res_expr_1 = fetch_stack_node(res_stack);
@@ -164,11 +181,8 @@ bool eval_expr::hook() {
                     }
 
                     if(res_expr_1.is_constant) {
-                        bool is_zero = std::stoi(std::string(res_expr_1.constant)) == 0; 
-                        if((sym == AND && is_zero) || (sym == OR && !is_zero)) {
-                            //Jump to false/true end if constant is 0/1(depending on context)
-                            code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, std::get<0>(logical_stack.top()));
-                        }
+                        bool is_zero = check_if_symbol(res_expr_1.constant) ? false : (std::stoi(std::string(res_expr_1.constant)) == 0); 
+                        std::get<2>(logical_stack.top()) = !is_zero; 
                     }
                     else {
                         //Branch if zero to the false end
@@ -199,49 +213,72 @@ void eval_expr::handle_logical_op(operator_type op) {
     static const std::string_view neg_value = "0";
     
     int false_id = 0, end_id = 0;
+    std::optional<bool> is_con;
     if (op == AND || op == OR) {
-        std::tie(false_id, end_id) = fetch_stack_node(logical_stack);
+        std::tie(false_id, end_id, is_con) = fetch_stack_node(logical_stack);
     }
     int tmp_id = 0; 
    
+    bool skip_branch = false;
+    auto set_to_constant = [&] (bool is_zero) {
+        if((op == AND && is_zero) || (op == OR && !is_zero)) {
+            res.is_constant = true;
+            res.constant = op == AND ? neg_value : pos_value;
+            skip_branch = true;
+        }
+    };
+
     if(res_expr_2.is_constant) {
-        bool is_zero = std::stoi(std::string(res_expr_2.constant)) == 0; 
+        bool is_zero = check_if_symbol(res_expr_2.constant) ? false : (std::stoi(std::string(res_expr_2.constant)) == 0);
         if(op == AND || op == OR) {
-            bool do_jmp = (op == AND && is_zero) || (op == OR && !is_zero);
-            if(do_jmp) {
-                code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, false_id);
+            //Both are constants, do compile time evaluation
+            if(is_con) {
+                res.is_constant = true;
+                res.constant = op == AND ? (*is_con && !is_zero ? pos_value : neg_value): (*is_con || !is_zero ? pos_value : neg_value);
+                skip_branch = true;
             }
+            else {
+                set_to_constant(is_zero);
+            } 
         }
         else if(op == NOT) {
             res.is_constant = true;
             res.constant = is_zero ? pos_value : neg_value;
         }
     }
-    else if(op == AND || op == OR) {
-        void (Ifunc_translation::*branch_op)(int, int) = (op == AND) ? &Ifunc_translation::branch_if_z : &Ifunc_translation::branch_if_nz;
-        code_gen::call_code_gen(fn_intf, branch_op, res_expr_2.expr_id, false_id);
-    } 
-    switch(op) {
-        case AND: 
-        case OR: {
-            std::string_view first_val = op == AND ? pos_value : neg_value;
-            std::string_view second_val = op == AND ? neg_value : pos_value;
-            tmp_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::create_temporary_value, res.type.base_type, res.type.is_signed);
-            code_gen::call_code_gen(fn_intf, &Ifunc_translation::set_value, tmp_id, first_val);
-            code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, end_id);
-            code_gen::call_code_gen(fn_intf, &Ifunc_translation::insert_label, false_id);
-            code_gen::call_code_gen(fn_intf, &Ifunc_translation::set_value, tmp_id, second_val);
-            code_gen::call_code_gen(fn_intf, &Ifunc_translation::insert_label, end_id);
-            break;
+    else if(is_con) {
+        set_to_constant(!*is_con);
+    }
+    
+    if(!skip_branch) {
+        if(op == AND || op == OR) {
+            void (Ifunc_translation::*branch_op)(int, int) = (op == AND) ? &Ifunc_translation::branch_if_z : &Ifunc_translation::branch_if_nz;
+            if(!res_expr_2.is_constant)
+                code_gen::call_code_gen(fn_intf, branch_op, res_expr_2.expr_id, false_id);
         }
-        case NOT: {
-            if(!res_expr_2.is_constant) {
-                tmp_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::if_eq, res_expr_2.expr_id, neg_value);
+
+        switch(op) {
+            case AND: 
+            case OR: {
+                std::string_view first_val = op == AND ? pos_value : neg_value;
+                std::string_view second_val = op == AND ? neg_value : pos_value;
+                tmp_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::create_temporary_value, res.type.base_type, res.type.is_signed);
+                code_gen::call_code_gen(fn_intf, &Ifunc_translation::set_value, tmp_id, first_val);
+                code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, end_id);
+                code_gen::call_code_gen(fn_intf, &Ifunc_translation::insert_label, false_id);
+                code_gen::call_code_gen(fn_intf, &Ifunc_translation::set_value, tmp_id, second_val);
+                code_gen::call_code_gen(fn_intf, &Ifunc_translation::insert_label, end_id);
+                break;
             }
-            break;
-        }
-        default: {
-            CRITICAL_ASSERT_NOW("handle_logical_op() called with invalid logical operator");
+            case NOT: {
+                if(!res_expr_2.is_constant) {
+                    tmp_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::if_eq, res_expr_2.expr_id, neg_value);
+                }
+                break;
+            }
+            default: {
+                CRITICAL_ASSERT_NOW("handle_logical_op() called with invalid logical operator");
+            }
         }
     }
 
@@ -249,7 +286,38 @@ void eval_expr::handle_logical_op(operator_type op) {
     res_stack.push(res);
 }
 
+std::string_view eval_expr::arithmetic_with_symbol(std::string_view num1_str, std::string_view num2_str, operator_type binary_op) {
+    auto sym1 = check_if_symbol(num1_str);
+    auto sym2 = check_if_symbol(num2_str);
+    if(!sym1 && !sym2)
+        return "";
+    
+    if(sym1 && sym2) {
+        sim_log_error("Arithmetic operation cannot be carried out on 2 symbols");
+    }
+
+    std::string_view sym = sym1 ? num1_str : num2_str;
+    std::string_view number = sym1 ? num2_str : num1_str;
+
+    if(binary_op != PLUS && binary_op != MINUS) {
+        sim_log_error("Symbols can only be added or subtracted");
+    }
+
+    if(binary_op == PLUS) {
+        const_storage.push_back(std::string(sym) + "+" + std::string(number));
+    }
+    else {
+        const_storage.push_back(std::string(sym) + "-" + std::string(number));
+    }
+
+    return const_storage.back();
+}
+
 std::string_view eval_expr::constant_fold(std::string_view num1_str, operator_type unary_op) {
+    if(check_if_symbol(num1_str)) {
+        sim_log_error("Only addition and subtraction operations can be carried out in symbols");
+    }
+
     int num1 = std::stoi(std::string(num1_str));
 
     switch(unary_op) {
@@ -266,6 +334,11 @@ std::string_view eval_expr::constant_fold(std::string_view num1_str, operator_ty
 }
 
 std::string_view eval_expr::constant_fold(std::string_view num1_str, std::string_view num2_str, operator_type binary_op) {
+    
+    std::string_view symbol_arithmetic = arithmetic_with_symbol(num1_str, num2_str, binary_op);
+    if(symbol_arithmetic != "")
+        return symbol_arithmetic;
+    
     int num1 = std::stoi(std::string(num1_str));
     int num2 = std::stoi(std::string(num2_str));
 
@@ -346,15 +419,21 @@ bool eval_expr::handle_pointer_arithmetic(expr_result& res1, expr_result& res2, 
         op_var_con = &Ifunc_translation::sub;
         op_con_var = &Ifunc_translation::sub;
     }
-
+    
+    expr_result res{res_p.type};
+    
     if(res_i.is_constant) {
-        res_id = code_gen::call_code_gen(fn_intf, op_var_con, res_p.expr_id, addend);
+        if(res_p.is_constant) {
+            res.is_constant = true;
+            res.constant = constant_fold(res_p.constant, addend, PLUS);
+        }
+        else 
+            res_id = code_gen::call_code_gen(fn_intf, op_var_con, res_p.expr_id, addend);
     }
     else {
         res_id = code_gen::call_code_gen(fn_intf, op_var, res_p.expr_id, res_id);
     }
 
-    expr_result res{res_p.type};
     res.expr_id = res_id;
     res_stack.push(res);
     return true;
@@ -379,7 +458,8 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
     convert_to_ptr_type(res1);
     convert_to_ptr_type(res2);
 
-    if(res1.type.is_pointer_type() && res2.type.is_integral()) {
+    if((res1.type.is_pointer_type() && res2.type.is_integral()) ||
+       (op == PLUS && (res1.type.is_integral() && res2.type.is_pointer_type()))) {
         handle_pointer_arithmetic(res1, res2, op);
         return;
     }
@@ -514,7 +594,7 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
     res_stack.push(res);
 }
 
- void eval_expr::handle_assignment() {
+void eval_expr::handle_assignment() {
     auto res2 = fetch_stack_node(res_stack);
     auto res1 = fetch_stack_node(res_stack);
 
@@ -526,7 +606,7 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
         sim_log_error("Cannot assign expression of type 'void' to anything");
     }
 
-    if(!res1.is_lvalue || !res1.type.is_modifiable()) {
+    if(!res1.is_lvalue || !res1.type.is_modifiable() || res1.is_constant) {
         sim_log_error("LHS of '=' operator must be a modifiable l-value");
     }
 
@@ -594,6 +674,13 @@ void eval_expr::handle_addr() {
     else {
         res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::get_address_of, in.expr_id, is_mem, is_global);
     }
+    
+    if(fn_scope->is_global_scope()) {
+        if(in.category == l_val_cat::GLOBAL) {
+            res.is_constant = true;
+            res.constant = std::get<std::string>(in.var_token->value);
+        }
+    }
 
     res_stack.push(res);
 }
@@ -601,6 +688,12 @@ void eval_expr::handle_addr() {
 void eval_expr::handle_array_subscript() {
     auto res1 = fetch_stack_node(res_stack);
     auto res2 = fetch_stack_node(res_stack);
+
+    if(fn_scope->is_global_scope()) {
+        if((res1.is_constant && check_if_symbol(res1.constant)) || (res2.is_constant && check_if_symbol(res2.constant))) {
+            CRITICAL_ASSERT_NOW("Array subscript operation evaluation is currently not supported for compile time expression");
+        }
+    }
 
     if(res1.type.is_convertible_to_pointer_type()) {
         res1.type.convert_to_pointer_type();
@@ -635,8 +728,13 @@ void eval_expr::handle_indir() {
         sim_log_error("'*' operator can only be used on a non void pointer type");
     }
 
+    if(fn_scope->is_global_scope() && res_in.is_constant && check_if_symbol(res_in.constant)) {
+        sim_log_error("'*' operator cannot be used to evaluate symbol during compile time");
+    }
+
     expr_result res{res_type};
     auto [base_type, is_signed] = res.type.get_simple_type();
+
     res.expr_id = res_in.expr_id;
     res.is_constant = res_in.is_constant;
     res.constant = res_in.constant;
@@ -657,7 +755,7 @@ void eval_expr::handle_indir() {
 
 void eval_expr::handle_inc_dec(operator_type op, bool is_postfix) {
     auto in = fetch_stack_node(res_stack);
-    if(!in.is_lvalue || !in.type.is_modifiable()) {
+    if(!in.is_lvalue || !in.type.is_modifiable() || in.is_constant) {
         sim_log_error("Operand to a inc/dec operator must be a modifiable lvalue");
     }
 
@@ -756,6 +854,8 @@ void eval_expr::handle_unary_op(operator_type op) {
 
 void eval_expr::handle_var() {
     auto& var = fn_scope->fetch_var_info(std::get<std::string>(expr->tok->value));
+    
+    //Handles compile time computable expr case
 
     int var_id = var.var_id;
     auto category = l_val_cat::LOCAL;
@@ -773,7 +873,20 @@ void eval_expr::handle_var() {
         }
         category = l_val_cat::GLOBAL;
     }
+    
     expr_result res{var_id, var.type, expr->tok, true, category};
+    if(!is_assignable() && fn_scope->is_global_scope()) {
+        if(var.type.is_array_type() || var.type.is_function_type()) {
+            res.is_constant = true;
+            res.constant = var.name;
+        }
+        else if(var.type.is_const()) {
+            if(var.init_value != "") {
+                res.is_constant = true;
+                res.constant = var.init_value;
+            }
+        }
+    }
     res_stack.push(res);
 }
 
@@ -878,6 +991,10 @@ void eval_expr::handle_comma_expr() {
 
     _.free(fn_intf);
     res_in.is_lvalue = false;
+
+    if(fn_scope->is_global_scope()) {
+        res_in.is_constant = false;
+    }
     res_stack.push(res_in);
 }
 

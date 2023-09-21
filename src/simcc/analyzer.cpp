@@ -273,13 +273,18 @@ static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_li
     return fn_args;
 }
 
+enum class control_stmt_type {
+    IF,
+    WHILE
+};
+
 static std::unique_ptr<ast> eval_while_stmt(std::unique_ptr<ast> stmt, Ifunc_translation* fn, 
-std::stack<std::unique_ptr<ast>>& stmt_stack, std::stack<std::tuple<int, int, bool>>& if_stack,
+std::stack<std::unique_ptr<ast>>& stmt_stack, std::stack<std::tuple<int, int, bool, control_stmt_type>>& if_stack,
 std::unique_ptr<ast> cur_stmt_list, std::stack<std::tuple<bool, bool, bool>>& branch_status) {
 
     //stmt list has been evaluated
     if(!stmt->children.size()) {
-        auto [start_id, end_id, _] = fetch_stack_node(if_stack);
+        auto [start_id, end_id, _, __] = fetch_stack_node(if_stack);
         code_gen::call_code_gen(fn, &Ifunc_translation::branch, start_id);
         code_gen::call_code_gen(fn, &Ifunc_translation::insert_label, end_id);
         return cur_stmt_list;
@@ -301,7 +306,7 @@ std::unique_ptr<ast> cur_stmt_list, std::stack<std::tuple<bool, bool, bool>>& br
     }
     res.free(fn);
 
-    if_stack.push(std::make_tuple(start_id, end_id, false));
+    if_stack.push(std::make_tuple(start_id, end_id, false, control_stmt_type::WHILE));
     auto stmt_list = fetch_child(stmt);
     cur_stmt_list->attach_node(std::move(stmt)); //Reattach node
 
@@ -311,8 +316,9 @@ std::unique_ptr<ast> cur_stmt_list, std::stack<std::tuple<bool, bool, bool>>& br
     create_new_scope();
     return stmt_list;
 }
+
 static std::unique_ptr<ast> eval_if_stmt(std::unique_ptr<ast> stmt, Ifunc_translation* fn, 
-std::stack<std::unique_ptr<ast>>& stmt_stack, std::stack<std::tuple<int, int, bool>>& if_stack,
+std::stack<std::unique_ptr<ast>>& stmt_stack, std::stack<std::tuple<int, int, bool, control_stmt_type>>& if_stack,
 std::unique_ptr<ast> cur_stmt_list, std::stack<std::tuple<bool, bool, bool>>& branch_status) {
     
     auto prepare_stmt_list_jump = [&] (std::unique_ptr<ast> node) {
@@ -361,7 +367,7 @@ std::unique_ptr<ast> cur_stmt_list, std::stack<std::tuple<bool, bool, bool>>& br
 
         if(node->is_if()) {
             int end_id = is_end ? next_id : code_gen::call_code_gen(fn, &Ifunc_translation::create_label);
-            if_stack.push(std::make_tuple(next_id, end_id, false));
+            if_stack.push(std::make_tuple(next_id, end_id, false, control_stmt_type::IF));
         }
         else {
             auto info = fetch_stack_node(if_stack);
@@ -373,7 +379,7 @@ std::unique_ptr<ast> cur_stmt_list, std::stack<std::tuple<bool, bool, bool>>& br
     };
     
     if (!stmt->children.size()) {
-        auto [_, end_id, __] = fetch_stack_node(if_stack);
+        auto [_, end_id, __, ___] = fetch_stack_node(if_stack);
         code_gen::call_code_gen(fn, &Ifunc_translation::insert_label, end_id);
         return cur_stmt_list;
     }
@@ -401,12 +407,34 @@ std::unique_ptr<ast> cur_stmt_list, std::stack<std::tuple<bool, bool, bool>>& br
 }
 
 static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation* fn, std::string_view fn_name) {
+    
+    using if_stack_type = std::tuple<int, int, bool, control_stmt_type>; 
+    
     std::stack<std::unique_ptr<ast>> stmt_stack;
-    std::stack<std::tuple<int, int, bool>> if_stack;
+    std::stack<if_stack_type> if_stack;
     std::stack<std::tuple<bool, bool, bool>> branch_status; //is_if, is_eval_only, is_nested_in_if
     std::optional<var_info> fn_decl;
     code_gen::eval_only = false;
     bool ret_encountered = false;
+
+    auto fetch_nearest_loop = [&] () {
+        std::optional<if_stack_type> res;
+        std::stack<if_stack_type> remaining;
+        while(!if_stack.empty()) {
+            auto node = fetch_stack_node(if_stack);
+            remaining.push(node);
+            if(std::get<3>(node) == control_stmt_type::WHILE) {
+                res = node;
+                break;
+            }
+        }
+
+        while(!remaining.empty()) {
+            if_stack.push(fetch_stack_node(remaining));
+        }
+
+        return res;
+    };
 
     branch_status.push(std::make_tuple(false, false, false));
     while(!stmt_stack.empty() || cur_stmt_list->children.size()) {
@@ -443,6 +471,24 @@ static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation
         else if(stmt->is_if()) {
             cur_stmt_list = eval_if_stmt(std::move(stmt), fn, stmt_stack, if_stack, std::move(cur_stmt_list), branch_status);
         }
+        else if(stmt->is_break_stmt()) {
+            auto nearest_loop = fetch_nearest_loop();
+            if(!nearest_loop) {
+                sim_log_error("break statement found in wrong context");
+            }
+
+            //Jump to end of loop
+            code_gen::call_code_gen(fn, &Ifunc_translation::branch, std::get<1>(*nearest_loop));
+        } 
+        else if(stmt->is_continue_stmt()) {
+            auto nearest_loop = fetch_nearest_loop();
+            if(!nearest_loop) {
+                sim_log_error("continue statement found in wrong context");
+            }
+            
+            //Jump to start of loop
+            code_gen::call_code_gen(fn, &Ifunc_translation::branch, std::get<0>(*nearest_loop));
+        }
         else if(stmt->is_ret_stmt()) {
             if(!fn_decl)
                 fn_decl = current_scope->fetch_var_info(fn_name);
@@ -459,7 +505,7 @@ static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation
 
     if(!ret_encountered) {
         auto& fn_info = current_scope->fetch_var_info(fn_name);
-        if(!fn_info.type.resolve_type().is_void()) {
+        if(fn_name != "main" && !fn_info.type.resolve_type().is_void()) {
             sim_log_error("Function with non void return type is not returning any expression");
         }
     } 

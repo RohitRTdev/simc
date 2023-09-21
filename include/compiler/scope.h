@@ -16,6 +16,7 @@ struct var_info {
     bool is_defined;
     bool is_initialized;
     std::vector<std::string_view> args;
+    std::string init_value; 
 };
 
 class scope {
@@ -37,7 +38,7 @@ public:
     scope* fetch_parent_scope() const;
     bool is_global_scope() const; 
 
-    bool redefine_symbol_check(std::string_view symbol, const type_spec& type, bool no_redefine = false) const;
+    bool redefine_symbol_check(std::string_view symbol, const type_spec& type, const decl_spec& stor_spec, bool no_redefine = false) const;
     var_info& fetch_var_info(std::string_view symbol);
     void add_variable(std::string_view name, const type_spec& type, const decl_spec& stor_spec, std::unique_ptr<ast> init_expr = std::unique_ptr<ast>(), bool is_global = false); 
     std::pair<Ifunc_translation*, scope*> add_function_definition(std::string_view fn_name, const std::vector<std::string_view>& fn_args);

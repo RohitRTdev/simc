@@ -80,7 +80,7 @@ class eval_expr {
     std::stack<expr_result> res_stack;
     std::stack<std::unique_ptr<ast>> op_stack;
     std::stack<std::tuple<std::string_view, size_t, size_t, bool>> fn_call_stack;
-    std::stack<std::tuple<int, int>> logical_stack;
+    std::stack<std::tuple<int, int, std::optional<bool>>> logical_stack;
 
     bool is_assignable() const;
     bool is_base_equal(const type_spec& type_1, const type_spec& type_2);
@@ -89,6 +89,7 @@ class eval_expr {
     void perform_arithmetic_conversion(expr_result& res1, expr_result& res2);
     void perform_integer_promotion(expr_result& res1);
     void convert_type(expr_result& res1, expr_result& res2);
+    std::string_view arithmetic_with_symbol(std::string_view num1_str, std::string_view num2_str, operator_type binary_op);
     std::string_view constant_fold(std::string_view num1_str, std::string_view num2_str, operator_type binary_op);
     std::string_view constant_fold(std::string_view num1_str, operator_type unary_op);
 
