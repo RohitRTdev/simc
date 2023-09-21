@@ -6,10 +6,13 @@ const char val = 2;
 int where = 4;
 int* global = ((1 && (val - 2)) || arr) + &where;
 
+int new_fn();
+
 int main() {
     unsigned int a;
     short b;
 
+    new_fn();
     a = ++global;
     char arr[4];
     const int con = -1;
@@ -29,4 +32,8 @@ int main() {
             printf(arr, 1+1);
     }
     return a;
+}
+
+int new_fn() {
+    return 1;
 }

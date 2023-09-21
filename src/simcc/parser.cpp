@@ -105,9 +105,28 @@ static void reduce_if_stmt(state_machine* inst) {
     switch_after_reduce_stmt(inst);
 }
 
+static void reduce_break_or_continue_stmt(state_machine* inst) {
+    if(inst->state_stack.top() == BREAK_STMT_REDUCE) {
+        if(!cast_to_ast_token(inst->parser_stack.top())->tok->is_keyword_break()) {
+            sim_log_error("Invalid syntax for break statement");
+        }
+        inst->parser_stack.pop();
+        inst->parser_stack.push(create_ast_break());
+    }
+    else if(inst->state_stack.top() == CONTINUE_STMT_REDUCE) {
+        if(!cast_to_ast_token(inst->parser_stack.top())->tok->is_keyword_continue()) {
+            sim_log_error("Invalid syntax for continue statement");
+        }
+        inst->parser_stack.pop();
+        inst->parser_stack.push(create_ast_continue());
+    }
+}
+
 static void reduce_stmt(state_machine* inst) {
     switch(inst->state_stack.top()) {
         case RETURN_STMT_REDUCE: reduce_ret_stmt(inst); inst->state_stack.pop(); break;
+        case BREAK_STMT_REDUCE: 
+        case CONTINUE_STMT_REDUCE: reduce_break_or_continue_stmt(inst); inst->state_stack.pop(); break;
         case STMT_LIST_REDUCE:
         case FN_DEF_REDUCE: 
         case STMT_REDUCE: {
@@ -933,7 +952,7 @@ static void parse_if_stmt() {
 }
 
 static void parse_while_stmt() {
-    parser.define_state("EXPECT_STMT_WHILE", EXPECT_WHILE_LB, &token::is_keyword_while, EXPECT_NULL_STMT_SC, true, nullptr, nullptr, WHILE_STMT_REDUCE);
+    parser.define_state("EXPECT_STMT_WHILE", EXPECT_WHILE_LB, &token::is_keyword_while, EXPECT_STMT_BREAK, true, nullptr, nullptr, WHILE_STMT_REDUCE);
     parser.define_state("EXPECT_WHILE_LB", EXPECT_EXPR_UOP, &token::is_operator_lb, PARSER_ERROR, true, nullptr,
     "Expected '(' after while keyword");
     parser.define_reduce_state("REDUCE_WHILE_STMT", PARSER_ERROR, reduce_while_stmt);
@@ -943,8 +962,10 @@ static void parse_stmt_list() {
 
     parser.define_state("EXPECT_STMT_LIST", EXPECT_STMT_LIST, &token::is_operator_clb, EXPECT_STMT_CRB, true, nullptr, nullptr, STMT_LIST_REDUCE);
     parser.define_state("EXPECT_STMT", EXPECT_EXPR_UOP, &token::is_keyword_return, EXPECT_STMT_IF, false, nullptr, nullptr, RETURN_STMT_REDUCE);
+    parser.define_state("EXPECT_STMT_BREAK", EXPECT_STMT_SC, &token::is_keyword_break, EXPECT_STMT_CONTINUE, true, nullptr, nullptr, BREAK_STMT_REDUCE);
+    parser.define_state("EXPECT_STMT_CONTINUE", EXPECT_STMT_SC, &token::is_keyword_continue, EXPECT_NULL_STMT_SC, true, nullptr, nullptr, CONTINUE_STMT_REDUCE);
     parser.define_special_state("EXPECT_STMT_SC", &token::is_operator_sc, reduce_stmt, PARSER_ERROR, 
-    "Expected statement list to end with }}");
+    "Expected statement list to end with '}'");
     parser.define_special_state("EXPECT_NULL_STMT_SC", &token::is_operator_sc, reduce_null_stmt_sc, EXPECT_EXPR_UOP);
     parser.define_special_state("EXPECT_STMT_CRB", &token::is_operator_crb, reduce_stmt_list, BASE_TYPE_CHECK_STMT);
 

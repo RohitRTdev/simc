@@ -25,7 +25,9 @@ enum class AST_TYPE {
     IF,
     ELSE_IF,
     ELSE,
-    WHILE
+    WHILE,
+    BREAK,
+    CONTINUE
 };
 
 struct ast {
@@ -64,6 +66,8 @@ public:
     bool is_array_specifier_list() const;
     bool is_base_type() const;
     bool is_param_list() const;
+    bool is_break_stmt() const;
+    bool is_continue_stmt() const;
 
 #ifdef SIMDEBUG
     virtual void print();

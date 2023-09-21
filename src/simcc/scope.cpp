@@ -60,7 +60,9 @@ void scope::initialize_variable(var_info& var, std::unique_ptr<ast> init_expr) {
         sim_log_error("Extern declaration cannot be initialized");
     }
 
-
+    if(var.init_value != "") {
+        sim_log_error("Redefinition of variable:{}", var.name);
+    }
     sim_log_debug("Initializing variable with var_id:{}", var.var_id);
     if(is_global_scope()) {
         //Expr must be computable at compile time
@@ -94,10 +96,11 @@ void scope::initialize_variable(var_info& var, std::unique_ptr<ast> init_expr) {
 }
 
 
-bool scope::redefine_symbol_check(std::string_view symbol, const type_spec& type, bool no_redefine) const {
+bool scope::redefine_symbol_check(std::string_view symbol, const type_spec& type, const decl_spec& stor_spec, bool no_redefine) const {
     for(auto& var: variables) {
         if(var.name == symbol) {
-            if(!no_redefine && !var.is_defined) {
+            if(!no_redefine && (stor_spec.is_stor_extern() || type.is_function_type() || 
+            (stor_spec.is_stor_static() && (var.stor_spec.is_stor_static() || var.stor_spec.is_stor_extern())) || !var.is_defined)) {
                 if(!(var.type == type)) {
                     sim_log_error("Current definition of symbol:{} does not match earlier declaration", symbol);
                 }
@@ -131,7 +134,7 @@ var_info& scope::fetch_var_info(std::string_view symbol) {
 
 void scope::add_variable(std::string_view name, const type_spec& type, const decl_spec& stor_spec,
 std::unique_ptr<ast> init_expr, bool is_global) {
-    if(redefine_symbol_check(name, type)) {
+    if(redefine_symbol_check(name, type, stor_spec)) {
         sim_log_debug("Found existing declaration for symbol");
         auto& var = fetch_var_info(name);
         var.is_defined = true;
@@ -168,7 +171,7 @@ std::unique_ptr<ast> init_expr, bool is_global) {
 }
 
 void scope::add_param_variable(int id, std::string_view name, const type_spec& type) {
-    redefine_symbol_check(name, type, true);
+    redefine_symbol_check(name, type, decl_spec{}, true);
     var_info var{};
     var.name = name;
     var.type = type;

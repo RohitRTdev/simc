@@ -129,3 +129,11 @@ bool ast::is_base_type() const {
 bool ast::is_param_list() const {
     return type == AST_TYPE::PARAM_LIST;
 }
+
+bool ast::is_break_stmt() const {
+    return type == AST_TYPE::BREAK;
+}
+
+bool ast::is_continue_stmt() const {
+    return type == AST_TYPE::CONTINUE;
+}

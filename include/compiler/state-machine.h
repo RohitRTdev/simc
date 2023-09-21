@@ -44,6 +44,8 @@ enum parser_states {
     //Stmt list
     EXPECT_STMT_LIST,
     EXPECT_STMT,
+    EXPECT_STMT_BREAK,
+    EXPECT_STMT_CONTINUE,
     EXPECT_STMT_SC,
     EXPECT_NULL_STMT_SC,
     EXPECT_STMT_CRB,
@@ -98,6 +100,8 @@ enum parser_states {
     FN_DEF_REDUCE,
     DECL_LB_REDUCE,
     PARAM_LIST_REDUCE,
+    BREAK_STMT_REDUCE,
+    CONTINUE_STMT_REDUCE,
 
     //misc
     PARSER_INVALID,
