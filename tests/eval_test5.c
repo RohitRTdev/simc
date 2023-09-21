@@ -3,7 +3,8 @@ int printf(const char*, int);
 const int arr[4];
 const int d = 2;
 const char val = 2;
-int* global = -10;
+int where = 4;
+int* global = ((1 && (val - 2)) || arr) + &where;
 
 int main() {
     unsigned int a;

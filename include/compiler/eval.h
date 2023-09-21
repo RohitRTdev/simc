@@ -80,7 +80,7 @@ class eval_expr {
     std::stack<expr_result> res_stack;
     std::stack<std::unique_ptr<ast>> op_stack;
     std::stack<std::tuple<std::string_view, size_t, size_t, bool>> fn_call_stack;
-    std::stack<std::tuple<int, int>> logical_stack;
+    std::stack<std::tuple<int, int, std::optional<bool>>> logical_stack;
 
     bool is_assignable() const;
     bool is_base_equal(const type_spec& type_1, const type_spec& type_2);

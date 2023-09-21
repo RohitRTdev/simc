@@ -8,6 +8,19 @@
 
 std::vector<std::string> eval_expr::const_storage;
 
+static bool check_if_symbol(std::string_view sym) {
+    try {
+        size_t idx = 0;
+        int value = std::stoi(std::string(sym), &idx);
+        return idx != sym.size();
+    }
+    catch (std::invalid_argument& _) {
+        return true;
+    }
+
+    return true;
+}
+
 eval_expr::eval_expr(std::unique_ptr<ast> expr_start, Ifunc_translation* fn, scope* cur_scope) : expr_node(std::move(expr_start)), 
 fn_intf(fn), fn_scope(cur_scope) 
 {
@@ -103,11 +116,6 @@ void eval_expr::perform_arithmetic_conversion(expr_result& res1, expr_result& re
 bool eval_expr::hook() {
     expr = cast_to_ast_expr(expr_node);
     if(expr->is_fn_call()) {
-
-       if(fn_scope->is_global_scope()) {
-            sim_log_error("Function call expression not allowed in global scope");
-       } 
-       
        auto fn_expr = static_cast<ast_fn_call*>(const_cast<ast_expr*>(expr));
 
        if(fn_expr->fn_designator) {
@@ -119,6 +127,9 @@ bool eval_expr::hook() {
             //It's a function name
             if(cast_to_ast_expr(fn_desig)->is_var()) {
                 fn_name = std::get<std::string>(cast_to_ast_token(fn_desig)->tok->value);
+                if(!check_if_symbol(fn_name)) {
+                    sim_log_error("Invalid function name found as function designator");
+                }
             }
             else {
                 //It's an expression. Evaluate it like usual
@@ -160,7 +171,7 @@ bool eval_expr::hook() {
                     int false_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::create_label);
                     int end_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::create_label);
 
-                    logical_stack.push(std::make_tuple(false_id, end_id));
+                    logical_stack.push(std::make_tuple(false_id, end_id, std::nullopt));
                 }
                 else if(expr->children.size() == 1) {
                     auto res_expr_1 = fetch_stack_node(res_stack);
@@ -170,11 +181,8 @@ bool eval_expr::hook() {
                     }
 
                     if(res_expr_1.is_constant) {
-                        bool is_zero = std::stoi(std::string(res_expr_1.constant)) == 0; 
-                        if((sym == AND && is_zero) || (sym == OR && !is_zero)) {
-                            //Jump to false/true end if constant is 0/1(depending on context)
-                            code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, std::get<0>(logical_stack.top()));
-                        }
+                        bool is_zero = check_if_symbol(res_expr_1.constant) ? false : (std::stoi(std::string(res_expr_1.constant)) == 0); 
+                        std::get<2>(logical_stack.top()) = !is_zero; 
                     }
                     else {
                         //Branch if zero to the false end
@@ -205,67 +213,77 @@ void eval_expr::handle_logical_op(operator_type op) {
     static const std::string_view neg_value = "0";
     
     int false_id = 0, end_id = 0;
+    std::optional<bool> is_con;
     if (op == AND || op == OR) {
-        std::tie(false_id, end_id) = fetch_stack_node(logical_stack);
+        std::tie(false_id, end_id, is_con) = fetch_stack_node(logical_stack);
     }
     int tmp_id = 0; 
    
+    bool skip_branch = false;
+    auto set_to_constant = [&] (bool is_zero) {
+        if((op == AND && is_zero) || (op == OR && !is_zero)) {
+            res.is_constant = true;
+            res.constant = op == AND ? neg_value : pos_value;
+            skip_branch = true;
+        }
+    };
+
     if(res_expr_2.is_constant) {
-        bool is_zero = std::stoi(std::string(res_expr_2.constant)) == 0; 
+        bool is_zero = check_if_symbol(res_expr_2.constant) ? false : (std::stoi(std::string(res_expr_2.constant)) == 0);
         if(op == AND || op == OR) {
-            bool do_jmp = (op == AND && is_zero) || (op == OR && !is_zero);
-            if(do_jmp) {
-                code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, false_id);
+            //Both are constants, do compile time evaluation
+            if(is_con) {
+                res.is_constant = true;
+                res.constant = op == AND ? (*is_con && !is_zero ? pos_value : neg_value): (*is_con || !is_zero ? pos_value : neg_value);
+                skip_branch = true;
             }
+            else {
+                set_to_constant(is_zero);
+            } 
         }
         else if(op == NOT) {
             res.is_constant = true;
             res.constant = is_zero ? pos_value : neg_value;
         }
     }
-    else if(op == AND || op == OR) {
-        void (Ifunc_translation::*branch_op)(int, int) = (op == AND) ? &Ifunc_translation::branch_if_z : &Ifunc_translation::branch_if_nz;
-        code_gen::call_code_gen(fn_intf, branch_op, res_expr_2.expr_id, false_id);
-    } 
-    switch(op) {
-        case AND: 
-        case OR: {
-            std::string_view first_val = op == AND ? pos_value : neg_value;
-            std::string_view second_val = op == AND ? neg_value : pos_value;
-            tmp_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::create_temporary_value, res.type.base_type, res.type.is_signed);
-            code_gen::call_code_gen(fn_intf, &Ifunc_translation::set_value, tmp_id, first_val);
-            code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, end_id);
-            code_gen::call_code_gen(fn_intf, &Ifunc_translation::insert_label, false_id);
-            code_gen::call_code_gen(fn_intf, &Ifunc_translation::set_value, tmp_id, second_val);
-            code_gen::call_code_gen(fn_intf, &Ifunc_translation::insert_label, end_id);
-            break;
+    else if(is_con) {
+        set_to_constant(!*is_con);
+    }
+    
+    if(!skip_branch) {
+        if(op == AND || op == OR) {
+            void (Ifunc_translation::*branch_op)(int, int) = (op == AND) ? &Ifunc_translation::branch_if_z : &Ifunc_translation::branch_if_nz;
+            if(!res_expr_2.is_constant)
+                code_gen::call_code_gen(fn_intf, branch_op, res_expr_2.expr_id, false_id);
         }
-        case NOT: {
-            if(!res_expr_2.is_constant) {
-                tmp_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::if_eq, res_expr_2.expr_id, neg_value);
+
+        switch(op) {
+            case AND: 
+            case OR: {
+                std::string_view first_val = op == AND ? pos_value : neg_value;
+                std::string_view second_val = op == AND ? neg_value : pos_value;
+                tmp_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::create_temporary_value, res.type.base_type, res.type.is_signed);
+                code_gen::call_code_gen(fn_intf, &Ifunc_translation::set_value, tmp_id, first_val);
+                code_gen::call_code_gen(fn_intf, &Ifunc_translation::branch, end_id);
+                code_gen::call_code_gen(fn_intf, &Ifunc_translation::insert_label, false_id);
+                code_gen::call_code_gen(fn_intf, &Ifunc_translation::set_value, tmp_id, second_val);
+                code_gen::call_code_gen(fn_intf, &Ifunc_translation::insert_label, end_id);
+                break;
             }
-            break;
-        }
-        default: {
-            CRITICAL_ASSERT_NOW("handle_logical_op() called with invalid logical operator");
+            case NOT: {
+                if(!res_expr_2.is_constant) {
+                    tmp_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::if_eq, res_expr_2.expr_id, neg_value);
+                }
+                break;
+            }
+            default: {
+                CRITICAL_ASSERT_NOW("handle_logical_op() called with invalid logical operator");
+            }
         }
     }
 
     res.expr_id = tmp_id;
     res_stack.push(res);
-}
-
-static bool check_if_symbol(std::string_view sym) {
-    try {
-        size_t idx = 0;
-        int value = std::stoi(std::string(sym), &idx);
-        return idx != sym.size();
-    }
-    catch(std::invalid_argument& _) {
-        return true;
-    }
-
-    return true;
 }
 
 std::string_view eval_expr::arithmetic_with_symbol(std::string_view num1_str, std::string_view num2_str, operator_type binary_op) {
@@ -440,7 +458,8 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
     convert_to_ptr_type(res1);
     convert_to_ptr_type(res2);
 
-    if(res1.type.is_pointer_type() && res2.type.is_integral()) {
+    if((res1.type.is_pointer_type() && res2.type.is_integral()) ||
+       (op == PLUS && (res1.type.is_integral() && res2.type.is_pointer_type()))) {
         handle_pointer_arithmetic(res1, res2, op);
         return;
     }
