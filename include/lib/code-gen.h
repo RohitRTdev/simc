@@ -52,6 +52,7 @@ struct c_var {
     bool is_signed;
     bool is_static;
     bool is_fn;
+    bool is_str;
     std::string value;
 };
 
@@ -71,8 +72,10 @@ public:
 class Ifunc_translation : public Itrbase {
 public:
 //Declaration
-    virtual int declare_local_variable(std::string_view name, c_type type, bool is_signed) = 0;
-    virtual int declare_local_mem_variable(std::string_view name, size_t mem_var_size) = 0; 
+    virtual int declare_local_variable(std::string_view name, c_type type, bool is_signed, bool is_static) = 0;
+    virtual int declare_local_mem_variable(std::string_view name, bool is_static, size_t mem_var_size) = 0; 
+    virtual int declare_string_constant(std::string_view name, std::string_view value) = 0;
+    virtual void init_variable(int var_id, std::string_view constant) = 0;
     virtual void free_result(int exp_id) = 0;
     virtual int create_temporary_value(c_type type, bool is_signed) = 0;
     virtual int set_value(int expr_id, std::string_view constant) = 0;
@@ -166,6 +169,7 @@ public:
     virtual int declare_global_variable(std::string_view name, c_type type, bool is_signed, bool is_static) = 0;
     virtual void init_variable(int var_id, std::string_view constant) = 0;
     virtual int declare_global_mem_variable(std::string_view name, bool is_static, size_t mem_var_size) = 0; 
+    virtual int declare_string_constant(std::string_view name, std::string_view value) = 0;
     virtual void generate_code() = 0;
 
     virtual ~Itranslation() = default;

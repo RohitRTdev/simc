@@ -32,6 +32,8 @@ class scope {
     void add_param_variable(int id, std::string_view name, const type_spec& type);
     void initialize_variable(var_info& var, std::unique_ptr<ast> init_expr);
 public:
+    static int static_id;
+    
     scope(scope* _parent); 
     scope(scope* _parent, tu_intf_type tu);
     scope(scope* _parent, fn_intf_type fn);
@@ -41,5 +43,6 @@ public:
     bool redefine_symbol_check(std::string_view symbol, const type_spec& type, const decl_spec& stor_spec, bool no_redefine = false) const;
     var_info& fetch_var_info(std::string_view symbol);
     void add_variable(std::string_view name, const type_spec& type, const decl_spec& stor_spec, std::unique_ptr<ast> init_expr = std::unique_ptr<ast>(), bool is_global = false); 
+    int add_string_constant(std::string_view name, std::string_view value);
     std::pair<Ifunc_translation*, scope*> add_function_definition(std::string_view fn_name, const std::vector<std::string_view>& fn_args);
 };

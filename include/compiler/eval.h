@@ -97,6 +97,7 @@ class eval_expr {
     Ifunc_translation* fn_intf;
     std::unique_ptr<ast> expr_node;
     const ast_expr* expr;
+    bool compile_only;
     static std::vector<std::string> const_storage;
     bool hook();
 
@@ -119,6 +120,7 @@ class eval_expr {
 
 
 public:
-    eval_expr(std::unique_ptr<ast> expr_start, Ifunc_translation* fn, scope* cur_scope);
+    eval_expr(std::unique_ptr<ast> expr_start, Ifunc_translation* fn, scope* cur_scope, bool only_compile = false);
     expr_result eval();
+    static int string_id;
 };

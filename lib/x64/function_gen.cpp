@@ -9,6 +9,7 @@ const std::vector<std::array<std::string, NUM_REGS>> regs = {{"rax", "rbx", "rcx
 
 
 int x64_func::new_label_id = 0;
+int x64_func::static_id = 0;
 
 x64_func::x64_func(std::string_view name, x64_tu* _parent, c_type ret_type, bool is_signed): new_id(1), cur_offset(0), 
 fn_name(name), parent(_parent), ret_label_id(0), m_is_signed(is_signed), m_ret_type(ret_type), call_index(0),
@@ -119,7 +120,7 @@ int x64_func::fetch_global_var(int id) {
 
     insert_comment("fetch global var");    
     int reg = choose_free_reg(type, var.is_signed);
-    if(var.mem_var_size)
+    if(var.mem_var_size || var.is_str)
         insert_code("lea{} {}(%rip), %{}", type, var.name, reg);
     else 
         insert_code("mov{} {}(%rip), %{}", type, var.name, reg);
@@ -180,7 +181,11 @@ int x64_func::get_address_of(int id, bool is_mem, bool is_global) {
     return reg_status_list[reg];
 }
 
-int x64_func::declare_local_variable(std::string_view name, c_type type, bool is_signed) {
+int x64_func::declare_local_variable(std::string_view name, c_type type, bool is_signed, bool is_static) {
+    if(is_static) {
+        return parent->declare_global_variable(generate_static_name(std::string(name)), type, is_signed, is_static);
+    }
+
     filter_type(type, is_signed);
     c_expr_x64 var{};
 
@@ -201,7 +206,10 @@ int x64_func::declare_local_variable(std::string_view name, c_type type, bool is
     return var.id;
 }
 
-int x64_func::declare_local_mem_variable(std::string_view name, size_t mem_var_size) {
+int x64_func::declare_local_mem_variable(std::string_view name, bool is_static, size_t mem_var_size) {
+    if(is_static) {
+        return parent->declare_global_mem_variable(generate_static_name(std::string(name)), is_static, mem_var_size);
+    }
     c_expr_x64 var{};
 
     c_var var_info{};
@@ -222,6 +230,14 @@ int x64_func::declare_local_mem_variable(std::string_view name, size_t mem_var_s
     return var.id;
 }
 
+void x64_func::init_variable(int var_id, std::string_view constant) {
+    parent->init_variable(var_id, constant);
+}
+
+int x64_func::declare_string_constant(std::string_view name, std::string_view value) {
+    return parent->declare_string_constant(name, value);
+}
+
 int x64_func::create_temporary_value(c_type type, bool is_signed) {
     int reg = choose_free_reg(type, is_signed);
     return reg_status_list[reg];
@@ -239,7 +255,7 @@ int x64_func::save_param(std::string_view name, c_type type, bool is_signed) {
     filter_type(type, is_signed);
     int id;
     if(call_index < reg_call_list.size()) {
-        id = declare_local_variable(name, type, is_signed);
+        id = declare_local_variable(name, type, is_signed, false);
         insert_code("mov{} %{}, {}(%rbp)", type, reg_call_list[call_index++], std::to_string(cur_offset));
     }
     else {
