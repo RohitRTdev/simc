@@ -33,8 +33,8 @@ static bool is_relational_operator(operator_type op) {
     return false;
 }
 
-eval_expr::eval_expr(std::unique_ptr<ast> expr_start, Ifunc_translation* fn, scope* cur_scope) : expr_node(std::move(expr_start)), 
-fn_intf(fn), fn_scope(cur_scope) 
+eval_expr::eval_expr(std::unique_ptr<ast> expr_start, Ifunc_translation* fn, scope* cur_scope, bool only_compile) : expr_node(std::move(expr_start)), 
+fn_intf(fn), fn_scope(cur_scope), compile_only(only_compile) 
 {
     const_storage.clear();
     const_storage.reserve(100);
@@ -708,7 +708,7 @@ void eval_expr::handle_addr() {
         res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::get_address_of, in.expr_id, is_mem, is_global);
     }
     
-    if(fn_scope->is_global_scope()) {
+    if(compile_only) {
         if(in.category == l_val_cat::GLOBAL) {
             res.is_constant = true;
             res.constant = std::get<std::string>(in.var_token->value);
@@ -722,7 +722,7 @@ void eval_expr::handle_array_subscript() {
     auto res1 = fetch_stack_node(res_stack);
     auto res2 = fetch_stack_node(res_stack);
 
-    if(fn_scope->is_global_scope()) {
+    if(compile_only) {
         if((res1.is_constant && check_if_symbol(res1.constant)) || (res2.is_constant && check_if_symbol(res2.constant))) {
             CRITICAL_ASSERT_NOW("Array subscript operation evaluation is currently not supported for compile time expression");
         }
@@ -761,7 +761,7 @@ void eval_expr::handle_indir() {
         sim_log_error("'*' operator can only be used on a non void pointer type");
     }
 
-    if(fn_scope->is_global_scope() && res_in.is_constant && check_if_symbol(res_in.constant)) {
+    if(compile_only && res_in.is_constant && check_if_symbol(res_in.constant)) {
         sim_log_error("'*' operator cannot be used to evaluate symbol during compile time");
     }
 
@@ -900,7 +900,7 @@ void eval_expr::handle_var() {
             category = l_val_cat::GLOBAL;
         }
     }
-    else if(var.is_global) {
+    else if(var.is_global || var.stor_spec.is_stor_static()) {
         if(!is_assignable()) {
             var_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::fetch_global_var, var.var_id);
         }
@@ -908,7 +908,7 @@ void eval_expr::handle_var() {
     }
     
     expr_result res{var_id, var.type, expr->tok, true, category};
-    if(!is_assignable() && fn_scope->is_global_scope()) {
+    if(!is_assignable() && compile_only) {
         if(var.type.is_array_type() || var.type.is_function_type()) {
             res.is_constant = true;
             res.constant = var.name;
@@ -944,7 +944,7 @@ void eval_expr::handle_constant() {
         type.is_signed = true;
     }
 
-    if(!(expr->tok->is_string_constant() && !fn_scope->is_global_scope()))
+    if(!(expr->tok->is_string_constant() && !compile_only))
         res.is_constant = true;
     if(expr->tok->is_char_constant()) {
         const_storage.push_back(std::to_string(int(std::get<char>(expr->tok->value))));
@@ -1039,7 +1039,7 @@ void eval_expr::handle_comma_expr() {
     _.free(fn_intf);
     res_in.is_lvalue = false;
 
-    if(fn_scope->is_global_scope()) {
+    if(compile_only) {
         res_in.is_constant = false;
     }
     res_stack.push(res_in);

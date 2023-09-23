@@ -1,6 +1,6 @@
 long arr[10];
 int printf(const char*);
-const char con = 2;
+static const char con = 2;
 const int* const gold = 1 + arr - 3 + 2 + con;  
 int* val = gold;
 
@@ -9,7 +9,9 @@ int main() {
     int i = 0;
     const char* str = &*"hello, world\n";
     printf(str);
-    char val = "choose from here"[2];
+    static char* val = "is_string_stable\n" - 2;
+    static const int another_int = -55;
+    printf(val);
     "add" == "add";
     while(i < 10) {
         sum = sum + i;
@@ -23,6 +25,8 @@ int main() {
 int fn() {
     int sum = 0;
     int i = 0;
+    static const int another_int;
+    another_int + 1;
     while (i < 10) {
         i = i + 1;
         if (i % 2)

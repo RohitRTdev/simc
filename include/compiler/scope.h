@@ -32,6 +32,8 @@ class scope {
     void add_param_variable(int id, std::string_view name, const type_spec& type);
     void initialize_variable(var_info& var, std::unique_ptr<ast> init_expr);
 public:
+    static int static_id;
+    
     scope(scope* _parent); 
     scope(scope* _parent, tu_intf_type tu);
     scope(scope* _parent, fn_intf_type fn);

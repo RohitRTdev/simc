@@ -5,6 +5,8 @@
 #include "compiler/utils.h"
 #include "debug-api.h"
 
+int scope::static_id = 0;
+
 scope::scope(scope* _parent) : parent(_parent), intf(_parent->intf)
 {}
 
@@ -41,10 +43,10 @@ int scope::declare_variable(const var_info& var) {
     }
     else {
         if(mem_var_size) {
-            return std::get<fn_intf_type>(intf)->declare_local_mem_variable(var.name, *mem_var_size);
+            return std::get<fn_intf_type>(intf)->declare_local_mem_variable(var.name, var.stor_spec.is_stor_static(), *mem_var_size);
         }
         else {
-            return std::get<fn_intf_type>(intf)->declare_local_variable(var.name, phy_type, is_signed);
+            return std::get<fn_intf_type>(intf)->declare_local_variable(var.name, phy_type, is_signed, var.stor_spec.is_stor_static());
         }
     }
 }
@@ -64,10 +66,10 @@ void scope::initialize_variable(var_info& var, std::unique_ptr<ast> init_expr) {
         sim_log_error("Redefinition of variable:{}", var.name);
     }
     sim_log_debug("Initializing variable with var_id:{}", var.var_id);
-    if(is_global_scope()) {
+    if(is_global_scope() || var.stor_spec.is_stor_static()) {
         //Expr must be computable at compile time
         code_gen::eval_only = true;
-        auto res = eval_expr(std::move(init_expr), nullptr, this).eval();
+        auto res = eval_expr(std::move(init_expr), nullptr, this, true).eval();
         if(!res.is_constant) {
             sim_log_error("Init expression is not compile time computable");
         }
@@ -77,7 +79,10 @@ void scope::initialize_variable(var_info& var, std::unique_ptr<ast> init_expr) {
             sim_log_error("Cannot assign pointer type to non pointer type at global scope");
         }
 
-        std::get<tu_intf_type>(intf)->init_variable(var.var_id, var.init_value);
+        if (is_global_scope())
+            std::get<tu_intf_type>(intf)->init_variable(var.var_id, var.init_value);
+        else
+            std::get<fn_intf_type>(intf)->init_variable(var.var_id, var.init_value);
     }
     else {
         auto res = eval_expr(std::move(init_expr), std::get<1>(intf), this).eval();

@@ -14,7 +14,6 @@ void filter_type(c_type& type) {
     }
 }
 
-
 x64_tu::x64_tu() : global_var_id(0) {
     x64_func::new_label_id = 0;
     x64_func::static_id = 0;

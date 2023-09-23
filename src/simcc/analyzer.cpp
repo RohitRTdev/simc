@@ -528,7 +528,8 @@ void eval(std::unique_ptr<ast> prog) {
     auto tu = std::shared_ptr<Itranslation>(create_translation_unit());
     current_scope = new scope(nullptr, tu);
     eval_expr::string_id = 0;
-
+    scope::static_id = 0;
+    
     for(auto& child: prog->children) {
         if(child->is_decl_list()) {
             eval_decl_list(std::move(child));
