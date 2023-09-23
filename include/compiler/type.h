@@ -40,6 +40,10 @@ struct modifier {
     modifier() = default;
     modifier(cv_info) {
         ptr_list.push_back(cv_info{});
+    }
+
+    modifier(size_t size) {
+        array_spec.push_back(std::to_string(size));
     } 
 
     bool operator == (const modifier& obj) const;

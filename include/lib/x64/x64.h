@@ -49,7 +49,8 @@ class x64_tu : public Itranslation {
 
     enum Segment {
         DATA,
-        BSS
+        BSS,
+        RODATA
     };
 
     template<Segment segment>
@@ -61,6 +62,9 @@ class x64_tu : public Itranslation {
             }
             else if constexpr (segment == BSS) {
                 seg_name = LINE(".section .bss");
+            }
+            else if constexpr (segment == RODATA) {
+                seg_name = LINE(".section .rodata");
             }
             data = seg_name + data;
             add_inst_to_code(data);
@@ -75,6 +79,7 @@ public:
     int declare_global_variable(std::string_view name, c_type type, bool is_signed, bool is_static) override;
     void init_variable(int var_id, std::string_view constant) override;
     int declare_global_mem_variable(std::string_view name, bool is_static, size_t mem_var_size) override; 
+    int declare_string_constant(std::string_view name, std::string_view value) override;
     Ifunc_translation* add_function(std::string_view name, c_type ret_type, bool is_signed, bool is_static) override; 
     void generate_code() override;
 
@@ -528,10 +533,12 @@ class x64_func : public Ifunc_translation {
 
 public:
     static int new_label_id;
+    static int static_id;
     x64_func(std::string_view name, x64_tu* parent, c_type ret_type, bool is_signed);
 //declaration
     int declare_local_variable(std::string_view name, c_type type, bool is_signed) override;
     int declare_local_mem_variable(std::string_view name, size_t mem_var_size) override; 
+    int declare_string_constant(std::string_view name, std::string_view value) override;
     void free_result(int exp_id) override;
     int create_temporary_value(c_type type, bool is_signed) override;
     int set_value(int expr_id, std::string_view constant) override;

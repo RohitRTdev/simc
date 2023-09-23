@@ -7,6 +7,7 @@
 #include "compiler/ast-ops.h"
 
 std::vector<std::string> eval_expr::const_storage;
+int eval_expr::string_id = 0;
 
 static bool check_if_symbol(std::string_view sym) {
     try {
@@ -19,6 +20,17 @@ static bool check_if_symbol(std::string_view sym) {
     }
 
     return true;
+}
+
+static bool is_relational_operator(operator_type op) {
+    switch(op) {
+        case GT:
+        case LT:
+        case EQUAL_EQUAL:
+        case NOT_EQUAL: return true;
+    }
+
+    return false;
 }
 
 eval_expr::eval_expr(std::unique_ptr<ast> expr_start, Ifunc_translation* fn, scope* cur_scope) : expr_node(std::move(expr_start)), 
@@ -303,15 +315,16 @@ std::string_view eval_expr::arithmetic_with_symbol(std::string_view num1_str, st
         sim_log_error("Symbols can only be added or subtracted");
     }
 
-    auto pos = std::find_if(sym.begin(), sym.end(), [] (char ch) {
-        return ch == '+' || ch == '-';
-    });
-    if(pos != sym.end()) {
-        auto _sym = std::string(sym).substr(0, pos - sym.begin());
-        auto _num = std::string(sym).substr(pos - sym.begin(), sym.end() - pos);
-        char op_sym = binary_op == PLUS ? '+' : '-';
+    size_t pos = sym.find_first_of("+-");
+    //auto pos = std::find_if(sym.begin(), sym.end(), [] (char ch) {
+    //    return ch == '+' || ch == '-';
+    //});
+    if(pos != decltype(sym)::npos) {
+        auto _sym = sym.substr(0, pos);
+        int _num = std::stoi(std::string(sym.substr(pos)));
 
-        int __num = binary_op == PLUS ? std::stoi(_num) + std::stoi(std::string(number)) : std::stoi(_num) - std::stoi(std::string(number));
+        char op_sym;
+        int __num = binary_op == PLUS ? _num + std::stoi(std::string(number)) : _num - std::stoi(std::string(number));
         if(__num < 0)
             op_sym = '-';
         else if(__num > 0)
@@ -486,10 +499,7 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
         return;
     }
 
-    if(res1.type.is_pointer_type() && res2.type.is_pointer_type()) {
-        if(op != MINUS) {
-            sim_log_error("Arithmetic operation can have 2 pointer operands only if it is a subtraction");
-        }
+    if(res1.type.is_pointer_type() && res2.type.is_pointer_type() && op == MINUS) {
         res1.convert_to_ptrdiff(fn_intf);
         res2.convert_to_ptrdiff(fn_intf);
 
@@ -500,10 +510,11 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
     }
 
     if(!res1.type.is_type_operable(res2.type)) {
-        sim_log_error("Arithmetic operation requires both operands to be of arithmetic types");
+        if(!(res1.type.is_pointer_type() && res2.type.is_pointer_type() && is_relational_operator(op)))
+            sim_log_error("Arithmetic operation requires both operands to be of arithmetic types");
     }
-
-    perform_arithmetic_conversion(res1, res2);
+    else 
+        perform_arithmetic_conversion(res1, res2);
 
     bool is_commutative = true;
     int res_id = 0;
@@ -913,21 +924,35 @@ void eval_expr::handle_var() {
 }
 
 void eval_expr::handle_constant() {
-    //We consider a constant by default to be a signed integer
-    CRITICAL_ASSERT(!expr->tok->is_string_constant(), "String constant not supported right now");
-
-    type_spec type{};
-    type.base_type = expr->tok->is_integer_constant() ? C_INT : C_CHAR;
-    type.is_signed = true;
-
     expr_result res{};
-    res.is_constant = true;
-    if(type.base_type == C_CHAR) {
+    type_spec type{};
+    if(expr->tok->is_string_constant()) {
+        type.cv.is_const = true;
+        type.base_type = C_CHAR;
+        type.is_signed = true;
+        auto& val = std::get<std::string>(expr->tok->value);
+        type.mod_list.push_back(modifier(val.size() + 1)); //+1 accounts for null character
+        
+        const_storage.push_back(".str" + std::to_string(string_id++));
+        res.constant = const_storage.back();
+        res.expr_id = fn_scope->add_string_constant(res.constant, val);
+        res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::fetch_global_var, res.expr_id);
+    }
+    else {
+        //We consider an integer constant by default to be a signed integer
+        type.base_type = expr->tok->is_integer_constant() ? C_INT : C_CHAR;
+        type.is_signed = true;
+    }
+
+    if(!(expr->tok->is_string_constant() && !fn_scope->is_global_scope()))
+        res.is_constant = true;
+    if(expr->tok->is_char_constant()) {
         const_storage.push_back(std::to_string(int(std::get<char>(expr->tok->value))));
         res.constant = const_storage.back();
     }
-    else 
+    else if(expr->tok->is_integer_constant()) 
         res.constant = std::get<std::string>(expr->tok->value);
+    
     res.type = type;
     res_stack.push(res);
 }

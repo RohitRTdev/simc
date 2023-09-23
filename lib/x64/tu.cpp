@@ -17,8 +17,8 @@ void filter_type(c_type& type) {
 
 x64_tu::x64_tu() : global_var_id(0) {
     x64_func::new_label_id = 0;
+    x64_func::static_id = 0;
 }
-
 
 const c_var& x64_tu::fetch_global_variable(int id) const {
     return globals[id-1];
@@ -58,6 +58,20 @@ int x64_tu::declare_global_mem_variable(std::string_view name, bool is_static, s
     return ++global_var_id;
 }
 
+int x64_tu::declare_string_constant(std::string_view name, std::string_view value) {
+    c_var var{};
+    var.name = name;
+    var.value = value; 
+    var.is_str = true;
+    var.is_static = true;
+    var.is_signed = false;
+    var.type = C_LONG;
+    globals.push_back(var);
+
+    sim_log_debug("Declared string constant:{}", name);
+    return ++global_var_id;
+}
+
 Ifunc_translation* x64_tu::add_function(std::string_view name, c_type ret_type, bool is_signed, bool is_static) {
     filter_type(ret_type, is_signed);
     auto fn = new x64_func(name, this, ret_type, is_signed);
@@ -74,6 +88,7 @@ void x64_tu::generate_code() {
     
     std::string bss_section;
     std::string data_section;
+    std::string rodata_section;
 
     auto fetch_var_size = [] (const c_var& var) {
         return var.mem_var_size.has_value() ? var.mem_var_size.value() : base_type_size(var.type);
@@ -82,7 +97,10 @@ void x64_tu::generate_code() {
     for(const auto& var : globals) {
         if(var.is_fn)
             continue;
-        if(var.value.size()) {
+        if(var.is_str) {
+            rodata_section.append(fmt::format(LINE("{}:\n\t.asciz \"{}\""), var.name, var.value));
+        }
+        else if(var.value.size()) {
             if(!var.is_static) {
                 data_section.append(fmt::format(LINE(".global {}"), var.name));
                 data_section.append(fmt::format(LINE(".type {}, @object"), var.name));
@@ -98,6 +116,7 @@ void x64_tu::generate_code() {
 
     write_segment<DATA>(data_section);
     write_segment<BSS>(bss_section);
+    write_segment<RODATA>(rodata_section);
 
     if(fn_list.size()) {
         add_inst_to_code(LINE(".section .text"));

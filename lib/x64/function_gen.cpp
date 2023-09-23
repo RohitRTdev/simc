@@ -9,6 +9,7 @@ const std::vector<std::array<std::string, NUM_REGS>> regs = {{"rax", "rbx", "rcx
 
 
 int x64_func::new_label_id = 0;
+int x64_func::static_id = 0;
 
 x64_func::x64_func(std::string_view name, x64_tu* _parent, c_type ret_type, bool is_signed): new_id(1), cur_offset(0), 
 fn_name(name), parent(_parent), ret_label_id(0), m_is_signed(is_signed), m_ret_type(ret_type), call_index(0),
@@ -119,7 +120,7 @@ int x64_func::fetch_global_var(int id) {
 
     insert_comment("fetch global var");    
     int reg = choose_free_reg(type, var.is_signed);
-    if(var.mem_var_size)
+    if(var.mem_var_size || var.is_str)
         insert_code("lea{} {}(%rip), %{}", type, var.name, reg);
     else 
         insert_code("mov{} {}(%rip), %{}", type, var.name, reg);
@@ -220,6 +221,10 @@ int x64_func::declare_local_mem_variable(std::string_view name, size_t mem_var_s
     id_list.push_back(var);
 
     return var.id;
+}
+
+int x64_func::declare_string_constant(std::string_view name, std::string_view value) {
+    return parent->declare_string_constant(name, value);
 }
 
 int x64_func::create_temporary_value(c_type type, bool is_signed) {

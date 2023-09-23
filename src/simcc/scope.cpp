@@ -82,6 +82,10 @@ void scope::initialize_variable(var_info& var, std::unique_ptr<ast> init_expr) {
     else {
         auto res = eval_expr(std::move(init_expr), std::get<1>(intf), this).eval();
 
+        if(!var.type.is_type_convertible(res.type)) {
+            sim_log_error("Cannot convert init-expr type to variable type");
+        }
+        
         res.expr_id = type_spec::convert_type(var.type, res.expr_id, res.type, std::get<1>(intf), !res.is_constant);
         if (res.is_constant) {
             code_gen::call_code_gen(std::get<1>(intf), &Ifunc_translation::assign_var, var.var_id, res.constant);
@@ -178,6 +182,18 @@ void scope::add_param_variable(int id, std::string_view name, const type_spec& t
     var.var_id = id;
 
     variables.push_back(var);
+}
+
+int scope::add_string_constant(std::string_view name, std::string_view value) {
+    int id = 0;
+    if(is_global_scope()) {
+        id = std::get<tu_intf_type>(intf)->declare_string_constant(name, value);
+    }
+    else {
+        id = std::get<fn_intf_type>(intf)->declare_string_constant(name, value);
+    }
+
+    return id;
 }
 
 std::pair<Ifunc_translation*, scope*> scope::add_function_definition(std::string_view fn_name, const std::vector<std::string_view>& fn_args) {
