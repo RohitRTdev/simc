@@ -3,6 +3,7 @@
 #include <string>
 #include <variant>
 
+
 enum token_type{
     KEYWORD,
     IDENT,  
@@ -78,12 +79,12 @@ enum operator_type {
     SEMICOLON
 };
 
-
+extern size_t global_token_pos;
 struct token {
 private:
     token_type type;
     token_sub_type sub_type;
-
+    size_t position;
     bool is_keyword_data_type() const;
 
 public:
@@ -92,18 +93,21 @@ public:
     template<typename T>
     token(token_type _type, const T& val) : type(_type) {
         value = val;
+        position = global_token_pos - 1;
     }
 
     token(token_type _type, token_sub_type _sub_type, const std::string& num) {
         type = CONSTANT;
         sub_type = _sub_type;
         value = num;
+        position = global_token_pos - 1;
     }
 
     token(token_type _type, const char& val) {
         type = CONSTANT;
         sub_type = TOK_CHAR;
         value = val;
+        position = global_token_pos - 1;
     }
 
     bool is_keyword_else() const;
@@ -146,6 +150,8 @@ public:
     bool is_unary_operator() const; 
     bool is_binary_operator() const; 
     bool is_postfix_operator() const; 
+
+    void print_error() const;
 
 #ifdef SIMDEBUG
     void print() const;

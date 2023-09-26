@@ -44,8 +44,9 @@ struct expr_result {
         expr_id = type_spec::convert_type(res2.type, expr_id, type, fn_intf, !is_constant);
     }
 
-    void convert_to_integral_type(Ifunc_translation* fn_intf) {
+    void convert_to_integral_type(Ifunc_translation* fn_intf, const token* key_token) {
         if(type.is_void()) {
+            key_token->print_error();
             sim_log_error("void type cannot be converted to integral type");
         }
         if(type.is_array_type() || type.is_function_type()) {
@@ -79,7 +80,7 @@ struct expr_result {
 class eval_expr {
     std::stack<expr_result> res_stack;
     std::stack<std::unique_ptr<ast>> op_stack;
-    std::stack<std::tuple<std::string_view, size_t, size_t, bool>> fn_call_stack;
+    std::stack<std::tuple<std::string_view, size_t, size_t, const token*, bool>> fn_call_stack;
     std::stack<std::tuple<int, int, std::optional<bool>>> logical_stack;
 
     bool is_assignable() const;

@@ -2,6 +2,25 @@
 #include "compiler/utils.h"
 #include "debug-api.h"
 
+void decl_spec::print_error() const {
+    if(type_spec) {
+        type_spec->print_error();
+    }
+    else if(storage_spec) {
+        storage_spec->print_error();
+    }
+    else if(const_qual) {
+        const_qual->print_error();
+    }
+    else if(vol_qual) {
+        vol_qual->print_error();
+    }
+    else if(sign_qual) {
+        sign_qual->print_error();
+    }
+
+}
+
 c_type decl_spec::fetch_type_spec() const {
     switch(std::get<keyword_type>(type_spec->value)) {
         case TYPE_INT: return C_INT;

@@ -73,14 +73,16 @@ public:
     virtual void print();
 #endif 
 
+    virtual bool print_error() const;
     virtual ~ast() = default;
+    const token* key_token = nullptr;
 };
 
 struct ast_base_type: ast {
     decl_spec base_type;
 
     ast_base_type(const token*, const token*, const token*, const token*, const token*);
-
+    bool print_error() const override;
 #ifdef SIMDEBUG
     void print() override;
 #endif
@@ -89,6 +91,7 @@ struct ast_base_type: ast {
 struct ast_ptr_spec : ast {
     const token* pointer, *const_qual, *vol_qual;
     ast_ptr_spec(const token* , const token* , const token* );
+    bool print_error() const override;
 
 #ifdef SIMDEBUG
     void print() override;
@@ -99,6 +102,7 @@ struct ast_ptr_spec : ast {
 struct ast_array_spec : ast {
     const token* constant;
     ast_array_spec(const token*);
+    bool print_error() const override;
 
 #ifdef SIMDEBUG
     void print() override;
@@ -109,6 +113,7 @@ struct ast_array_spec : ast {
 struct ast_decl : ast {
     const token* ident;
     ast_decl(const token*);
+    bool print_error() const override;
 
 #ifdef SIMDEBUG
     void print() override;
@@ -119,6 +124,7 @@ struct ast_token: ast {
     const token* tok;
     ast_token(const token*);
     ast_token(const token*, bool);
+    bool print_error() const override;
 
 #ifdef SIMDEBUG
     virtual void print() override;
@@ -175,6 +181,7 @@ struct ast_fn_call : ast_expr {
     std::unique_ptr<ast> fn_designator;
     ast_fn_call();
 
+    bool print_error() const override;
 #ifdef SIMDEBUG
     void print() override;
 #endif
@@ -186,7 +193,7 @@ std::unique_ptr<ast> create_ast_postfix_op(const token* tok);
 std::unique_ptr<ast> create_ast_expr_var(const token* tok); 
 std::unique_ptr<ast> create_ast_expr_con(const token* tok); 
 std::unique_ptr<ast> create_ast_punctuator(const token* tok); 
-std::unique_ptr<ast> create_ast_array_subscript();
+std::unique_ptr<ast> create_ast_array_subscript(const token* tok);
 std::unique_ptr<ast> create_ast_fn_call(); 
 
 bool is_ast_expr_lb(const std::unique_ptr<ast>& node); 

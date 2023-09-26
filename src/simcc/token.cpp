@@ -1,4 +1,5 @@
 #include "compiler/token.h"
+#include "compiler/diag.h"
 #include "debug-api.h"
 
 bool token::is_keyword_else() const {
@@ -239,4 +240,9 @@ bool token::is_keyword_char() const {
 
 bool token::is_keyword_void() const {
     return type == KEYWORD && std::get<keyword_type>(value) == TYPE_VOID;
+}
+
+
+void token::print_error() const {
+    diag::print_error(position);
 }

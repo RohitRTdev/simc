@@ -1,28 +1,52 @@
 long arr[10];
 int printf(const char*);
-static const char con = 2;
-const int* const gold = 1 + arr - 3 + 2 + con;  
-int* val = gold;
+static const char* con = "fails" == "fails";
+const char* ptr = "";
+
+int test_this(int a, int b);
+
+int test_this(int a, int b) {
+    int flag = 0;
+    if (flag)
+                return 2;
+            else if(2)
+                return 4;
+            else if(5)
+                return 2;
+
+    return 1;
+}
+
+int return_void() {
+    return 2;
+}
+char val = 'a';
 
 int main() {
-    int sum = 0;
-    int i = 0;
-    const char* str = &*"hello, world\n";
+    int sum = 1, i = 0;
+    const char* str = &*"";
     printf(str);
-    static char* val = "is_string_stable\n" - 2;
+    ptr++;
+    static char* val = "is_string_stable\n";
     static const int another_int = -55;
     printf(val);
     "add" == "add";
+    return_void() && val;
     while(i < 10) {
         sum = sum + i;
         if (sum > 10)
-            break;
+            continue;
         i++;
     }
     return sum;
 }
 
 int fn() {
+    
+
+    int (*(*s[2]))(int, const char(char [2], register char));
+    
+    (*s[0][1])(0, fn);
     int sum = 0;
     int i = 0;
     static const int another_int;
