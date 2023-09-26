@@ -2,10 +2,11 @@
 #include <list>
 #include <optional>
 #include "compiler/token.h"
+#include "compiler/diag.h"
 #include "debug-api.h"
 
 std::vector<token> tokens;  
-
+size_t global_token_pos = 0;
 enum lexer_states {
     LEXER_START,
     EXTENDED_OPERATOR_TOKEN,
@@ -154,6 +155,7 @@ void lex(const std::vector<char>& input) {
     size_t start_pos = 0, literal_count = 0;
     for(int i = 0; i < input.size(); i++) {
         char ch = input[i];
+        global_token_pos = i;
         operator_type op;
 
         if (state == EXPECTING_TICK) {
@@ -163,6 +165,7 @@ void lex(const std::vector<char>& input) {
                 continue;
             }
             else {
+                diag::print_error(i);
                 sim_log_error("\' should be closed with just one character.");
             }
         }
@@ -175,6 +178,7 @@ void lex(const std::vector<char>& input) {
                 state = EXPECTING_TICK;
             }
             else {
+                diag::print_error(i);
                 sim_log_error("Character {} is not a valid escape character", ch);
             }
         }
@@ -195,7 +199,13 @@ void lex(const std::vector<char>& input) {
             if(ch == '\"') {
                 std::string literal(input.begin()+start_pos+1, input.begin()+start_pos+literal_count+1);
                 sim_log_debug("Pushing string constant:{} with literal_count: {}", literal, literal_count);
-                tokens.push_back(token(CONSTANT, TOK_STRING, literal));
+                if(!tokens.empty() && tokens.back().is_string_constant()) {
+                    auto& str = std::get<std::string>(tokens.back().value);
+                    str += literal; 
+                }
+                else {
+                    tokens.push_back(token(CONSTANT, TOK_STRING, literal));
+                }
                 state = LEXER_START;
                 continue;
             }
@@ -208,6 +218,7 @@ void lex(const std::vector<char>& input) {
                 literal_count++;
             }
             else if(isalpha(ch) || ch == '_') {
+                diag::print_error(i);
                 sim_log_error("Variable names are not supposed to start with a digit.");
             }
             else {
@@ -425,13 +436,15 @@ void lex(const std::vector<char>& input) {
         }
 
         if(state == LEXER_INVALID_TOKEN) {
-            sim_log_error("Invalid token encountered:{}", ch);
+            diag::print_error(i);
+            sim_log_error("Invalid token encountered:'{}'", ch);
         }
     }
 
 #ifdef SIMDEBUG
     print_token_list();
 #endif
-    if(state != LEXER_START)
+    if(state != LEXER_START) {
         sim_log_error("Lexical analysis failed")
+    }
 }

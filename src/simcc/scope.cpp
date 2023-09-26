@@ -13,7 +13,7 @@ scope::scope(scope* _parent) : parent(_parent), intf(_parent->intf)
 scope::scope(scope* _parent, tu_intf_type tu) : parent(_parent), intf(tu)
 {}
 
-scope::scope(scope* _parent, fn_intf_type fn) : parent(_parent), intf(fn)
+scope::scope(scope* _parent, fn_intf_type fn) : parent(_parent), intf(fn) 
 {}
 
 scope* scope::fetch_parent_scope() const {
@@ -22,6 +22,11 @@ scope* scope::fetch_parent_scope() const {
 
 bool scope::is_global_scope() const {
     return !parent;
+}
+
+void scope::print_error() const {
+    if(cur_var_token)
+        cur_var_token->print_error();
 }
 
 int scope::declare_variable(const var_info& var) {
@@ -53,16 +58,19 @@ int scope::declare_variable(const var_info& var) {
 
 void scope::initialize_variable(var_info& var, std::unique_ptr<ast> init_expr) {
     if(var.type.is_function_type()) {
+        print_error();
         sim_log_error("Function type cannot be initialized");
     }
 
     CRITICAL_ASSERT(!var.type.is_array_type(), "Array type initialization is not supported right now");
 
     if(var.stor_spec.is_stor_extern()) {
+        print_error();
         sim_log_error("Extern declaration cannot be initialized");
     }
 
-    if(var.init_value != "") {
+    if(var.is_initialized) {
+        print_error();
         sim_log_error("Redefinition of variable:{}", var.name);
     }
     sim_log_debug("Initializing variable with var_id:{}", var.var_id);
@@ -71,11 +79,13 @@ void scope::initialize_variable(var_info& var, std::unique_ptr<ast> init_expr) {
         code_gen::eval_only = true;
         auto res = eval_expr(std::move(init_expr), nullptr, this, true).eval();
         if(!res.is_constant) {
+            print_error();
             sim_log_error("Init expression is not compile time computable");
         }
         code_gen::eval_only = false;
         var.init_value = res.constant;
         if(!var.type.is_pointer_type() && res.type.is_pointer_type()) {
+            print_error();
             sim_log_error("Cannot assign pointer type to non pointer type at global scope");
         }
 
@@ -88,6 +98,7 @@ void scope::initialize_variable(var_info& var, std::unique_ptr<ast> init_expr) {
         auto res = eval_expr(std::move(init_expr), std::get<1>(intf), this).eval();
 
         if(!var.type.is_type_convertible(res.type)) {
+            print_error();
             sim_log_error("Cannot convert init-expr type to variable type");
         }
         
@@ -111,11 +122,13 @@ bool scope::redefine_symbol_check(std::string_view symbol, const type_spec& type
             if(!no_redefine && (stor_spec.is_stor_extern() || type.is_function_type() || 
             (stor_spec.is_stor_static() && (var.stor_spec.is_stor_static() || var.stor_spec.is_stor_extern())) || !var.is_defined)) {
                 if(!(var.type == type)) {
+                    print_error();
                     sim_log_error("Current definition of symbol:{} does not match earlier declaration", symbol);
                 }
                 return true;
             }
             else {
+                print_error();
                 sim_log_error("\"{}\" redefined", symbol);
             }
         }
@@ -124,7 +137,7 @@ bool scope::redefine_symbol_check(std::string_view symbol, const type_spec& type
     return false;
 }
 
-var_info& scope::fetch_var_info(std::string_view symbol) {
+var_info& scope::fetch_var_info(std::string_view symbol, const token* key_token) {
     scope* search_scope = this;
     sim_log_debug("Searching for symbol:{}", symbol);
     while(search_scope) {
@@ -138,14 +151,17 @@ var_info& scope::fetch_var_info(std::string_view symbol) {
         search_scope = search_scope->parent;
     }
 
+    if(key_token)
+        key_token->print_error();
     sim_log_error("Variable:{} seems to be undefined", symbol);
 }
 
 void scope::add_variable(std::string_view name, const type_spec& type, const decl_spec& stor_spec,
-std::unique_ptr<ast> init_expr, bool is_global) {
+const token* key_token, std::unique_ptr<ast> init_expr, bool is_global) {
+    cur_var_token = key_token;
     if(redefine_symbol_check(name, type, stor_spec)) {
         sim_log_debug("Found existing declaration for symbol");
-        auto& var = fetch_var_info(name);
+        auto& var = fetch_var_info(name, key_token);
         var.is_defined = true;
 
         if(!var.type.is_function_type())
@@ -177,9 +193,11 @@ std::unique_ptr<ast> init_expr, bool is_global) {
             initialize_variable(variables.back(), std::move(init_expr));
         }
     }
+    cur_var_token = nullptr;
 }
 
-void scope::add_param_variable(int id, std::string_view name, const type_spec& type) {
+void scope::add_param_variable(int id, std::string_view name, const type_spec& type, const token* key_token) {
+    cur_var_token = key_token;
     redefine_symbol_check(name, type, decl_spec{}, true);
     var_info var{};
     var.name = name;
@@ -187,6 +205,7 @@ void scope::add_param_variable(int id, std::string_view name, const type_spec& t
     var.var_id = id;
 
     variables.push_back(var);
+    cur_var_token = nullptr;
 }
 
 int scope::add_string_constant(std::string_view name, std::string_view value) {
@@ -201,8 +220,14 @@ int scope::add_string_constant(std::string_view name, std::string_view value) {
     return id;
 }
 
-std::pair<Ifunc_translation*, scope*> scope::add_function_definition(std::string_view fn_name, const std::vector<std::string_view>& fn_args) {
-    auto& fn = fetch_var_info(fn_name);
+std::pair<Ifunc_translation*, scope*> scope::add_function_definition(std::string_view fn_name, const std::vector<std::string_view>& fn_args,
+const std::vector<const token*>& fn_arg_tokens) {
+    auto& fn = fetch_var_info(fn_name, fn_arg_tokens.back());
+    if(fn.is_body_defined) {
+        fn_arg_tokens.back()->print_error();
+        sim_log_error("Function {} is being redefined", fn_name);
+    }
+    fn.is_body_defined = true;
     fn.is_defined = true;
     fn.args = fn_args;
 
@@ -220,7 +245,7 @@ std::pair<Ifunc_translation*, scope*> scope::add_function_definition(std::string
         }
         auto [sim_type, is_sign] = arg.get_simple_type();
         int id = fn_intf->save_param(fn_args[arg_index], sim_type, is_sign);
-        fn_scope->add_param_variable(id, fn.args[arg_index], tmp_arg);
+        fn_scope->add_param_variable(id, fn_args[arg_index], tmp_arg, fn_arg_tokens[arg_index]);
         arg_index++;
     }
 

@@ -11,12 +11,6 @@
 scope* current_scope = nullptr;
 bool code_gen::eval_only = false;
 
-//Fn scope
-static void create_new_scope(Ifunc_translation* fn_intf) {
-    auto new_scope = new scope(current_scope, fn_intf);
-    current_scope = new_scope;
-}
-
 //Block scope
 static void create_new_scope() {
     auto new_scope = new scope(current_scope);
@@ -30,26 +24,29 @@ static void revert_to_old_scope() {
     current_scope = parent;
 }
 
-static void eval_expr_stmt(std::unique_ptr<ast> cur_stmt, Ifunc_translation* fn) {
+static void eval_expr_stmt(std::unique_ptr<ast> cur_stmt, Ifunc_translation* fn, const token* fn_token) {
     auto res = eval_expr(fetch_child(cur_stmt), fn, current_scope).eval();
     res.free(fn);
 }
 
-static void eval_ret_stmt(std::unique_ptr<ast> ret_stmt, Ifunc_translation* fn, const var_info& var, bool is_branch = false) {
+static void eval_ret_stmt(std::unique_ptr<ast> ret_stmt, Ifunc_translation* fn, const var_info& var, const token* fn_token, bool is_branch = false) {
     auto ret_type = var.type.resolve_type();
     if(!ret_stmt->children.size()) {
         if(!ret_type.is_void()) {
-            sim_log_error("Function with non void return type, returning void expression");
+            ret_stmt->print_error();
+            sim_log_error("Function {} with non void return type, returning void expression", var.name);
         }
         return;
     }
 
     auto res = eval_expr(std::move(ret_stmt->children[0]), fn, current_scope).eval();
     if(ret_type.is_void() && !res.type.is_void()) {
-        sim_log_error("Function with void return type, returning an expression");
+        ret_stmt->print_error();
+        sim_log_error("Function {} with void return type, returning an expression", var.name);
     }
 
     if(!res.type.is_type_convertible(ret_type)) {
+        ret_stmt->print_error();
         sim_log_error("Expr type not compatible with return type of function");
     }
 
@@ -99,7 +96,7 @@ static type_spec forge_type(const base_type_res& base_res, const decltype(type_s
     return {std::get<0>(base_res), std::get<1>(base_res), std::get<2>(base_res), stor_spec.is_stor_register(), mod_list};
 }
 
-static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_list, bool is_fn_def = false) {
+static std::pair<std::vector<std::string_view>, std::vector<const token*>> eval_decl_list(std::unique_ptr<ast> decl_list, bool is_fn_def = false) {
 
     struct context {
         std::unique_ptr<ast> decl_list;
@@ -129,6 +126,7 @@ static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_li
     bool array = false, function = false;
     decltype(type_spec::mod_list) mod_list;
     std::vector<std::string_view> fn_args;
+    std::vector<const token*> fn_arg_tokens;
 
     while(!decl_list->children.empty() || !iter_stack.empty()) {    
         //Retrieve the saved context and resume from there
@@ -168,6 +166,7 @@ static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_li
             else if(child->is_array_specifier_list()) {
 
                 if(function) {
+                    child->print_error();
                     sim_log_error("Function cannot return array type");
                 }
 
@@ -182,9 +181,11 @@ static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_li
             }
             else if(child->is_param_list()) {
                 if(array) {
+                    child->print_error();
                     sim_log_error("Modified type of array of functions not allowed");
                 }
                 if(function) {
+                    child->print_error();
                     sim_log_error("Function cannot return function type");
                 }
 
@@ -241,9 +242,11 @@ static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_li
         res = forge_type(forged_base, mod_list, stor_spec);
         if (res.base_type == C_VOID) {
             if (!res.mod_list.size()) {
+                stor_spec.print_error();
                 sim_log_error("void base type cannot be used with unmodified type");
             }
             else if (res.mod_list.back().is_array_mod()) {
+                stor_spec.print_error();
                 sim_log_error("array of void is not allowed");
             }
         }
@@ -256,21 +259,23 @@ static std::vector<std::string_view> eval_decl_list(std::unique_ptr<ast> decl_li
             //Push the function name along with it's args for ease of processing
             if(is_fn_def) {
                 fn_args.push_back(name);
+                fn_arg_tokens.push_back(decl_view);
             }
             bool is_global = current_scope->is_global_scope();
-            current_scope->add_variable(name, res, stor_spec, std::move(init_expr), is_global);
+            current_scope->add_variable(name, res, stor_spec, decl_view, std::move(init_expr), is_global);
         }
         else {
             //Only top level fn arguments should get pushed to list
             if(is_fn_def && iter_stack.size() == 1) {
                 fn_args.push_back(name);
+                fn_arg_tokens.push_back(decl_view);
             }
             saved_res = res; 
         } 
         mod_list.clear();
     }
 
-    return fn_args;
+    return std::make_pair(fn_args, fn_arg_tokens);
 }
 
 enum class control_stmt_type {
@@ -280,7 +285,7 @@ enum class control_stmt_type {
 
 static std::unique_ptr<ast> eval_while_stmt(std::unique_ptr<ast> stmt, Ifunc_translation* fn, 
 std::stack<std::unique_ptr<ast>>& stmt_stack, std::stack<std::tuple<int, int, bool, control_stmt_type>>& if_stack,
-std::unique_ptr<ast> cur_stmt_list, std::stack<std::tuple<bool, bool, bool>>& branch_status) {
+std::unique_ptr<ast> cur_stmt_list, std::stack<std::tuple<bool, bool, bool>>& branch_status, const token* fn_token) {
 
     //stmt list has been evaluated
     if(!stmt->children.size()) {
@@ -319,7 +324,7 @@ std::unique_ptr<ast> cur_stmt_list, std::stack<std::tuple<bool, bool, bool>>& br
 
 static std::unique_ptr<ast> eval_if_stmt(std::unique_ptr<ast> stmt, Ifunc_translation* fn, 
 std::stack<std::unique_ptr<ast>>& stmt_stack, std::stack<std::tuple<int, int, bool, control_stmt_type>>& if_stack,
-std::unique_ptr<ast> cur_stmt_list, std::stack<std::tuple<bool, bool, bool>>& branch_status) {
+std::unique_ptr<ast> cur_stmt_list, std::stack<std::tuple<bool, bool, bool>>& branch_status, const token* fn_token) {
     
     auto prepare_stmt_list_jump = [&] (std::unique_ptr<ast> node) {
         auto stmt_list = fetch_child(node);
@@ -406,7 +411,7 @@ std::unique_ptr<ast> cur_stmt_list, std::stack<std::tuple<bool, bool, bool>>& br
     }
 }
 
-static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation* fn, std::string_view fn_name) {
+static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation* fn, std::string_view fn_name, const token* fn_token) {
     
     using if_stack_type = std::tuple<int, int, bool, control_stmt_type>; 
     
@@ -463,17 +468,18 @@ static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation
             eval_decl_list(fetch_child(stmt));
         }
         else if(stmt->is_expr_stmt()) {
-            eval_expr_stmt(std::move(stmt), fn);
+            eval_expr_stmt(std::move(stmt), fn, fn_token);
         }
         else if(stmt->is_while()) {
-            cur_stmt_list = eval_while_stmt(std::move(stmt), fn, stmt_stack, if_stack, std::move(cur_stmt_list), branch_status);
+            cur_stmt_list = eval_while_stmt(std::move(stmt), fn, stmt_stack, if_stack, std::move(cur_stmt_list), branch_status, fn_token);
         }
         else if(stmt->is_if()) {
-            cur_stmt_list = eval_if_stmt(std::move(stmt), fn, stmt_stack, if_stack, std::move(cur_stmt_list), branch_status);
+            cur_stmt_list = eval_if_stmt(std::move(stmt), fn, stmt_stack, if_stack, std::move(cur_stmt_list), branch_status, fn_token);
         }
         else if(stmt->is_break_stmt()) {
             auto nearest_loop = fetch_nearest_loop();
             if(!nearest_loop) {
+                stmt->print_error();
                 sim_log_error("break statement found in wrong context");
             }
 
@@ -483,6 +489,7 @@ static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation
         else if(stmt->is_continue_stmt()) {
             auto nearest_loop = fetch_nearest_loop();
             if(!nearest_loop) {
+                stmt->print_error();
                 sim_log_error("continue statement found in wrong context");
             }
             
@@ -491,8 +498,8 @@ static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation
         }
         else if(stmt->is_ret_stmt()) {
             if(!fn_decl)
-                fn_decl = current_scope->fetch_var_info(fn_name);
-            eval_ret_stmt(std::move(stmt), fn, *fn_decl, std::get<0>(branch_status.top()) || std::get<2>(branch_status.top()));
+                fn_decl = current_scope->fetch_var_info(fn_name, fn_token);
+            eval_ret_stmt(std::move(stmt), fn, *fn_decl, fn_token, std::get<0>(branch_status.top()) || std::get<2>(branch_status.top()));
             code_gen::eval_only = true;
             std::get<1>(branch_status.top()) = true;
             ret_encountered = true;
@@ -504,20 +511,22 @@ static void eval_stmt_list(std::unique_ptr<ast> cur_stmt_list, Ifunc_translation
     }
 
     if(!ret_encountered) {
-        auto& fn_info = current_scope->fetch_var_info(fn_name);
+        auto& fn_info = current_scope->fetch_var_info(fn_name, fn_token);
         if(fn_name != "main" && !fn_info.type.resolve_type().is_void()) {
-            sim_log_error("Function with non void return type is not returning any expression");
+            fn_token->print_error();
+            sim_log_error("Function {} with non void return type is not returning any expression", fn_name);
         }
     } 
 
 }
 
 void eval_fn_def(std::unique_ptr<ast> fn_def) {
-    auto fn_args = eval_decl_list(fetch_child(fn_def), true);
-    auto [fn_intf, fn_scope] = current_scope->add_function_definition(fn_args.back(), std::vector<std::string_view>(fn_args.begin(), fn_args.begin() + fn_args.size() - 1));
+    auto [fn_args, fn_arg_tokens] = eval_decl_list(fetch_child(fn_def), true);
+    auto [fn_intf, fn_scope] = current_scope->add_function_definition(fn_args.back(), std::vector<std::string_view>(fn_args.begin(), fn_args.begin() + fn_args.size() - 1),
+    fn_arg_tokens);
 
     current_scope = fn_scope;
-    eval_stmt_list(fetch_child(fn_def), fn_intf, fn_args.back());
+    eval_stmt_list(fetch_child(fn_def), fn_intf, fn_args.back(), fn_arg_tokens.back());
     revert_to_old_scope();
 }
 

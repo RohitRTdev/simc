@@ -102,7 +102,8 @@ static inline std::unique_ptr<ast> create_ast_array_spec(const token* constant) 
 
 static inline const ast_token* cast_to_ast_token(const std::unique_ptr<ast>& node) {
     auto _ptr = dynamic_cast<ast_token*>(node.get());
-    CRITICAL_ASSERT(_ptr, "cast_to_ast_token called with invalid ast node");
+    CRITICAL_ASSERT(_ptr, 
+    "cast_to_ast_token called with invalid ast node");
     
     return _ptr;
 }

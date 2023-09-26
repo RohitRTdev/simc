@@ -21,6 +21,8 @@ struct decl_spec {
 
     bool is_const() const;
     bool is_volatile() const;
+
+    void print_error() const;
 };
 
 struct cv_info {

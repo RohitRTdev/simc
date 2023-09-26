@@ -88,6 +88,7 @@ bool eval_expr::is_rank_higher(const type_spec& type_1, const type_spec& type_2)
 
 void eval_expr::perform_integer_promotion(expr_result& res) {    
     if(res.type.base_type < C_INT) {
+        expr->print_error();
         sim_log_debug("Performing integer promotion from type:{} to int", res.type.base_type);
         if(!res.is_constant)
             res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::type_cast, res.expr_id, C_INT, true);
@@ -135,10 +136,11 @@ bool eval_expr::hook() {
             
             auto fn_desig = std::move(fn_expr->fn_designator);
             std::string_view fn_name;
-
+            const token* fn_token = nullptr;
             //It's a function name
             if(cast_to_ast_expr(fn_desig)->is_var()) {
-                fn_name = std::get<std::string>(cast_to_ast_token(fn_desig)->tok->value);
+                fn_token = cast_to_ast_token(fn_desig)->tok;
+                fn_name = std::get<std::string>(fn_token->value);
                 if(!check_if_symbol(fn_name)) {
                     sim_log_error("Invalid function name found as function designator");
                 }
@@ -149,11 +151,11 @@ bool eval_expr::hook() {
                 expr_node = std::move(fn_desig);
             }
 
-            fn_call_stack.push(std::make_tuple(fn_name, num_args_found, 0, false));   
+            fn_call_stack.push(std::make_tuple(fn_name, num_args_found, 0, fn_token, false));   
             return true;
        }
        else {
-            auto& evaluated = std::get<3>(fn_call_stack.top());
+            auto& evaluated = std::get<4>(fn_call_stack.top());
             if(!evaluated) {
                 //If no function name exists, it must have been an expression
                 //Fetch the type of this expression
@@ -162,6 +164,7 @@ bool eval_expr::hook() {
                     auto fn_type = fn_desig.type;
                     if(!fn_desig.type.is_function_type()) {
                         if(!(fn_desig.type.is_pointer_type() && fn_desig.type.resolve_type().is_function_type())) {
+                            expr->print_error();
                             sim_log_error("Function designator must be a function type or pointer to function type");
                         }
                         fn_type = fn_desig.type.resolve_type(); 
@@ -189,7 +192,7 @@ bool eval_expr::hook() {
                     auto res_expr_1 = fetch_stack_node(res_stack);
 
                     if(!res_expr_1.type.is_integral()) {
-                        res_expr_1.convert_to_integral_type(fn_intf);
+                        res_expr_1.convert_to_integral_type(fn_intf, expr->tok);
                     }
 
                     if(res_expr_1.is_constant) {
@@ -214,7 +217,7 @@ void eval_expr::handle_logical_op(operator_type op) {
     auto res_expr_2 = fetch_stack_node(res_stack);
 
     if(!res_expr_2.type.is_integral()) {
-        res_expr_2.convert_to_integral_type(fn_intf);
+        res_expr_2.convert_to_integral_type(fn_intf, expr->tok);
     }
 
     //Todo: Make sure we get the common type of the 2 expressions
@@ -305,20 +308,36 @@ std::string_view eval_expr::arithmetic_with_symbol(std::string_view num1_str, st
         return "";
     
     if(sym1 && sym2) {
-        sim_log_error("Arithmetic operation cannot be carried out on 2 symbols");
+        if(!is_relational_operator(binary_op)) {
+            expr->print_error();
+            sim_log_error("Arithmetic operation cannot be carried out on 2 symbols");
+        }
+
+        switch(binary_op) {
+            case GT:
+            case LT: return "0";
+        }
+
+        bool is_eq = (num1_str == num2_str) && (num1_str.substr(0, 4) != ".str") ? true : false;   
+        if(binary_op == EQUAL_EQUAL) {
+            return is_eq ? "1" : "0"; 
+        }
+        else if(binary_op == NOT_EQUAL) {
+            return !is_eq ? "1" : "0";
+        }
+
+        CRITICAL_ASSERT_NOW("2 symbols case reached with non relational operator");
     }
 
     std::string_view sym = sym1 ? num1_str : num2_str;
     std::string_view number = sym1 ? num2_str : num1_str;
 
     if(binary_op != PLUS && binary_op != MINUS) {
+        expr->print_error();
         sim_log_error("Symbols can only be added or subtracted");
     }
 
     size_t pos = sym.find_first_of("+-");
-    //auto pos = std::find_if(sym.begin(), sym.end(), [] (char ch) {
-    //    return ch == '+' || ch == '-';
-    //});
     if(pos != decltype(sym)::npos) {
         auto _sym = sym.substr(0, pos);
         int _num = std::stoi(std::string(sym.substr(pos)));
@@ -350,6 +369,7 @@ std::string_view eval_expr::arithmetic_with_symbol(std::string_view num1_str, st
 
 std::string_view eval_expr::constant_fold(std::string_view num1_str, operator_type unary_op) {
     if(check_if_symbol(num1_str)) {
+        expr->print_error();
         sim_log_error("Only addition and subtraction operations can be carried out in symbols");
     }
 
@@ -426,6 +446,7 @@ bool eval_expr::handle_pointer_arithmetic(expr_result& res1, expr_result& res2, 
     }
 
     if(res_p.type.is_incomplete_type()) {
+        expr->print_error();
         sim_log_error("Pointer arithmetic cannot be carried out on a pointer to an incomplete type");
     }
 
@@ -495,8 +516,8 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
 
     if((res1.type.is_pointer_type() && res2.type.is_integral()) ||
        (op == PLUS && (res1.type.is_integral() && res2.type.is_pointer_type()))) {
-        handle_pointer_arithmetic(res1, res2, op);
-        return;
+        if(handle_pointer_arithmetic(res1, res2, op))
+            return;
     }
 
     if(res1.type.is_pointer_type() && res2.type.is_pointer_type() && op == MINUS) {
@@ -510,8 +531,10 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
     }
 
     if(!res1.type.is_type_operable(res2.type)) {
-        if(!(res1.type.is_pointer_type() && res2.type.is_pointer_type() && is_relational_operator(op)))
+        if(!(res1.type.is_pointer_type() && res2.type.is_pointer_type() && is_relational_operator(op))) {
+            expr->print_error();
             sim_log_error("Arithmetic operation requires both operands to be of arithmetic types");
+        }
     }
     else 
         perform_arithmetic_conversion(res1, res2);
@@ -632,18 +655,22 @@ void eval_expr::handle_assignment() {
     auto res1 = fetch_stack_node(res_stack);
 
     if(res1.type.is_void()) {
+        expr->print_error();
         sim_log_error("LHS of '=' cannot be void type");
     }
 
     if(res2.type.is_void()) {
+        expr->print_error();
         sim_log_error("Cannot assign expression of type 'void' to anything");
     }
 
     if(!res1.is_lvalue || !res1.type.is_modifiable() || res1.is_constant) {
+        expr->print_error();
         sim_log_error("LHS of '=' operator must be a modifiable l-value");
     }
 
     if(!res1.type.is_type_convertible(res2.type)) {
+        expr->print_error();
         sim_log_error("Incompatible types encountered during assignment operation");
     }
 
@@ -692,6 +719,7 @@ void eval_expr::handle_addr() {
     auto in = fetch_stack_node(res_stack);   
 
     if(!in.is_lvalue) {
+        expr->print_error();
         sim_log_error("'&' operator requires operand to be an lvalue");
     }
 
@@ -737,6 +765,7 @@ void eval_expr::handle_array_subscript() {
     }
     
     if(!handle_pointer_arithmetic(res1, res2, PLUS)) {
+        expr->print_error();
         sim_log_error("[] operator requires operands to be pointer type and integral type");
     }
     handle_indir();
@@ -751,6 +780,7 @@ void eval_expr::handle_indir() {
             res_in.type.convert_to_pointer_type();
         }
         else {
+            expr->print_error();
             sim_log_error("'*' operator requires operand to be a pointer type");
         }
     }
@@ -758,10 +788,12 @@ void eval_expr::handle_indir() {
     auto res_type = res_in.type.resolve_type();
 
     if(res_type.is_void()) {
+        expr->print_error();
         sim_log_error("'*' operator can only be used on a non void pointer type");
     }
 
     if(compile_only && res_in.is_constant && check_if_symbol(res_in.constant)) {
+        expr->print_error();
         sim_log_error("'*' operator cannot be used to evaluate symbol during compile time");
     }
 
@@ -789,10 +821,12 @@ void eval_expr::handle_indir() {
 void eval_expr::handle_inc_dec(operator_type op, bool is_postfix) {
     auto in = fetch_stack_node(res_stack);
     if(!in.is_lvalue || !in.type.is_modifiable() || in.is_constant) {
+        expr->print_error();
         sim_log_error("Operand to a inc/dec operator must be a modifiable lvalue");
     }
 
     if(in.type.is_incomplete_type()) {
+        expr->print_error();
         sim_log_error("inc/dec operator cannot be applied to an incomplete type");
     }
 
@@ -886,7 +920,7 @@ void eval_expr::handle_unary_op(operator_type op) {
 }
 
 void eval_expr::handle_var() {
-    auto& var = fn_scope->fetch_var_info(std::get<std::string>(expr->tok->value));
+    auto& var = fn_scope->fetch_var_info(std::get<std::string>(expr->tok->value), expr->tok);
     
     //Handles compile time computable expr case
 
@@ -958,11 +992,12 @@ void eval_expr::handle_constant() {
 }
 
 void eval_expr::handle_fn_call() {
-    auto [fn_name, num_args_found, num_args, _] = fetch_stack_node(fn_call_stack);
+    auto [fn_name, num_args_found, num_args, var_token, _] = fetch_stack_node(fn_call_stack);
 
-    auto check_if_function_type = [] (auto& fn_type) {
+    auto check_if_function_type = [&] (auto& fn_type) {
         if(!fn_type.is_function_type()) {
             if(!fn_type.is_pointer_to_function()) {
+                expr->print_error();
                 sim_log_error("Function designator is not a function or pointer to function type");
             }
             fn_type = fn_type.resolve_type();
@@ -974,7 +1009,7 @@ void eval_expr::handle_fn_call() {
     type_spec fn_type{};
     bool is_fn_pointer = false;
     if(fn_name.size()) {
-        auto& fn_info = fn_scope->fetch_var_info(fn_name);
+        auto& fn_info = fn_scope->fetch_var_info(fn_name, var_token);
         fn_type = fn_info.type;
         if(fn_type.is_pointer_to_function()) {
             fn_desig.expr_id = fn_info.var_id;
@@ -985,6 +1020,7 @@ void eval_expr::handle_fn_call() {
     }
 
     if(num_args != num_args_found) {
+        expr->print_error();
         sim_log_error("Number of arguments mentioned in function call is different from the fn declaration");
     }
 

@@ -10,8 +10,8 @@
 
 std::string asm_code;
 
-static void start_compilation(const std::vector<char>& file_input) {
-
+static void start_compilation(std::string_view file_name, const std::vector<char>& file_input) {
+    diag::init(file_name, file_input);
     lex(file_input);    
     auto prog = parse();
     eval(std::move(prog));
@@ -81,7 +81,7 @@ int app_start(int argc, char** argv) {
     for(auto& file: files) {
         auto file_info_buf = read_file(file);
         sim_log_debug("File size: {}", file_info_buf.size());
-        start_compilation(file_info_buf);
+        start_compilation(file, file_info_buf);
         write_file("out.s", asm_code);
     }
 

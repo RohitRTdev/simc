@@ -77,6 +77,8 @@ void state_machine::start() {
             advance_token = false;
         }
         else {
+            if(tok)
+                tok->print_error();
             sim_log_error(state_path[cur_state].error_string);
         }
     };

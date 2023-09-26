@@ -1,4 +1,5 @@
 #include "compiler/ast.h"
+#include "debug-api.h"
 
 ast::ast(AST_TYPE _type) : type(_type) 
 {}
@@ -136,4 +137,65 @@ bool ast::is_break_stmt() const {
 
 bool ast::is_continue_stmt() const {
     return type == AST_TYPE::CONTINUE;
+}
+
+bool ast_ptr_spec::print_error() const {
+    pointer->print_error();
+    return true;
+}
+
+bool ast_array_spec::print_error() const {
+    constant->print_error();
+    return true;
+}
+
+bool ast_decl::print_error() const {
+    if(ident) {
+        ident->print_error();
+        return true;
+    }
+
+    for(const auto& child: children) {
+        if(child->print_error()) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool ast_token::print_error() const {
+    CRITICAL_ASSERT(tok, "ast_token::print_error() called on null token");
+    tok->print_error();
+    return true;
+}
+
+bool ast_fn_call::print_error() const {
+    tok->print_error();
+    return true;
+}
+
+bool ast_base_type::print_error() const {
+    base_type.print_error();
+    return true;
+}
+
+bool ast::print_error() const {
+    switch(type) {
+        case AST_TYPE::DECL_LIST: 
+        case AST_TYPE::PTR_LIST: 
+        case AST_TYPE::ARRAY_SPEC_LIST: {
+            children[0]->print_error();
+            break;
+        }
+        default: {
+            if(key_token) {
+                key_token->print_error();
+                break;
+            }
+            CRITICAL_ASSERT_NOW("ast::print_error() called on invalid ast node of type:{}", static_cast<int>(type));
+        }
+    }
+
+    return true;
 }

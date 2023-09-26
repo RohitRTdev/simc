@@ -82,8 +82,8 @@ std::unique_ptr<ast> create_ast_fn_call() {
     return std::unique_ptr<ast>(node);
 }
 
-std::unique_ptr<ast> create_ast_array_subscript() {
-    ast* node = static_cast<ast*>(new ast_expr(EXPR_TYPE::ARRAY_SUB));
+std::unique_ptr<ast> create_ast_array_subscript(const token* tok) {
+    ast* node = static_cast<ast*>(new ast_expr(EXPR_TYPE::ARRAY_SUB, tok));
     return std::unique_ptr<ast>(node);
 }
 
