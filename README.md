@@ -33,7 +33,11 @@ gcc out.s -o test
 ./test
 ```
 
-First command created an assembly file named "out.s" which is then assembled using <I>gcc</I> to elf executable <B>test</B> which you can then run<br>
+First command created an assembly file named "test.s" which is then assembled using <I>gcc</I> to elf executable <B>test</B> which you can then run.<br>
+You could also use the -o option to give a different name to the output.
+```
+./simcc test.c -o output.s
+```
 
 ## Planned design
 The design involved three executables. <b>sime</b>, <b>simcc</b> and <b>simc</b>.<br>
