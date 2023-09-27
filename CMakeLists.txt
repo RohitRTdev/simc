@@ -79,7 +79,7 @@ foreach(DIR ${SUBDIRS})
     if(DIR STREQUAL simcc)
       add_subdirectory(src/simcc)
     else()
-      add_executable(${DIR} ${srcs} src/entry.cpp)
+      add_executable(${DIR} ${srcs} src/entry.cpp src/options.cpp)
     endif()
     
     target_link_libraries(${DIR} simc_options)

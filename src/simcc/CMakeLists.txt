@@ -28,7 +28,7 @@ else()
     set(mod_srcs ${mod_srcs_debug})
 endif()
 
-add_executable(simcc ${mod_srcs} ${PROJECT_SOURCE_DIR}/src/entry.cpp)
+add_executable(simcc ${mod_srcs} ${PROJECT_SOURCE_DIR}/src/entry.cpp ${PROJECT_SOURCE_DIR}/src/options.cpp)
 target_compile_definitions(simcc PRIVATE INITDEBUGGER)
 
 target_link_libraries(simcc code-gen)
