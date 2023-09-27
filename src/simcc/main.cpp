@@ -5,6 +5,7 @@
 #include "debug-api.h"
 #include "lib/code-gen.h"
 #include "compiler/compile.h"
+#include "common/options.h"
 
 #define FILE_READ_CHUNK_SIZE 256
 
@@ -67,25 +68,19 @@ static void write_file(const std::string& name, std::string_view code) {
 
 int app_start(int argc, char** argv) {
     
-    if(argc <= 1) {
-        sim_log_error("Please input atleast 1 file..");
-        return -1;
-    }
-
-    std::vector<std::string> files(argc-1);
-    for (int i = 0; i < argc - 1; i++) {
-        files[i] = argv[i+1];
-        sim_log_debug("File {}: {}", i+1, files[i]);
-    }
-
-    for(auto& file: files) {
+    argparser cmdline(argc, argv);
+    cmdline.parse();
+    size_t file_idx = 0;
+    for(const auto& file: cmdline.get_input_files()) {
+        sim_log_debug("Reading file:{}", file);
         auto file_info_buf = read_file(file);
+
         sim_log_debug("File size: {}", file_info_buf.size());
         start_compilation(file, file_info_buf);
-        write_file("out.s", asm_code);
+        
+        write_file(cmdline.get_output_files()[file_idx++], asm_code);
     }
 
     std::cout << "Compilation successful" << std::endl;  
-
     return 0;
 }
