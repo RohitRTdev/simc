@@ -6,8 +6,7 @@
 #include "lib/code-gen.h"
 #include "compiler/compile.h"
 #include "common/options.h"
-
-#define FILE_READ_CHUNK_SIZE 256
+#include "common/file-utils.h"
 
 std::string asm_code;
 
@@ -24,46 +23,6 @@ static void dump_buffer(const std::vector<char>& buf) {
     }
 
     std::cout << std::endl;
-}
-
-std::vector<char> read_file(const std::string& file_name) {
-    std::ifstream file_intf(file_name, std::ios::binary);
-
-    std::vector<char> f_buf(FILE_READ_CHUNK_SIZE); 
-    size_t i = 0;
-
-    if(!file_intf.is_open()) {
-        sim_log_error("File open failed!");
-    }
-
-    sim_log_debug("Reading file {}", file_name);
-    size_t chunk = 1;
-    while(!file_intf.eof()) {
-        file_intf.read(&f_buf[i], FILE_READ_CHUNK_SIZE);
-
-        sim_log_debug("gcount()={}", file_intf.gcount());
-        //We have more chunks to read
-        if(file_intf.gcount() == FILE_READ_CHUNK_SIZE) {
-            chunk++;
-            f_buf.resize(chunk*FILE_READ_CHUNK_SIZE);
-        }
-        else {
-            f_buf.resize((chunk-1)*FILE_READ_CHUNK_SIZE + file_intf.gcount());
-        }
-        i += FILE_READ_CHUNK_SIZE;
-    }
-
-    return f_buf;
-}
-
-static void write_file(const std::string& name, std::string_view code) {
-    std::ofstream file_intf(name, std::ios::binary);
-
-    if(!file_intf.is_open()) {
-        sim_log_error("Could not create output file:{}", name);
-    }
-
-    file_intf.write(code.data(), code.size());
 }
 
 int app_start(int argc, char** argv) {

@@ -28,7 +28,14 @@ else()
     set(mod_srcs ${mod_srcs_debug})
 endif()
 
-add_executable(simcc ${mod_srcs} ${PROJECT_SOURCE_DIR}/src/entry.cpp ${PROJECT_SOURCE_DIR}/src/options.cpp)
+
+string(REPLACE " " ";" COMMON_FILES_LIST "${COMMON_FILES}")
+foreach(STRING ${COMMON_FILES_LIST})
+  list(APPEND APPEND_FILE_LIST "${PROJECT_SOURCE_DIR}/${STRING}")
+endforeach()
+string(JOIN " " APPEND_FILES "${APPEND_FILE_LIST}")
+
+add_executable(simcc ${mod_srcs} ${APPEND_FILE_LIST})
 target_compile_definitions(simcc PRIVATE INITDEBUGGER)
 
 target_link_libraries(simcc code-gen)
