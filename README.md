@@ -1,4 +1,5 @@
 # Simple C compiler
+To learn about the inner working of this compiler, check out this blog https://rohitrtdev.github.io/
 
 To build this, simply execute from top level directory
 ### If you're on GNU compatible system
