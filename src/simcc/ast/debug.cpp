@@ -3,7 +3,7 @@
 #include "compiler/token.h"
 #include "compiler/ast.h"
 
-#define AST_PRINT( msg, ... ) (sim_log_debug(std::string(level_space, ' ') + std::string(msg) __VA_OPT__(,) __VA_ARGS__))
+#define AST_PRINT( msg, ... ) (sim_log_debug(fmt::runtime(std::string(level_space, ' ') + std::string(msg)) __VA_OPT__(,) __VA_ARGS__))
 
 const size_t level_increment = 3;
 size_t level_space = 0; 
