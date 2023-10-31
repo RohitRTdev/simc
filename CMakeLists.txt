@@ -73,13 +73,15 @@ endmacro()
 
 subdirlist(SUBDIRS ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
+set(COMMON_FILES src/entry.cpp src/options.cpp src/file-utils.cpp)
+
 foreach(DIR ${SUBDIRS})
     FILE(GLOB srcs src/${DIR}/*.cpp)
 
     if(DIR STREQUAL simcc)
       add_subdirectory(src/simcc)
     else()
-      add_executable(${DIR} ${srcs} src/entry.cpp src/options.cpp)
+      add_executable(${DIR} ${srcs} ${COMMON_FILES})
     endif()
     
     target_link_libraries(${DIR} simc_options)

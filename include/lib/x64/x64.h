@@ -14,6 +14,7 @@
 #define NUM_REGS 8
 #define NUM_CALL_REGS 6
 
+
 extern const std::vector<std::array<std::string, NUM_REGS>> regs;
 enum registers {
     RAX,
@@ -511,8 +512,7 @@ class x64_func : public Ifunc_translation {
 
     template<typename... Args>
     void insert_code(std::string_view msg, c_type type, Args&&... args) {
-        std::string _msg = "\t" + std::string(msg) + "\n";
-        add_inst_to_code(fmt::format(_msg, inst_suffix[type], make_format_args(type, args)...));
+        add_inst_to_code(fmt::format(fmt::runtime("\t"+std::string(msg)+"\n"), inst_suffix[type], make_format_args(type, args)...));
     }
 
     std::string generate_static_name(const std::string& name) {
