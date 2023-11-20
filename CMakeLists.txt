@@ -89,6 +89,6 @@ foreach(DIR ${SUBDIRS})
 endforeach()
 
 #If building in vs, this sets the startup project to simcc
-set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT simcc)
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT sime)
 
 message(STATUS "Build type:${CMAKE_BUILD_TYPE}")

@@ -27,7 +27,7 @@ static void dump_buffer(const std::vector<char>& buf) {
 
 int app_start(int argc, char** argv) {
     
-    argparser cmdline(argc, argv);
+    argparser cmdline(argc, argv, ".s");
     cmdline.parse();
     size_t file_idx = 0;
     for(const auto& file: cmdline.get_input_files()) {

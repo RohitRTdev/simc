@@ -30,7 +30,7 @@ The compiler is a long way from feature complete, but it is usable as of now.
 ### Example
 ```
 ./simcc test.c
-gcc out.s -o test
+gcc test.s -o test
 ./test
 ```
 

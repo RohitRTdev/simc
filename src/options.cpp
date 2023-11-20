@@ -16,14 +16,15 @@ std::string argparser::generate_default_file_name(std::string_view file_path) {
     size_t lastSlash = file_path.find_last_of("/\\");
     
     if (lastSlash == std::string::npos) {
-        output_file_name = remove_suffix(output_file_name) + ".s";
+        output_file_name = remove_suffix(output_file_name) + m_extension;
         return output_file_name;
     }
     
-    return remove_suffix(output_file_name.substr(lastSlash + 1)) + ".s";
+    return remove_suffix(output_file_name.substr(lastSlash + 1)) + m_extension;
 }
 
-argparser::argparser(int argc, char** argv) : m_argc(argc), m_argv(argv)
+argparser::argparser(int argc, char** argv, std::string_view extension) : m_argc(argc), m_argv(argv),
+m_extension(extension)
 {}
 
 void argparser::parse() {
