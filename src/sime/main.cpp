@@ -8,6 +8,8 @@ int app_start(int argc, char** argv) {
     argparser cmdline(argc, argv, ".i");
     cmdline.parse();
     size_t file_idx = 0;
+    preprocess::init_with_defaults();
+    
     for(const auto& file: cmdline.get_input_files()) {
         sim_log_debug("Reading file:{}", file);
         auto file_info_buf = read_file(file);

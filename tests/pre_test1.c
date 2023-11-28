@@ -5,5 +5,7 @@ int square(int num) {
 }
 
 int main() {
-    BLOCK_COMMENT;
+    REPLACE_THIS;
 }
+/*Block comment
+* /blah
