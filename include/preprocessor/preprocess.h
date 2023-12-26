@@ -23,15 +23,16 @@ class preprocess {
     const std::vector<char>& contents;
     std::string output;
     bool handle_directives;
-    bool handle_line_info;
+    bool read_single_line;
     size_t buffer_index;
     size_t line_number;
     parser_state state;
     void handle_line_comment();
     void handle_block_comment();
+    bool handle_continued_line();
+    void handle_directive();
     std::string process_token(std::string_view cur_token);
     std::string expand_token(std::string_view cur_token);
-    bool handle_continued_line();
 
     bool no_advance;
     static sym_table table;
@@ -47,8 +48,8 @@ class preprocess {
     void skip_newline(bool add_to_output = false);
 public:
     static void init_with_defaults();
-    preprocess(const std::vector<char>& input, bool handle_directives = false, 
-    bool handle_line_info = false);
+    preprocess(const std::vector<char>& input, bool handle_directives = true, 
+    bool read_single_line = false);
     void parse();
     std::string_view get_output() const;
 };

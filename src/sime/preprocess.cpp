@@ -126,9 +126,9 @@ std::string preprocess::process_token(std::string_view cur_token) {
 }
 
 preprocess::preprocess(const std::vector<char>& input, bool handle_directives, 
-bool handle_line_info) : contents(input), handle_directives(handle_directives),
-handle_line_info(handle_line_info), line_number(1), buffer_index(0), state(PARSER_NORMAL),
-no_advance(false)
+bool read_single_line) : contents(input), handle_directives(handle_directives),
+line_number(1), buffer_index(0), state(PARSER_NORMAL),
+no_advance(false), read_single_line(read_single_line)
 {}
 
 void preprocess::parse() {
@@ -141,6 +141,8 @@ void preprocess::parse() {
         if(state == PARSER_NORMAL) {
             if(handle_continued_line()) {
                 sim_log_debug("Handling continued line in NORMAL state at line:{}", line_number-1);
+                no_advance = false;
+                continue;
             }
             else if(ch == '/') {
                 state = PARSER_COMMENT;
@@ -149,26 +151,34 @@ void preprocess::parse() {
                 sim_log_debug("Handling string");
                 state = PARSER_STRING;
                 output += ch;
+                start_of_line = false;
             }
             else if(ch == '#' && start_of_line && handle_directives) {
-                sim_log_debug("Start handling directive");
-                //handle_preprocessor_directive(contents);
+                sim_log_debug("Preprocessor directive detected at line:{}", line_number);
+                handle_directive();
             }
             else {
                 if(is_end_of_line(false)) {
-                    skip_newline(true);
                     start_of_line = true;
                     no_advance = true;
                     sim_log_debug("Processing line number:{}", line_number);
+                    if(read_single_line) {
+                        sim_log_debug("EOL detected in read_single_line mode");
+                        break;
+                    } else {
+                        skip_newline(true);
+                    }
                 }
                 else if(is_alpha_num()) {
-                    start_of_line = false;
                     cur_token.clear();
                     state = PARSER_TOKEN;
                     no_advance = true;
                 }
                 else {
                     output += ch;
+                    if(!is_white_space()) {
+                        start_of_line = false;
+                    }
                 }
             }
         }
@@ -179,9 +189,6 @@ void preprocess::parse() {
                 continue;
             }
             
-            if(is_end_of_line(false)) {
-                skip_newline(true);
-            }
             else if(ch == '/') {
                 sim_log_debug("Handling line comment");
                 handle_line_comment();
@@ -192,7 +199,8 @@ void preprocess::parse() {
             }
             else {
                 start_of_line = false;
-                (output += "/") += ch;
+                output += "/";
+                no_advance = true;
             }
             state = PARSER_NORMAL;
         }
@@ -218,7 +226,12 @@ void preprocess::parse() {
                 continue;
             }
             else {
-                output += process_token(cur_token);
+                if(handle_directives) {
+                    output += process_token(cur_token);
+                }
+                else {
+                    output += cur_token;
+                }
                 start_of_line = false;
                 no_advance = true;
                 state = PARSER_NORMAL;
