@@ -9,7 +9,7 @@ void preprocess::handle_directive() {
     sim_log_debug("Preprocess line read is:{}", line_reader_inst.get_output());
     buffer_index += line_reader_inst.buffer_index;    
 
-
+    
 
 
 }

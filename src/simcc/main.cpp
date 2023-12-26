@@ -25,18 +25,24 @@ static void dump_buffer(const std::vector<char>& buf) {
     std::cout << std::endl;
 }
 
+static argparser init_argparser(int argc, char** argv, std::string ext) {
+    argparser cmdline(argc, argv, ext);
+
+    cmdline.add_flag('o', argparser::FILE);
+
+    return cmdline;
+}
+
+
 int app_start(int argc, char** argv) {
     
-    argparser cmdline(argc, argv, ".s");
+    auto cmdline = init_argparser(argc, argv, ".s");
     cmdline.parse();
     size_t file_idx = 0;
     for(const auto& file: cmdline.get_input_files()) {
-        sim_log_debug("Reading file:{}", file);
         auto file_info_buf = read_file(file);
 
-        sim_log_debug("File size: {}", file_info_buf.size());
         start_compilation(file, file_info_buf);
-        
         write_file(cmdline.get_output_files()[file_idx++], asm_code);
     }
 
