@@ -4,6 +4,7 @@ log/*
 gcc_tests/*
 write_a_c_compiler
 TODO
+Design plan
 *.s
 *.exe
 *.o

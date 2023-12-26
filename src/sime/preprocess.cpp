@@ -4,109 +4,25 @@
 sym_table preprocess::table;
 
 void preprocess::init_with_defaults() {
-    table.add_symbol("ANOTHER", true, "Rohit/*Comment is here */Jacob");
+    table.add_symbol("LAST", true, "c");
+    table.add_symbol("FIRST", true, "a+b    ");
+    table.add_symbol("ANOTHER", true, "(FIRST)<(LAST)");
     table.add_symbol("REPLACE_THIS", true, "ANOTHER");
-}
-
-
-preprocess::endline_marker preprocess::figure_new_line() {
-    auto index = buffer_index;
-    bool has_end_r = false, has_end_n = false;
-    if(index < contents.size()) {
-        if(contents[index] == '\r') {
-            has_end_r = true;
-            index++;
-        }
-    }
-    
-    if(index < contents.size()) {
-        if(contents[index] == '\n') {
-            has_end_n = true;
-            index++;
-        }
-    } 
-
-    if(has_end_n && has_end_r) {
-        return ENDLINE_RN;
-    }
-    else if(has_end_n) {
-        return ENDLINE_N;
-    }
-    else if(has_end_r) {
-        return ENDLINE_R;
-    }
-    
-    return ENDLINE_NONE;
-}
-
-std::string preprocess::fetch_end_line_marker() {
-    auto end_line_type = figure_new_line();
-    switch(end_line_type) {
-        case ENDLINE_R: return "\r";
-        case ENDLINE_N: return "\n";
-        case ENDLINE_RN: return "\r\n";
-        default: return "";
-    }
-}
-
-void preprocess::skip_newline(bool add_to_output) {
-    auto newline_type = figure_new_line();
-    std::string ch = "";
-    switch(newline_type) {
-        case ENDLINE_R: {
-            ch = "\r";
-            buffer_index++;
-            break;
-        }
-        case ENDLINE_N: {
-            ch = "\n";
-            buffer_index++;
-            break;
-        }
-        case ENDLINE_RN:{
-            buffer_index += 2;
-            ch = "\r\n";
-            break;
-        }
-    }
-
-    if(add_to_output) {
-        if(ch != "") {
-            output += ch;
-        }
-    }
-}
-
-bool preprocess::is_end_of_buf() {
-    return !(buffer_index < contents.size());
-}
-
-bool preprocess::is_alpha_num() {
-    return isalnum(contents[buffer_index]) || contents[buffer_index] == '_';
-}
-
-bool preprocess::is_valid_ident(std::string_view ident) {
-    return isalpha(ident[0]) || ident[0] == '_';
-}
-
-bool preprocess::is_end_of_line(bool do_skip) {
-    //One of '\n' or '\r\n' or '\r'
-    bool is_end_line_1 = contents[buffer_index] == '\n' || (contents.size() - buffer_index > 1 && contents[buffer_index] == '\r' && contents[buffer_index + 1] == '\n');
-    bool is_end_line_2 = contents[buffer_index] == '\r';
-
-    if(is_end_line_1 || is_end_line_2) {
-        if(do_skip)
-            skip_newline();
-        return true;
-    }
-
-    return false; 
 }
 
 //Replace line comments with a single space
 void preprocess::handle_line_comment() {
-    while(!is_end_of_buf() && !is_end_of_line())
-        buffer_index++;
+    while(!is_end_of_buf()) {
+        if(handle_continued_line()) {
+            sim_log_debug("Handling continued line while handling line comment at line:{}", line_number-1);
+        }
+        else if(is_end_of_line(false)) {
+            break;
+        }
+        else {
+            buffer_index++;
+        }
+    }
 
     output += " ";
     no_advance = true;
@@ -136,7 +52,6 @@ void preprocess::handle_block_comment() {
         if (is_end_of_line(false)) {
             comment += fetch_end_line_marker(); //We need to preserve the newline as block comment might be left unterminated
             skip_newline();
-            line_number++;
         }
         else {
             comment += ch;
@@ -148,7 +63,19 @@ void preprocess::handle_block_comment() {
     output += comment;
 }
 
-std::string preprocess::handle_token(std::string_view cur_token) {
+bool preprocess::handle_continued_line() {
+    if(contents[buffer_index] == '\\') {
+        buffer_index++;
+        if(is_end_of_line()) {
+            return true;
+        }
+        buffer_index--;
+    }
+
+    return false;
+}
+
+std::string preprocess::expand_token(std::string_view cur_token) {
     std::string new_token(cur_token);
     if(table.has_symbol(new_token)) {
         return table[new_token];
@@ -160,14 +87,38 @@ std::string preprocess::handle_token(std::string_view cur_token) {
 std::string preprocess::process_token(std::string_view cur_token) {
     std::string final_token(cur_token);
     if (is_valid_ident(cur_token)) {
-        auto stream = handle_token(cur_token);
+        auto stream = expand_token(cur_token);
         sim_log_debug("Found token:{}", final_token);
         if (stream != final_token) {
-            sim_log_debug("Token translated to:{}", stream);
-            std::vector<char> new_token(stream.begin(), stream.end());
-            preprocess aux_preprocessor(new_token);
-            aux_preprocessor.parse();
-            final_token = aux_preprocessor.get_output();
+            sim_log_debug("Token expanded to:{}", stream);
+            std::string expanded_stream;
+            //Parse new stream into words
+            size_t idx = 0;
+            std::string word;
+            while(idx < stream.size()) {
+                while(idx < stream.size() && !is_alpha_num(stream[idx])) {
+                    expanded_stream += stream[idx];
+                    idx++;
+                }
+
+                while(idx < stream.size() && is_alpha_num(stream[idx])) {
+                    word += stream[idx];
+                    idx++;
+                }
+
+                if (word.size()) {
+                    //Find the expanded version of each token within the expanded token recursively
+                    expanded_stream += process_token(word);
+                }
+
+                if(idx < stream.size()) {
+                    expanded_stream += stream[idx];
+                }
+                word.clear();
+                idx++;
+            }
+            sim_log_debug("Token translated to:{}", expanded_stream);
+            return expanded_stream;
         }
     }
 
@@ -187,25 +138,11 @@ void preprocess::parse() {
     while (buffer_index < contents.size()) {
         char ch = contents[buffer_index];
         
-        if(found_escaped_character) {
-            if(!is_end_of_line()) {
-                output += '\\';
-                output += ch;
-            }
-            else {
-                line_number++;
-            }
-            found_escaped_character = false;
-        }
-
-        if(ch == '\\') {
-            found_escaped_character = true;
-            buffer_index++;
-            continue;
-        }
-
         if(state == PARSER_NORMAL) {
-            if(ch == '/') {
+            if(handle_continued_line()) {
+                sim_log_debug("Handling continued line in NORMAL state at line:{}", line_number-1);
+            }
+            else if(ch == '/') {
                 state = PARSER_COMMENT;
             }
             else if(ch == '\"') {
@@ -221,7 +158,6 @@ void preprocess::parse() {
                 if(is_end_of_line(false)) {
                     skip_newline(true);
                     start_of_line = true;
-                    line_number++;
                     no_advance = true;
                     sim_log_debug("Processing line number:{}", line_number);
                 }
@@ -237,18 +173,18 @@ void preprocess::parse() {
             }
         }
         else if(state == PARSER_COMMENT) {
-            if(ch == '\n') {
-                state = PARSER_NORMAL;
-            }
-            else if(ch == '\r') {
-                state = PARSER_COMMENT;
+            if(handle_continued_line()) {
+                sim_log_debug("Handling continued line while handling possible comment at line:{}", line_number-1);
+                no_advance = false;
                 continue;
+            }
+            
+            if(is_end_of_line(false)) {
+                skip_newline(true);
             }
             else if(ch == '/') {
                 sim_log_debug("Handling line comment");
                 handle_line_comment();
-                start_of_line = true;
-                line_number++;
             }
             else if(ch == '*') {
                 sim_log_debug("Handling block comment");
@@ -261,14 +197,25 @@ void preprocess::parse() {
             state = PARSER_NORMAL;
         }
         else if(state == PARSER_STRING) {
-            if(ch == '\"' || is_end_of_line(false)) {
+            if(handle_continued_line()) {
+                sim_log_debug("Handling continued line while handling string at line:{}", line_number-1);
+                no_advance = false;
+                continue;
+            }
+            else if(ch == '\"' || is_end_of_line(false)) {
                 state = PARSER_NORMAL;
             }
+
             output += ch;
         }
         else if(state == PARSER_TOKEN) {
             if(is_alpha_num()) {
                 cur_token += ch;
+            }
+            else if(handle_continued_line()) {
+                sim_log_debug("Handling continued line while handling token at line:{}", line_number - 1);
+                no_advance = false;
+                continue;
             }
             else {
                 output += process_token(cur_token);
