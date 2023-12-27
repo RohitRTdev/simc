@@ -1,12 +1,10 @@
-#include "compiler/diag.h"
+#include "common/diag.h"
 #include "debug-api.h"
 
-std::string diag::file_name;
-std::vector<std::string> diag::lines;
-size_t diag::start_line = 0;
-void diag::init(std::string_view new_file_name, const std::vector<char>& file_content) {
+
+void diag::init(std::string_view new_file_name, size_t m_start_line, const std::vector<char>& file_content) {
     file_name = new_file_name;
-    start_line = 0;
+    start_line = m_start_line;
     lines.clear();
     split_into_lines(file_content);
 }
@@ -33,9 +31,9 @@ void diag::print_error(size_t position) {
     size_t line_num = 1;
     for (const auto& line : lines) {
         cur_pos += line.length(); 
-        if (cur_pos >= position) {
+        if (cur_pos > position) {
             size_t offset = position + line.length() - cur_pos; 
-            std::cout << fmt::format("In File:{}:Line:{}:", file_name, line_num) << std::endl;
+            std::cout << fmt::format("In File:{}:Line:{}:", file_name, start_line + line_num - 1) << std::endl;
             if(line.ends_with('\n'))
                 std::cout << line;
             else 

@@ -11,7 +11,7 @@
 std::string asm_code;
 
 static void start_compilation(std::string_view file_name, const std::vector<char>& file_input) {
-    diag::init(file_name, file_input);
+    token::global_diag_inst.init(file_name, 1, file_input);
     lex(file_input);    
     auto prog = parse();
     eval(std::move(prog));

@@ -23,6 +23,7 @@ int app_start(int argc, char** argv) {
         auto file_info_buf = read_file(file);
 
         preprocess main_preprocessor(file_info_buf);
+        main_preprocessor.init_diag(file);
         main_preprocessor.parse();
         write_file(cmdline.get_output_files()[file_idx++], main_preprocessor.get_output());
     }

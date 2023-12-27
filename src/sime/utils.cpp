@@ -100,6 +100,24 @@ bool preprocess::is_end_of_line(bool do_skip) {
     return false; 
 }
 
+std::pair<std::string, size_t> preprocess::read_next_word(std::string_view line) {
+    size_t idx = 0;
+    std::string word;
+    while(idx < line.size()) {
+        while(idx < line.size() && !is_alpha_num(line[idx])) {
+            idx++;
+        }
+
+        while(idx < line.size() && is_alpha_num(line[idx])) {
+            word += line[idx++];
+        }
+
+        break;
+    }
+
+    return make_pair(word, idx);
+}
+
 bool preprocess::is_white_space() {
     return contents[buffer_index] == ' ' || contents[buffer_index] == '\t';
 }

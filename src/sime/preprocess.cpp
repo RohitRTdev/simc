@@ -4,10 +4,6 @@
 sym_table preprocess::table;
 
 void preprocess::init_with_defaults() {
-    table.add_symbol("LAST", true, "c");
-    table.add_symbol("FIRST", true, "a+b    ");
-    table.add_symbol("ANOTHER", true, "(FIRST)<(LAST)");
-    table.add_symbol("REPLACE_THIS", true, "ANOTHER");
 }
 
 //Replace line comments with a single space
@@ -77,11 +73,22 @@ bool preprocess::handle_continued_line() {
 
 std::string preprocess::expand_token(std::string_view cur_token) {
     std::string new_token(cur_token);
-    if(table.has_symbol(new_token)) {
-        return table[new_token];
+    auto res = table.has_symbol(new_token);
+    if(res.first) {
+        return res.second ? table[new_token] : "";
     }
 
     return new_token;
+}
+
+bool preprocess::is_word_parent(std::string_view word) {
+    for(const auto& parent: parents) {
+        if(parent == word) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 std::string preprocess::process_token(std::string_view cur_token) {
@@ -95,6 +102,7 @@ std::string preprocess::process_token(std::string_view cur_token) {
             //Parse new stream into words
             size_t idx = 0;
             std::string word;
+            parents.push_back(std::string(cur_token));
             while(idx < stream.size()) {
                 while(idx < stream.size() && !is_alpha_num(stream[idx])) {
                     expanded_stream += stream[idx];
@@ -107,8 +115,14 @@ std::string preprocess::process_token(std::string_view cur_token) {
                 }
 
                 if (word.size()) {
-                    //Find the expanded version of each token within the expanded token recursively
-                    expanded_stream += process_token(word);
+                    //Prevents self referential macro expansion
+                    if(is_word_parent(word)) {
+                        expanded_stream += word;
+                    }
+                    else {
+                        //Find the expanded version of each token within the expanded token recursively
+                        expanded_stream += process_token(word); 
+                    }
                 }
 
                 if(idx < stream.size()) {
@@ -117,6 +131,7 @@ std::string preprocess::process_token(std::string_view cur_token) {
                 word.clear();
                 idx++;
             }
+            parents.pop_back();
             sim_log_debug("Token translated to:{}", expanded_stream);
             return expanded_stream;
         }
@@ -130,6 +145,11 @@ bool read_single_line) : contents(input), handle_directives(handle_directives),
 line_number(1), buffer_index(0), state(PARSER_NORMAL),
 no_advance(false), read_single_line(read_single_line)
 {}
+
+void preprocess::init_diag(std::string_view name) {
+    file_name = name;
+    diag_inst.init(name, 1, contents);
+}
 
 void preprocess::parse() {
     bool start_of_line = true;
@@ -161,13 +181,13 @@ void preprocess::parse() {
                 if(is_end_of_line(false)) {
                     start_of_line = true;
                     no_advance = true;
-                    sim_log_debug("Processing line number:{}", line_number);
                     if(read_single_line) {
                         sim_log_debug("EOL detected in read_single_line mode");
                         break;
                     } else {
                         skip_newline(true);
                     }
+                    sim_log_debug("Processing line number:{}", line_number);
                 }
                 else if(is_alpha_num()) {
                     cur_token.clear();

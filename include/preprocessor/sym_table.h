@@ -9,6 +9,6 @@ struct sym_table {
 public:
     void add_symbol(std::string name, bool has_value = false, std::string value = "");
     void remove_symbol(std::string name);
-    bool has_symbol(const std::string& name);
+    std::pair<bool, bool> has_symbol(const std::string& name);
     std::string& operator [](const std::string& name);
 };

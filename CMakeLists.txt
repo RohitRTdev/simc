@@ -73,7 +73,7 @@ endmacro()
 
 subdirlist(SUBDIRS ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-set(COMMON_FILES src/entry.cpp src/options.cpp src/file-utils.cpp)
+set(COMMON_FILES src/entry.cpp src/options.cpp src/file-utils.cpp src/diagnostic.cpp)
 
 foreach(DIR ${SUBDIRS})
     FILE(GLOB srcs src/${DIR}/*.cpp)
