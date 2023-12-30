@@ -2,11 +2,10 @@
 #include "debug-api.h"
 
 void preprocess::handle_define(std::string_view dir_line) {
-    auto [macro, next_idx] = read_next_word(dir_line);
+    auto [macro, next_idx] = read_next_token(dir_line);
 
     //We're only considering object macros currently
-
-    if(!is_valid_ident(macro)) {
+    if(!is_valid_macro(macro)) {
         diag_inst.print_error(dir_line_start_idx);
         sim_log_error("Invalid identifier name for macro:{}", macro);
     }
@@ -39,7 +38,7 @@ void preprocess::handle_directive() {
     buffer_index += line_reader_inst.buffer_index;
     line_number += line_reader_inst.line_number - 1;
 
-    auto [directive, next_idx] = read_next_word(line_reader_inst.get_output());
+    auto [directive, next_idx] = read_next_token(line_reader_inst.get_output());
 
     if(directive == "define") {
         handle_define(line_reader_inst.get_output().substr(next_idx));

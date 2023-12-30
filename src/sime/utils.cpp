@@ -82,6 +82,16 @@ bool preprocess::is_alpha_num(char ch) {
     return isalnum(ch) || ch == '_';
 }
 
+bool preprocess::is_valid_macro(std::string_view ident) {
+    for(const auto el: ident) {
+        if(!is_alpha_num(el)) {
+            return false;
+        }
+    }
+
+    return is_valid_ident(ident);
+}
+
 bool preprocess::is_valid_ident(std::string_view ident) {
     return isalpha(ident[0]) || ident[0] == '_';
 }
@@ -100,15 +110,15 @@ bool preprocess::is_end_of_line(bool do_skip) {
     return false; 
 }
 
-std::pair<std::string, size_t> preprocess::read_next_word(std::string_view line) {
+std::pair<std::string, size_t> preprocess::read_next_token(std::string_view line) {
     size_t idx = 0;
     std::string word;
     while(idx < line.size()) {
-        while(idx < line.size() && !is_alpha_num(line[idx])) {
+        while(idx < line.size() && is_white_space(line[idx])) {
             idx++;
         }
 
-        while(idx < line.size() && is_alpha_num(line[idx])) {
+        while(idx < line.size() && !is_white_space(line[idx])) {
             word += line[idx++];
         }
 

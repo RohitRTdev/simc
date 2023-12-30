@@ -46,7 +46,7 @@ void argparser::parse() {
         std::string arg = m_argv[i];
         //It's an option
         if(arg[0] == '-') {
-            if(!flag_store.contains(arg[1]) && !name_flag_store.contains(arg[1])) {
+            if(arg.size() != 2 || (!flag_store.contains(arg[1]) && !name_flag_store.contains(arg[1]))) {
                 sim_log_error("Unrecognized option {}", arg);
             }
 
