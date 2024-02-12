@@ -18,7 +18,7 @@ int app_start(int argc, char** argv) {
     cmdline.parse();
     size_t file_idx = 0;
     preprocess::init_with_defaults();
-    
+
     for(const auto& file: cmdline.get_input_files()) {
         auto file_info_buf = read_file(file);
 
@@ -27,8 +27,8 @@ int app_start(int argc, char** argv) {
         main_preprocessor.parse();
         write_file(cmdline.get_output_files()[file_idx++], main_preprocessor.get_output());
     }
-   
-    sim_log_debug("Preprocessing successful");    
+
+    sim_log_debug("Preprocessing successful");
 
     return 0;
 }

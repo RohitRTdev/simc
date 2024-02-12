@@ -118,7 +118,7 @@ std::pair<std::string, size_t> preprocess::read_next_token(std::string_view line
             idx++;
         }
 
-        while(idx < line.size() && !is_white_space(line[idx])) {
+        while(idx < line.size() && is_alpha_num(line[idx])) {
             word += line[idx++];
         }
 
@@ -126,6 +126,58 @@ std::pair<std::string, size_t> preprocess::read_next_token(std::string_view line
     }
 
     return make_pair(word, idx);
+}
+
+bool preprocess::is_alpha_numeric_token(std::string_view token) {
+    for(int i = token.size()-1; i >= 0; i--) {
+        if(is_white_space(token[i])) {
+            return true;
+        }
+        if(!is_alpha_num(token[i])) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+std::pair<std::string, std::string> preprocess::split_token(std::string_view token) {
+    bool start_word_read = false;
+    int i = token.size() - 1, word_end_index = i;
+    for(; i >= 0; i--) {
+        if(is_alpha_num(token[i]) && !start_word_read) {
+            start_word_read = true;
+            word_end_index = i;
+        }
+        else if(start_word_read && !is_alpha_num(token[i])) {
+            break;
+        }
+    }
+
+    auto split_val = make_pair(std::string(token.substr(0, i+1)), 
+    std::string(token.substr(i+1, word_end_index - i)));
+
+    return split_val;
+}
+
+void preprocess::trim_whitespace(std::string& token) {
+    for(int i = 0; i < token.size(); i++) {
+        if(!is_white_space(token[i])) {
+            if(i != 0) {
+                token.erase(0, i);
+            }
+            break;
+        }
+    }
+
+    for(int i = token.size()-1; i >= 0; i--) {
+        if(!is_white_space(token[i])) {
+            if(i != token.size()-1) {
+                token.erase(i+1, token.size()-i-1);
+            }
+            break;
+        }
+    }
 }
 
 bool preprocess::is_white_space() {

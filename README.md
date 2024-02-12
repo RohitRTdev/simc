@@ -44,7 +44,7 @@ You could also use the -o option to give a different name to the output.
 The design involved three executables. <b>sime</b>, <b>simcc</b> and <b>simc</b>.<br>
 sime is the preprocessor, simcc is the compiler(generates assembly) and simc is a frontend executable which is what the user invokes.<br>
 simc knows the installation location for the compiler and preprocessor and invokes them approriately to generate the final assembly.<br>
-Although this is the planned design, the current state of the project is that we only have a half finished compiler. Preprocessor is not ready, and without the preprocessor it doesn't make sense to write the frontend. So if you wish to use it, invoke the compiler directly.
+Although this is the planned design, the current state of the project is that we only have a compiler. Preprocessor work is ongoing, and without a complete preprocessor it doesn't make sense to write the frontend. So if you wish to use it, invoke the compiler directly (or the preprocessor, to debug it).
 
 ## Compiler design
 Unlike most toy compilers, we don't use a recursive descendent parser, instead simcc uses a state-machine based parser(like a very crude and specific bison clone). This makes simcc less prone to stack overflow errors on highly nested expressions or statements. Our code generator is written as a separate module which makes it easy to add support for another architecture if needed. Currently we only support the x64 variant(no support for 32 bit) which generates position independent att syntax assembly compatible with gcc toolchain.
@@ -59,6 +59,7 @@ This could also be considered a TODO list:)
   <li>for and do-while loop</li>
   <li>ternary expression</li>
   <li>variadic functions</li>
+  <li>goto statements</li>
   <li>compound literal and array/struct type initialization(This is dependent on feature no:2, but could just be used for array initialization also)</li>
   <li>Array with no size specified(This is a consequence of lack of the previous feature, as arrays with no size requires an array initializer to be present)</li>
   <li>_Generic, _atomic, _complex specifiers</li>
