@@ -31,7 +31,8 @@ int main() {
     static const int another_int = -55;
     printf(val);
     "add" == "add";
-    return_void() && val;
+    return_void() && val;    
+    
     while(i < 10) {
         sum = sum + i;
         if (sum > 10)
@@ -41,9 +42,8 @@ int main() {
     return sum;
 }
 
-int fn() {
+int fn() { 
     
-
     int (*(*s[2]))(int, const char(char [2], register char));
     
     (*s[0][1])(0, fn);

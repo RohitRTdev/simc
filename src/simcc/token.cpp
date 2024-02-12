@@ -1,6 +1,8 @@
 #include "compiler/token.h"
-#include "compiler/diag.h"
+#include "common/diag.h"
 #include "debug-api.h"
+
+diag token::global_diag_inst;
 
 bool token::is_keyword_else() const {
     return type == KEYWORD && std::get<keyword_type>(value) == ELSE;
@@ -244,5 +246,5 @@ bool token::is_keyword_void() const {
 
 
 void token::print_error() const {
-    diag::print_error(position);
+    global_diag_inst.print_error(position);
 }

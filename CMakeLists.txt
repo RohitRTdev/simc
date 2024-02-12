@@ -60,20 +60,20 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 
 #Our cmake script automatically fetches and builds an executable for every subdirectory in the src directory
-macro(subdirlist result curdir)
-  file(GLOB children RELATIVE ${curdir} ${curdir}/*)
-  set(dirlist "")
-  foreach(child ${children})
-    if(IS_DIRECTORY ${curdir}/${child})
-      list(APPEND dirlist ${child})
-    endif()
-  endforeach()
-  set(${result} ${dirlist})
-endmacro()
+# macro(subdirlist result curdir)
+#   file(GLOB children RELATIVE ${curdir} ${curdir}/*)
+#   set(dirlist "")
+#   foreach(child ${children})
+#     if(IS_DIRECTORY ${curdir}/${child})
+#       list(APPEND dirlist ${child})
+#     endif()
+#   endforeach()
+#   set(${result} ${dirlist})
+# endmacro()
 
-subdirlist(SUBDIRS ${CMAKE_CURRENT_SOURCE_DIR}/src)
-
-set(COMMON_FILES src/entry.cpp src/options.cpp src/file-utils.cpp)
+#subdirlist(SUBDIRS ${CMAKE_CURRENT_SOURCE_DIR}/src)
+set(SUBDIRS sime simcc)
+set(COMMON_FILES src/entry.cpp src/options.cpp src/file-utils.cpp src/diagnostic.cpp)
 
 foreach(DIR ${SUBDIRS})
     FILE(GLOB srcs src/${DIR}/*.cpp)
@@ -89,6 +89,6 @@ foreach(DIR ${SUBDIRS})
 endforeach()
 
 #If building in vs, this sets the startup project to simcc
-set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT simcc)
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT sime)
 
 message(STATUS "Build type:${CMAKE_BUILD_TYPE}")
