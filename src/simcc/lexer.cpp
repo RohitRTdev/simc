@@ -2,7 +2,7 @@
 #include <list>
 #include <optional>
 #include "compiler/token.h"
-#include "compiler/diag.h"
+#include "common/diag.h"
 #include "debug-api.h"
 
 std::vector<token> tokens;  
@@ -165,7 +165,7 @@ void lex(const std::vector<char>& input) {
                 continue;
             }
             else {
-                diag::print_error(i);
+                token::global_diag_inst.print_error(i);
                 sim_log_error("\' should be closed with just one character.");
             }
         }
@@ -178,7 +178,7 @@ void lex(const std::vector<char>& input) {
                 state = EXPECTING_TICK;
             }
             else {
-                diag::print_error(i);
+                token::global_diag_inst.print_error(i);
                 sim_log_error("Character {} is not a valid escape character", ch);
             }
         }
@@ -218,7 +218,7 @@ void lex(const std::vector<char>& input) {
                 literal_count++;
             }
             else if(isalpha(ch) || ch == '_') {
-                diag::print_error(i);
+                token::global_diag_inst.print_error(i);
                 sim_log_error("Variable names are not supposed to start with a digit.");
             }
             else {
@@ -436,7 +436,7 @@ void lex(const std::vector<char>& input) {
         }
 
         if(state == LEXER_INVALID_TOKEN) {
-            diag::print_error(i);
+            token::global_diag_inst.print_error(i);
             sim_log_error("Invalid token encountered:'{}'", ch);
         }
     }

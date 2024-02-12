@@ -30,7 +30,8 @@ std::vector<char> read_file(std::string_view file_name) {
         }
         i += FILE_READ_CHUNK_SIZE;
     }
-
+        
+    sim_log_debug("File size: {}", f_buf.size());
     return f_buf;
 }
 
@@ -41,5 +42,6 @@ void write_file(std::string_view name, std::string_view code) {
         sim_log_error("Could not create output file:{}", name);
     }
 
+    sim_log_debug("Writing output to file:{}", name);
     file_intf.write(code.data(), code.size());
 }

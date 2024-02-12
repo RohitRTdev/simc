@@ -16,31 +16,77 @@ std::string argparser::generate_default_file_name(std::string_view file_path) {
     size_t lastSlash = file_path.find_last_of("/\\");
     
     if (lastSlash == std::string::npos) {
-        output_file_name = remove_suffix(output_file_name) + ".s";
+        output_file_name = remove_suffix(output_file_name) + m_extension;
         return output_file_name;
     }
     
-    return remove_suffix(output_file_name.substr(lastSlash + 1)) + ".s";
+    return remove_suffix(output_file_name.substr(lastSlash + 1)) + m_extension;
 }
 
-argparser::argparser(int argc, char** argv) : m_argc(argc), m_argv(argv)
+argparser::argparser(int argc, char** argv, std::string_view extension) : m_argc(argc), m_argv(argv),
+m_extension(extension)
 {}
+
+void argparser::add_flag(char ch, flag_type type) {
+    CRITICAL_ASSERT(!flag_store.contains(ch) && !name_flag_store.contains(ch), "Flag -{} is already added");
+
+    if(type == NORMAL) {
+        flag_store.insert(std::make_pair(ch, false));   
+    }
+    else {
+        name_flag_store.insert(std::make_pair(ch, std::vector<std::string>()));
+    }
+
+}
 
 void argparser::parse() {
     int i = 1;
     while (i < m_argc) 
     {
         std::string arg = m_argv[i];
-        if (arg == "-o") {
-            if(i + 1 >= m_argc || std::string(m_argv[i+1]) == "" || std::string(m_argv[i+1])[0] == '-') {
-                sim_log_error("-o option must be followed by a valid filename argument");
+        //It's an option
+        if(arg[0] == '-') {
+            if(arg.size() != 2 || (!flag_store.contains(arg[1]) && !name_flag_store.contains(arg[1]))) {
+                sim_log_error("Unrecognized option {}", arg);
             }
-            output_files.push_back(m_argv[i + 1]);
-            i += 2;
-        } else {
-            input_files.push_back(arg);
-            i++;
+
+            if(flag_store.contains(arg[1])) {
+                if(flag_store[arg[1]]) {
+                    sim_log_error("Option {} cannot be used multiple times");
+                }
+                flag_store[arg[1]] = true;
+            }
+            else {
+                if(i >= m_argc - 1) {
+                    sim_log_error("Invalid use of {} option", arg);
+                }
+
+                std::string val = m_argv[++i];
+                if(val[0] == '-') {
+                    sim_log_error("Invalid value:{} given for option {}", val, arg);
+                }
+
+                name_flag_store[arg[1]].push_back(val);
+            }
+
+
         }
+        else {
+            input_files.push_back(arg);
+        }
+        i++;
+    }
+
+    CRITICAL_ASSERT(name_flag_store.contains('o'), "argparser doesn't contain -o option configured");
+
+    //Special treatment for -o option as it's used in all modules
+    size_t user_op_files = name_flag_store['o'].size();
+    for(i = 0; i < user_op_files; i++) {
+        output_files.push_back(name_flag_store['o'][i]);
+    }
+
+    for(i = user_op_files; i < input_files.size(); i++) {
+        output_files.push_back(generate_default_file_name(input_files[i]));
     }
 
     if(output_files.size() > input_files.size()) {
@@ -50,10 +96,6 @@ void argparser::parse() {
     if(!input_files.size()) {
         sim_log_error("Please mention atleast one input file");
     }
-
-    size_t diff = input_files.size() - output_files.size();
-    for(i = 0; i < diff; i++)
-        output_files.push_back(generate_default_file_name(input_files[output_files.size() + i]));
 }
 
 const std::vector<std::string>& argparser::get_output_files() const {

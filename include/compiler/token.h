@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <variant>
+#include "common/diag.h"
 
 
 enum token_type{
@@ -88,6 +89,7 @@ private:
     bool is_keyword_data_type() const;
 
 public:
+    static diag global_diag_inst;   
     std::variant<char, std::string, operator_type, keyword_type> value;
     
     template<typename T>

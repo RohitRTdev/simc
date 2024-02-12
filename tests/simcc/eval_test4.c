@@ -45,7 +45,6 @@ int main() {
 
         }
         some = 1;
-        return new_fn(b, b);
     }
     
 
@@ -68,6 +67,6 @@ int main() {
             five = 2;
         }
 
-
+    a = (a++)+(++b);
     return a;
 }

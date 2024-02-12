@@ -1,7 +1,7 @@
 #pragma once
 
 #include "compiler/ast.h"
-#include "compiler/diag.h"
+#include "common/diag.h"
 
 void lex(const std::vector<char>& input);
 std::unique_ptr<ast> parse();
