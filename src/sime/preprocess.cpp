@@ -3,9 +3,21 @@
 
 sym_table preprocess::table;
 std::vector<std::string> preprocess::parents;
+std::vector<std::string> preprocess::ancestors;
 
-void preprocess::init_with_defaults() {
+void preprocess::init_with_defaults(const std::string& top_file_name) {
+    ancestors.clear();
+    ancestors.push_back(top_file_name);
 }
+
+void preprocess::insert_token_at_pos(size_t pos, std::string_view token) {
+    if (pos == output.size()) {
+        output += token;
+    }
+    else {
+        output.insert(pos, token);
+    }
+};
 
 //Replace line comments with a single space
 void preprocess::handle_line_comment() {
@@ -213,6 +225,15 @@ std::string preprocess::stringify_token(std::string_view token) {
     return res;
 }
 
+void preprocess::place_barrier() {
+    if(prev_token.size()) {
+        sim_log_debug("Placing barrier. Flushing previous token:{}", prev_token);
+        insert_token_at_pos(prev_token_pos, process_token(prev_token));
+    }
+    prev_token.clear();
+    context.prev_token_macro = false;
+}
+
 preprocess::preprocess(const std::vector<char>& input, bool handle_directives, 
 bool read_single_line, bool read_macro_arg) : contents(input), line_number(1), 
 buffer_index(0), state(PARSER_NORMAL), bracket_count(1), prev_idx(1), prev_token_pos(0) {
@@ -254,15 +275,6 @@ void preprocess::parse() {
     auto setup_prev_token = [&](std::string_view token) {
         prev_token = token;
         prev_token_pos = output.size();
-    };
-
-    auto insert_token_at_pos = [&](size_t pos, std::string_view token) {
-        if (pos == output.size()) {
-            output += token;
-        }
-        else {
-            output.insert(pos, token);
-        }
     };
 
     auto flush_token = [&] (bool is_last_token = false) {
@@ -373,7 +385,7 @@ void preprocess::parse() {
             return;
         }
         print_error(delimiter_start_pos);
-        sim_log_warn("Unterminated '{}'", delimiter);  
+        sim_log_warn("Unterminated '{}'", delimiter == '>' ? '<' : delimiter);
     };
     
     while (buffer_index < contents.size()) {
@@ -528,11 +540,11 @@ void preprocess::parse() {
             else if(ch == '/') {
                 state = PARSER_COMMENT;
             }
-            else if(ch == '\"' || ch == '\'') {
+            else if(ch == '\"' || ch == '\'' || (context.consider_angle_as_str && ch == '<')) {
                 check_string_op();     
                 sim_log_debug("Handling string");
                 state = PARSER_STRING;
-                delimiter = ch;
+                delimiter = ch == '<' ? '>' : ch;
                 output += ch;
                 start_of_line = false;
                 flush_token();

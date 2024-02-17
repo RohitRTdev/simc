@@ -43,6 +43,7 @@ class preprocess {
         bool macro_arg_expanded_token;
         bool no_hash_processing;    // Turned on when we don't want to treat string('#') and concat('##') operators
         bool is_last_token_fn_macro;
+        bool consider_angle_as_str;
         std::vector<std::string> set_actual_args;
         std::vector<std::string> macro_args;
     
@@ -64,18 +65,22 @@ class preprocess {
     parser_state state;
     static sym_table table;
     static std::vector<std::string> parents; //Construct to prevent infinite recursion during macro expansion
+    static std::vector<std::string> ancestors; //Construct to prevent infinite recursion during file inclusion 
     
     void handle_line_comment();
     void handle_block_comment();
     bool handle_continued_line(bool only_check = false);
     void handle_directive();
+    void handle_include(std::string_view dir_line); 
     void handle_define(std::string_view dir_line);
 	void setup_prev_token_macro(const std::string& new_token); 
+    void place_barrier();
     std::tuple<bool, std::vector<std::string>, std::string_view, bool> parse_macro_args(std::string_view macro_line);
     std::string process_token(std::string_view cur_token);
     std::string expand_token(std::string_view cur_token);
     std::string expand_variadic_args();
     std::string stringify_token(std::string_view token);
+    void insert_token_at_pos(size_t pos, std::string_view token); 
     std::string macro_arg_expand(std::string_view token);
     void print_error(size_t pos);
     bool is_word_parent(std::string_view word);
@@ -97,7 +102,7 @@ class preprocess {
     bool is_alpha_numeric_token(std::string_view token);
     void config_diag(const preprocess* inst);
 public:
-    static void init_with_defaults();
+    static void init_with_defaults(const std::string& top_file_name);
     preprocess(const std::vector<char>& input, bool handle_directives = true, 
     bool read_single_line = false, bool read_macro_arg = false);
     void parse();

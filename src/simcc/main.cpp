@@ -40,7 +40,7 @@ int app_start(int argc, char** argv) {
     cmdline.parse();
     size_t file_idx = 0;
     for(const auto& file: cmdline.get_input_files()) {
-        auto file_info_buf = read_file(file);
+        auto file_info_buf = *read_file(file);
 
         start_compilation(file, file_info_buf);
         write_file(cmdline.get_output_files()[file_idx++], asm_code);

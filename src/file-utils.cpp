@@ -4,14 +4,19 @@
 
 #define FILE_READ_CHUNK_SIZE 256
 
-std::vector<char> read_file(std::string_view file_name) {
+std::optional<std::vector<char>> read_file(std::string_view file_name, bool exit_on_error) {
     std::ifstream file_intf(std::string(file_name), std::ios::binary);
 
+    std::optional<std::vector<char>> f_buf_wrap;
     std::vector<char> f_buf(FILE_READ_CHUNK_SIZE); 
     size_t i = 0;
 
     if(!file_intf.is_open()) {
-        sim_log_error("File open failed!");
+        if(exit_on_error) {
+            sim_log_error("File open failed!");
+        }
+
+        return f_buf_wrap;
     }
 
     sim_log_debug("Reading file {}", file_name);
@@ -32,7 +37,8 @@ std::vector<char> read_file(std::string_view file_name) {
     }
         
     sim_log_debug("File size: {}", f_buf.size());
-    return f_buf;
+    f_buf_wrap = f_buf;
+    return f_buf_wrap;
 }
 
 void write_file(std::string_view name, std::string_view code) {

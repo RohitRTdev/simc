@@ -1,4 +1,7 @@
+#include <unordered_set>
+#include <filesystem>
 #include "preprocessor/preprocess.h"
+#include "common/file-utils.h"
 #include "debug-api.h"
 
 std::tuple<bool, std::vector<std::string>, std::string_view, bool> 
@@ -103,7 +106,103 @@ preprocess::parse_macro_args(std::string_view macro_line) {
         idx++;
     }
 
+
+    //Check for duplicates in arguments
+    std::unordered_set<std::string> arg_table;
+    for(const auto& arg: args) {
+        if(arg_table.contains(arg)) {
+            diag_inst.print_error(dir_line_start_idx);
+            sim_log_error("Argument \"{}\" in macro definition seems to be duplicated", arg);
+        }
+        else {
+            arg_table.insert(arg); 
+        }
+    }
+
+
     return make_tuple(true, args, macro_line.substr(idx), is_variadic);
+}
+
+void preprocess::handle_include(std::string_view dir_line) {
+    
+    size_t idx = 0;
+    while(is_white_space(dir_line[idx]) && idx < dir_line.size())
+        idx++;
+
+    
+    auto print_include_error = [&] {
+        diag_inst.print_error(dir_line_start_idx);
+        sim_log_error("Invalid syntax for include directive");
+    };
+
+
+    if (idx >= dir_line.size()) {
+        print_include_error();
+    }
+
+    char delimiter = dir_line[idx];
+    if(delimiter != '<' && delimiter != '\"') {
+        print_include_error();    
+    }
+
+    if (delimiter == '<') {
+        delimiter = '>';
+    }
+
+    std::string file_path;
+    idx++;
+    while(idx < dir_line.size() && dir_line[idx] != delimiter) {
+        file_path.push_back(dir_line[idx++]);
+    }
+
+    if(idx >= dir_line.size() || dir_line[idx] != delimiter) {
+        print_include_error();
+    }
+
+    file_path = trim_whitespace(file_path);
+    sim_log_debug("Include file path read as:{}", file_path);
+
+    //Start file read process
+    std::string file_dir = std::filesystem::path(file_name).parent_path().string();
+    sim_log_debug("Current file directory for {} is {}", file_name, file_dir);
+
+    //Checking if file is present in current directory
+    std::string path = (std::filesystem::path(file_dir) / std::filesystem::path(file_path)).string();
+    sim_log_debug("Checking for file:{} in location:{}", file_path, path);
+
+    std::optional<std::vector<char>> file_contents;
+
+    file_contents = read_file(path, false);
+    if(!file_contents.has_value()) {
+        //Checking if file is present in current working directory
+        sim_log_debug("Checking for file:{} in current working directory", file_path);
+        file_contents = read_file(file_path, false);
+        if(!file_contents.has_value()) {
+            diag_inst.print_error(dir_line_start_idx);
+            sim_log_error("File:{} not found", file_path);
+        }
+        path = file_path;
+    }
+
+    for(const auto& ancestor: ancestors) {
+        if(std::filesystem::path(ancestor) == std::filesystem::path(path)) {
+            diag_inst.print_error(dir_line_start_idx);
+            sim_log_error("Cyclical inclusion of file:{} detected", path); 
+        }
+    }
+
+    //Flush previous token if any
+    place_barrier();
+    sim_log_debug("Starting preprocessing for file:{}", file_path);
+    preprocess aux_preprocessor(*file_contents);
+    aux_preprocessor.init_diag(path);
+    aux_preprocessor.ancestors.push_back(path);
+    aux_preprocessor.parse();
+    aux_preprocessor.ancestors.pop_back();
+   
+
+    output += aux_preprocessor.get_output();
+    sim_log_debug("Preprocessed file:{}", file_path);
 }
 
 void preprocess::handle_define(std::string_view dir_line) {
@@ -145,10 +244,24 @@ void preprocess::handle_directive() {
 
     sim_log_debug("Preprocess line read is:{}", line_reader_inst.get_output());
     dir_line_start_idx = buffer_index;
-    buffer_index += line_reader_inst.buffer_index;
-    line_number += line_reader_inst.line_number - 1;
-
     auto [directive, next_idx] = read_next_token(line_reader_inst.get_output());
+    
+    if(directive == "include") {
+        //Start a line read but consider angle brackets as string constants
+        sim_log_debug("Starting include argument read...");
+        preprocess line_reader_inst(rem_line, false, true);
+        line_reader_inst.context.consider_angle_as_str = true;
+        line_reader_inst.parse();
+        buffer_index += line_reader_inst.buffer_index;
+        line_number += line_reader_inst.line_number - 1;
+
+        handle_include(line_reader_inst.get_output().substr(next_idx));
+        return;
+    }
+    else {
+        buffer_index += line_reader_inst.buffer_index;
+        line_number += line_reader_inst.line_number - 1;
+    }
 
     if(directive == "define") {
         handle_define(line_reader_inst.get_output().substr(next_idx));

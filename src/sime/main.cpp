@@ -17,10 +17,10 @@ int app_start(int argc, char** argv) {
     auto cmdline = init_argparser(argc, argv, ".i");
     cmdline.parse();
     size_t file_idx = 0;
-    preprocess::init_with_defaults();
 
     for(const auto& file: cmdline.get_input_files()) {
-        auto file_info_buf = read_file(file);
+        preprocess::init_with_defaults(file);
+        auto file_info_buf = *read_file(file);
 
         preprocess main_preprocessor(file_info_buf);
         main_preprocessor.init_diag(file);
