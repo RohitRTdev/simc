@@ -249,6 +249,8 @@ void preprocess::parse() {
     std::string cur_token;
     bool triggered_whitespace = false;
     bool no_advance = false;
+    char delimiter = ' ';
+    size_t delimiter_start_pos = 0;
     auto setup_prev_token = [&](std::string_view token) {
         prev_token = token;
         prev_token_pos = output.size();
@@ -310,8 +312,8 @@ void preprocess::parse() {
     auto handle_token = [&] {
         sim_log_debug("Found token:{}", cur_token);
         if(found_concat_op) {
-            auto first_token = macro_arg_expand(prev_token);
-            auto second_token = macro_arg_expand(cur_token); 
+            auto first_token = trim_whitespace(macro_arg_expand(prev_token));
+            auto second_token = trim_whitespace(macro_arg_expand(cur_token));
             first_token += second_token;
             found_concat_op = false;
             output.erase(prev_token_pos);
@@ -345,8 +347,7 @@ void preprocess::parse() {
                 output.erase(string_op_out_pos);
 
                 auto new_token = macro_arg_expand(cur_token);
-                trim_whitespace(new_token);
-                insert_token_at_pos(string_op_out_pos, stringify_token(new_token));
+                insert_token_at_pos(string_op_out_pos, stringify_token(trim_whitespace(new_token)));
                 flush_token();
             }
             
@@ -366,15 +367,15 @@ void preprocess::parse() {
         state = PARSER_NORMAL;
     };
 
-    auto reverse_continue_line = [&] {
-        if (context.read_macro_arg) {
-            context.actual_arg.erase(context.actual_arg.size()-1);
+
+    auto print_unterm_str_warn = [&] {
+        if(context.read_single_line || context.read_macro_arg || context.in_arg_prescan_mode) {
+            return;
         }
+        print_error(delimiter_start_pos);
+        sim_log_warn("Unterminated '{}'", delimiter);  
     };
-     
-    if (contents.size() > 2 && contents[0] == ' ' && contents[1] == '#' && contents[2] == 'a') {
-        int stop = 1;
-    }
+    
     while (buffer_index < contents.size()) {
         char ch = contents[buffer_index];
         if(state == PARSER_NORMAL) {
@@ -424,8 +425,6 @@ void preprocess::parse() {
                     if(macro_incomplete) {
                         print_error(prev_token_pos);
                         sim_log_error("Incorrect invocation of function macro:{}", prev_token);
-                        //flush_token();
-                        //setup_prev_token("(");
                     }
                     else if((is_var && args.size() < macro.size()-1) || (!is_var && args.size() != macro.size() - 1)) {
                         print_error(buffer_index);
@@ -529,13 +528,15 @@ void preprocess::parse() {
             else if(ch == '/') {
                 state = PARSER_COMMENT;
             }
-            else if(ch == '\"') {
+            else if(ch == '\"' || ch == '\'') {
                 check_string_op();     
                 sim_log_debug("Handling string");
                 state = PARSER_STRING;
+                delimiter = ch;
                 output += ch;
                 start_of_line = false;
                 flush_token();
+                delimiter_start_pos = buffer_index;
             }
             else if(context.read_macro_arg && (ch == ',' || ch == '(' || ch == ')')) {
 				bool added_to_output = false;
@@ -639,11 +640,19 @@ void preprocess::parse() {
                 no_advance = false;
                 continue;
             }
-            else if(ch == '\"' || is_end_of_line(false)) {
+            else if(ch == delimiter) {
                 state = PARSER_NORMAL;
+                output += ch;
             }
-
-            output += ch;
+            else if(is_end_of_line(false)) {
+                state = PARSER_NORMAL;
+                print_unterm_str_warn();
+                no_advance = true;
+            }
+            else {
+                output += ch;
+            }
+          
         }
         else if(state == PARSER_TOKEN) {
             if(is_alpha_num()) {
@@ -662,6 +671,9 @@ void preprocess::parse() {
         if(!no_advance)
             buffer_index++;
         no_advance = false;
+    }
+    if(state == PARSER_STRING) {
+        print_unterm_str_warn();
     }
     
     if (context.read_macro_arg && buffer_index >= contents.size() && !context.args_complete) {
@@ -704,7 +716,7 @@ void preprocess::parse() {
 }
 
 void preprocess::print_error(size_t pos) {
-    if(parents.size()) {
+    if(context.in_token_expansion) {
         //We're currently expanding a token
         std::cout << "In expansion of token:" << parents[parents.size()-1] << std::endl;
     }

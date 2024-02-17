@@ -141,26 +141,8 @@ bool preprocess::is_alpha_numeric_token(std::string_view token) {
     return true;
 }
 
-std::pair<std::string, std::string> preprocess::split_token(std::string_view token) {
-    bool start_word_read = false;
-    int i = token.size() - 1, word_end_index = i;
-    for(; i >= 0; i--) {
-        if(is_alpha_num(token[i]) && !start_word_read) {
-            start_word_read = true;
-            word_end_index = i;
-        }
-        else if(start_word_read && !is_alpha_num(token[i])) {
-            break;
-        }
-    }
-
-    auto split_val = make_pair(std::string(token.substr(0, i+1)), 
-    std::string(token.substr(i+1, word_end_index - i)));
-
-    return split_val;
-}
-
-void preprocess::trim_whitespace(std::string& token) {
+std::string preprocess::trim_whitespace(const std::string& old_token) {
+    std::string token(old_token);
     for(int i = 0; i < token.size(); i++) {
         if(!is_white_space(token[i])) {
             if(i != 0) {
@@ -178,6 +160,8 @@ void preprocess::trim_whitespace(std::string& token) {
             break;
         }
     }
+
+    return token;
 }
 
 bool preprocess::is_white_space() {

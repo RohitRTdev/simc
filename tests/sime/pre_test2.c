@@ -6,4 +6,4 @@ defi\
 ne /*some comment*/ great b\
 lah blah blah
 
-All righty
+All righty great

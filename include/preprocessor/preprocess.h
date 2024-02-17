@@ -7,13 +7,16 @@
 
 enum parser_state {
     PARSER_NORMAL,
-    PARSER_COMMENT,
     PARSER_STRING,
+    PARSER_COMMENT,
     PARSER_TOKEN
 };
 
+
+//Preprocessor parsing and state handling construct
 class preprocess {
 
+    //We emit whatever endline we find (This means, a file could be mixed with CRLF/LF/CR ending. However, it's not recommended to mix different endlines)
     enum endline_marker {
         ENDLINE_RN,
         ENDLINE_N,
@@ -24,31 +27,28 @@ class preprocess {
     const std::vector<char>& contents;
     std::string output;
     std::string file_name;
-    diag diag_inst;
+    diag diag_inst;  // Gives us file diagnostic information (Helpful while printing diagnostic messages)
     struct preprocess_context {
-        bool handle_directives;
-        bool read_single_line;
-        bool read_macro_arg;
-        bool in_macro_expansion;
-        bool in_token_expansion;
-        bool in_arg_prescan_mode;
-        bool is_variadic_macro;
-        bool arg_premature_term;
-        bool args_complete;
-        bool prev_token_macro; 
-        bool no_complete_expansion;
+        bool handle_directives;     // Turned on when handling top level file
+        bool read_single_line;      // Indicates that we would like to read one logical line and do no expansion
+        bool read_macro_arg;        // Indicates that we would like to read one logical macro argument
+        bool in_macro_expansion;    // Turned on during function macro expansion
+        bool in_token_expansion;    // Turned on during object/function macro expansion
+        bool in_arg_prescan_mode;   // Turned on during argument prescan phase on function macro expansion
+        bool is_variadic_macro;     
+        bool arg_premature_term;    // Tells if function macro is prematurely terminated or not 
+        bool args_complete;         // Tells if function macro is properly invoked or not
+        bool prev_token_macro;      
+        bool no_complete_expansion; 
         bool macro_arg_expanded_token;
-        bool no_hash_processing;
+        bool no_hash_processing;    // Turned on when we don't want to treat string('#') and concat('##') operators
         bool is_last_token_fn_macro;
-		std::vector<std::string> set_expanded_args;
         std::vector<std::string> set_actual_args;
         std::vector<std::string> macro_args;
-        std::string actual_arg;
     
         void copy_macro_params(const preprocess_context& new_context) {
             in_macro_expansion = new_context.in_macro_expansion;
             is_variadic_macro = new_context.is_variadic_macro;
-            set_expanded_args = new_context.set_expanded_args;
             set_actual_args = new_context.set_actual_args;
         }
     } context;
@@ -63,7 +63,7 @@ class preprocess {
     size_t bracket_count;
     parser_state state;
     static sym_table table;
-    static std::vector<std::string> parents;
+    static std::vector<std::string> parents; //Construct to prevent infinite recursion during macro expansion
     
     void handle_line_comment();
     void handle_block_comment();
@@ -87,7 +87,7 @@ class preprocess {
     bool is_alpha_num();
     bool is_valid_macro(std::string_view ident);
     bool is_valid_ident(std::string_view ident);
-    void trim_whitespace(std::string& token);
+    std::string trim_whitespace(const std::string& token);
     endline_marker figure_new_line();
     std::string fetch_end_line_marker();
     std::pair<std::string, size_t> read_next_token(std::string_view line);
@@ -95,7 +95,6 @@ class preprocess {
     bool is_white_space(char ch);
     void skip_newline(bool add_to_output = false);
     bool is_alpha_numeric_token(std::string_view token);
-    std::pair<std::string, std::string> split_token(std::string_view token);
     void config_diag(const preprocess* inst);
 public:
     static void init_with_defaults();
