@@ -6,6 +6,7 @@ std::vector<std::string> preprocess::parents;
 std::vector<std::string> preprocess::ancestors;
 
 void preprocess::init_with_defaults(const std::string& top_file_name) {
+    //This makes sure that we do not allow the compilation file to include itself
     ancestors.clear();
     ancestors.push_back(top_file_name);
 }
@@ -33,7 +34,8 @@ void preprocess::handle_line_comment() {
         }
     }
 
-    output += " ";
+    if(!context.passive_scan)
+        output += " ";
 }
 
 void preprocess::handle_block_comment() {    
@@ -72,7 +74,8 @@ void preprocess::handle_block_comment() {
         
     }
 
-    output += comment;
+    if(!context.passive_scan)
+        output += comment;
 }
 
 bool preprocess::handle_continued_line(bool only_check) {
@@ -251,6 +254,7 @@ buffer_index(0), state(PARSER_NORMAL), bracket_count(1), prev_idx(1), prev_token
     context.in_token_expansion = false;
     context.no_hash_processing = false;
     context.is_last_token_fn_macro = false;
+    context.passive_scan = false;
 }
 
 void preprocess::init_diag(std::string_view name, size_t line_num) {
@@ -279,7 +283,7 @@ void preprocess::parse() {
 
     auto flush_token = [&] (bool is_last_token = false) {
         if(prev_token.size()) {
-            if(is_last_token && !context.read_single_line && !context.read_macro_arg && !context.in_arg_prescan_mode && is_function_macro(prev_token)) {
+            if(is_last_token && !context.passive_scan && !context.read_single_line && !context.read_macro_arg && !context.in_arg_prescan_mode && is_function_macro(prev_token)) {
                 sim_log_debug("Last token:{} seems to be a function macro. Saving it...", prev_token);
 				context.is_last_token_fn_macro = true;
                 return;
@@ -288,6 +292,10 @@ void preprocess::parse() {
                 sim_log_debug("Macro expanding token:{} in prescan mode", prev_token);
                 auto new_token = macro_arg_expand(prev_token);
                 insert_token_at_pos(prev_token_pos, new_token);
+            }
+            else if(context.passive_scan) {
+                //We don't output the text
+                sim_log_debug("Ignoring token:{} in passive scan mode", prev_token);
             }
             else if (!is_alpha_numeric_token(prev_token) || context.prev_token_macro 
             || is_function_macro(prev_token) || context.no_complete_expansion 
@@ -391,7 +399,7 @@ void preprocess::parse() {
     while (buffer_index < contents.size()) {
         char ch = contents[buffer_index];
         if(state == PARSER_NORMAL) {
-            if(!context.read_single_line && !context.read_macro_arg && !context.in_arg_prescan_mode && ch == '(') {
+            if(!context.passive_scan && !context.read_single_line && !context.read_macro_arg && !context.in_arg_prescan_mode && ch == '(') {
 				if(!is_function_macro(prev_token)) {
 					flush_token(); //Forcefully expand the previous token
 				}
@@ -494,7 +502,7 @@ void preprocess::parse() {
                     setup_prev_token("(");
                 }
             }
-            else if(!context.no_hash_processing && !context.read_macro_arg && context.in_token_expansion && !context.read_single_line && ch == '#') {
+            else if(!context.passive_scan && !context.no_hash_processing && !context.read_macro_arg && context.in_token_expansion && !context.read_single_line && ch == '#') {
                 if (found_concat_op) {
                     print_error(string_op_pos);
                     sim_log_error("Concatenation operator must be followed by a valid token");
@@ -545,7 +553,8 @@ void preprocess::parse() {
                 sim_log_debug("Handling string");
                 state = PARSER_STRING;
                 delimiter = ch == '<' ? '>' : ch;
-                output += ch;
+                if(!context.passive_scan)
+                    output += ch;
                 start_of_line = false;
                 flush_token();
                 delimiter_start_pos = buffer_index;
@@ -576,7 +585,7 @@ void preprocess::parse() {
 					output += ch;
 				}
             }
-            else if(context.handle_directives && ch == '#' && start_of_line) {
+            else if((context.handle_directives || context.passive_scan) && ch == '#' && start_of_line) {
                 sim_log_debug("Preprocessor directive detected at line:{}", line_number);
                 handle_directive();
             }
@@ -598,7 +607,7 @@ void preprocess::parse() {
                         skip_newline(); 
                     } 
                     else {
-                        skip_newline(true);
+                        skip_newline(!context.passive_scan);
                     }
                     flush_token();
                     sim_log_debug("Processing line number:{}", line_number);
@@ -615,7 +624,8 @@ void preprocess::parse() {
                         no_advance = false;
                     }
                     else {
-                        output += ch;
+                        if(!context.passive_scan)
+                            output += ch;
                         if(found_string_op) {
                             triggered_whitespace = true;
                         }
@@ -654,7 +664,8 @@ void preprocess::parse() {
             }
             else if(ch == delimiter) {
                 state = PARSER_NORMAL;
-                output += ch;
+                if(!context.passive_scan)
+                    output += ch;
             }
             else if(is_end_of_line(false)) {
                 state = PARSER_NORMAL;
@@ -662,7 +673,8 @@ void preprocess::parse() {
                 no_advance = true;
             }
             else {
-                output += ch;
+                if(!context.passive_scan)
+                    output += ch;
             }
           
         }
@@ -693,7 +705,13 @@ void preprocess::parse() {
     }
 
     if(state == PARSER_COMMENT) {
-        output += "/";
+        if(!context.passive_scan)
+            output += '/';
+    }
+
+    if(context.handle_directives && ifdef_stack.size()) {
+        diag_inst.print_error(ifdef_stack.top().offset);
+        sim_log_error("Directive was not terminated"); 
     }
 
     if(prev_token.size() && cur_token.size()) {

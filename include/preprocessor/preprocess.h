@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <stack>
 #include "preprocessor/sym_table.h"
 #include "common/diag.h"
 
@@ -22,6 +23,19 @@ class preprocess {
         ENDLINE_N,
         ENDLINE_R,
         ENDLINE_NONE
+    };
+    
+    enum IFDEF {
+        IF,
+        ELIF,
+        ELSE
+    };
+
+    struct ifdef_info {
+        IFDEF type;
+        bool res;
+        bool state;
+        size_t offset;
     };
 
     const std::vector<char>& contents;
@@ -44,6 +58,7 @@ class preprocess {
         bool no_hash_processing;    // Turned on when we don't want to treat string('#') and concat('##') operators
         bool is_last_token_fn_macro;
         bool consider_angle_as_str;
+        bool passive_scan;
         std::vector<std::string> set_actual_args;
         std::vector<std::string> macro_args;
     
@@ -63,6 +78,7 @@ class preprocess {
     size_t string_op_pos;
     size_t bracket_count;
     parser_state state;
+    std::stack<ifdef_info> ifdef_stack; 
     static sym_table table;
     static std::vector<std::string> parents; //Construct to prevent infinite recursion during macro expansion
     static std::vector<std::string> ancestors; //Construct to prevent infinite recursion during file inclusion 
@@ -73,6 +89,7 @@ class preprocess {
     void handle_directive();
     void handle_include(std::string_view dir_line); 
     void handle_define(std::string_view dir_line);
+    void handle_ifdef(std::string_view expression, std::string_view directive); 
 	void setup_prev_token_macro(const std::string& new_token); 
     void place_barrier();
     std::tuple<bool, std::vector<std::string>, std::string_view, bool> parse_macro_args(std::string_view macro_line);

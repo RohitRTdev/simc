@@ -4,6 +4,49 @@
 #include "common/file-utils.h"
 #include "debug-api.h"
 
+void preprocess::handle_ifdef(std::string_view expression, std::string_view directive) {
+    //This function could be called in both passive_scan mode or normal mode
+    bool expr_res = false;
+    auto exp = trim_whitespace(std::string(expression));
+        
+    //We only care to check this if the block is being evaluated in normal mode
+    if(!context.passive_scan && (directive == "if" || directive == "elif")) {
+        if(!exp.size()) {
+            diag_inst.print_error(dir_line_start_idx);
+            sim_log_error("if/elif statements require an expression");
+        }
+        expr_res = exp != "0";
+    }
+    
+    if(directive == "if") {
+        //Save the previous state, along with the eval result
+        ifdef_stack.push(ifdef_info{IFDEF::IF, expr_res, context.passive_scan, dir_line_start_idx});
+        
+        //In passive scan mode, we only check for comments, line endings and #if/elif/else/endif blocks
+        context.passive_scan = context.passive_scan || !expr_res;
+        if(context.passive_scan) {
+            sim_log_debug("Entering passive scan mode");
+        }
+    }
+    else if(directive == "endif") {
+       if(!ifdef_stack.size()) {
+            diag_inst.print_error(dir_line_start_idx);
+            sim_log_error("endif statement found in wrong context");
+       }
+
+       //Go back to previous state
+       context.passive_scan = ifdef_stack.top().state;
+       if(!context.passive_scan && exp.size()) {
+            diag_inst.print_error(dir_line_start_idx);
+            sim_log_error("Invalid syntax for endif statement");
+       }
+        
+       ifdef_stack.pop();
+    }
+    
+
+}
+
 std::tuple<bool, std::vector<std::string>, std::string_view, bool> 
 preprocess::parse_macro_args(std::string_view macro_line) {
     if(macro_line[0] != '(') {
@@ -240,12 +283,20 @@ void preprocess::handle_define(std::string_view dir_line) {
 void preprocess::handle_directive() {
     std::vector<char> rem_line(contents.begin() + buffer_index + 1, contents.end());
     preprocess line_reader_inst(rem_line, false, true);
+    sim_log_debug("Starting line read for preprocessor directive");
     line_reader_inst.parse();
 
     sim_log_debug("Preprocess line read is:{}", line_reader_inst.get_output());
     dir_line_start_idx = buffer_index;
     auto [directive, next_idx] = read_next_token(line_reader_inst.get_output());
-    
+
+    if(context.passive_scan) {
+        if(directive != "if" && directive != "elif" && directive != "else" && directive != "endif") {
+            sim_log_debug("Ignoring directive as it is found during passive scan");
+            return;
+        }
+    }
+
     if(directive == "include") {
         //Start a line read but consider angle brackets as string constants
         sim_log_debug("Starting include argument read...");
@@ -265,6 +316,9 @@ void preprocess::handle_directive() {
 
     if(directive == "define") {
         handle_define(line_reader_inst.get_output().substr(next_idx));
+    }
+    else if(directive == "if" || directive == "elif" || directive == "else" || directive == "endif") {
+        handle_ifdef(line_reader_inst.get_output().substr(next_idx), directive);
     }
     else {
         diag_inst.print_error(dir_line_start_idx);
