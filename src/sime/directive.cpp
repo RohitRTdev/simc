@@ -8,16 +8,33 @@ void preprocess::handle_ifdef(std::string_view expression, std::string_view dire
     //This function could be called in both passive_scan mode or normal mode
     bool expr_res = false;
     auto exp = trim_whitespace(std::string(expression));
-        
-    //We only care to check this if the block is being evaluated in normal mode
-    if(!context.passive_scan && (directive == "if" || directive == "elif")) {
-        if(!exp.size()) {
+
+    if(directive == "elif" || directive == "else" || directive == "endif") {
+       if(!ifdef_stack.size()) {
             diag_inst.print_error(dir_line_start_idx);
-            sim_log_error("if/elif statements require an expression");
-        }
-        expr_res = exp != "0";
+            sim_log_error("{} statement found in wrong context", directive);
+       }
     }
     
+    if(!ifdef_stack.size() || !ifdef_stack.top().state) {
+        //This means passive_scan is not turned on within this context
+        //Hence, check for valid syntax
+        
+        if(directive == "if" || directive == "elif") {
+            if(!exp.size()) {
+                diag_inst.print_error(dir_line_start_idx);
+                sim_log_error("if/elif statements require an expression");
+            }
+            expr_res = exp != "0";
+        }
+        else {
+            if(exp.size()) {
+                diag_inst.print_error(dir_line_start_idx);
+                sim_log_error("Invalid use of {} statement", directive);
+            }
+        }
+
+    }
     if(directive == "if") {
         //Save the previous state, along with the eval result
         ifdef_stack.push(ifdef_info{IFDEF::IF, expr_res, context.passive_scan, dir_line_start_idx});
@@ -28,12 +45,32 @@ void preprocess::handle_ifdef(std::string_view expression, std::string_view dire
             sim_log_debug("Entering passive scan mode");
         }
     }
-    else if(directive == "endif") {
-       if(!ifdef_stack.size()) {
+    else if(directive == "elif" || directive == "else") {
+        if(ifdef_stack.top().type != IFDEF::IF && ifdef_stack.top().type != IFDEF::ELIF) {
             diag_inst.print_error(dir_line_start_idx);
-            sim_log_error("endif statement found in wrong context");
-       }
-
+            sim_log_error("{} statement found in wrong context", directive);
+        }
+        bool prev_state = ifdef_stack.top().state;
+        bool prev_res = ifdef_stack.top().res;
+        auto type = directive == "else" ? IFDEF::ELSE : IFDEF::ELIF;
+        if(prev_res) {
+            context.passive_scan = true;
+        }
+        else {
+            if(directive == "else") {
+                context.passive_scan = prev_state;
+            }
+            else {
+                context.passive_scan = prev_state || !expr_res;
+            }
+            if(!context.passive_scan) {
+                prev_res = true;
+            }
+        }
+        ifdef_stack.pop();
+        ifdef_stack.push(ifdef_info{type, prev_res, prev_state, dir_line_start_idx});
+    }
+    else if(directive == "endif") {
        //Go back to previous state
        context.passive_scan = ifdef_stack.top().state;
        if(!context.passive_scan && exp.size()) {
@@ -43,8 +80,6 @@ void preprocess::handle_ifdef(std::string_view expression, std::string_view dire
         
        ifdef_stack.pop();
     }
-    
-
 }
 
 std::tuple<bool, std::vector<std::string>, std::string_view, bool> 

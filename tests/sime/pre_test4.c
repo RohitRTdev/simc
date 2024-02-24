@@ -18,16 +18,24 @@
 
 #define GREAT hehe choke hehe
 GREAT
-#if 1
+#if 0
 Processed 1
 #if 1
 Processed  2
 #if 0
 Processed   3
+#elif 0
+Processed 5
+#elif 1
+Processed 6
 #endif
 #endif
 #include <pre_test3.c>
-#if 2
+#if 0
 Processed  4
+#else
+Processed 7
 #endif
+#elif 1   
+Processed 8
 #endif

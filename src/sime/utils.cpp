@@ -143,14 +143,13 @@ bool preprocess::is_alpha_numeric_token(std::string_view token) {
 
 std::string preprocess::trim_whitespace(const std::string& old_token) {
     std::string token(old_token);
-    for(int i = 0; i < token.size(); i++) {
+    int i = 0;
+    for(;i < token.size(); i++) {
         if(!is_white_space(token[i])) {
-            if(i != 0) {
-                token.erase(0, i);
-            }
             break;
         }
     }
+    token.erase(0, i);
 
     for(int i = token.size()-1; i >= 0; i--) {
         if(!is_white_space(token[i])) {
