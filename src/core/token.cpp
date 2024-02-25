@@ -1,8 +1,14 @@
-#include "compiler/token.h"
+#include "core/token.h"
 #include "common/diag.h"
 #include "debug-api.h"
 
+#ifdef MODSIMCC
 diag token::global_diag_inst;
+
+void token::print_error() const {
+    global_diag_inst.print_error(position);
+}
+#endif
 
 bool token::is_keyword_else() const {
     return type == KEYWORD && std::get<keyword_type>(value) == ELSE;
@@ -244,7 +250,24 @@ bool token::is_keyword_void() const {
     return type == KEYWORD && std::get<keyword_type>(value) == TYPE_VOID;
 }
 
+#ifdef SIMDEBUG
 
-void token::print_error() const {
-    global_diag_inst.print_error(position);
+std::vector<std::string> keywords_debug = { "INT", "CHAR", "VOID", "LONGLONG", "LONG", "SHORT", "UNSIGNED", "SIGNED",
+"CONST", "VOLATILE", "AUTO", "REGISTER", "EXTERN", "STATIC",
+"RETURN", "WHILE", "DO", "FOR", "IF", "ELSE_IF", "ELSE", "BREAK", "CONTINUE" };
+
+std::vector<std::string> op_debug = { "CLB", "CRB", "LB", "RB", "LSB", "RSB",
+    "POINTER_TO", "DOT", "INCREMENT", "DECREMENT", "NOT", "BIT_NOT",
+    "AMPER", "SIZEOF", "MUL", "DIV", "MODULO",
+    "PLUS", "MINUS", "SHIFT_LEFT", "SHIFT_RIGHT", "GT",
+    "LT", "EQUAL_EQUAL", "NOT_EQUAL", "BIT_XOR", "BIT_OR",
+    "AND", "OR", "EQUAL", "COMMA", "SEMICOLON" };
+
+void print_token_list(const std::vector<token>& tokens) {
+    sim_log_debug("Printing tokens...");
+    for (auto& tok : tokens) {
+        tok.print();
+    }
 }
+
+#endif

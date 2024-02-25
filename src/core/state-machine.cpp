@@ -1,5 +1,5 @@
-#include "compiler/state-machine.h"
-#include "compiler/ast-ops.h"
+#include "core/state-machine.h"
+#include "core/ast-ops.h"
 #include "debug-api.h"
 
 state_machine::state_machine(): cur_state(EXPECT_STOR_SPEC), token_stream(nullptr), advance_token(true), 
@@ -77,8 +77,10 @@ void state_machine::start() {
             advance_token = false;
         }
         else {
+#ifdef MODSIMCC
             if(tok)
                 tok->print_error();
+#endif
             sim_log_error(state_path[cur_state].error_string);
         }
     };

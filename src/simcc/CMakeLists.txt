@@ -19,23 +19,15 @@ if(${COMPILER} STREQUAL GNU OR ${COMPILER} STREQUAL Clang)
     target_compile_options(code-gen PRIVATE "-fvisibility=hidden")
 endif()
 
-FILE(GLOB mod_srcs_debug *.cpp */*.cpp)
-string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/ast/debug.cpp;" "" mod_srcs_rel "${mod_srcs_debug}")
-
-if(CMAKE_BUILD_TYPE STREQUAL Release)
-    set(mod_srcs ${mod_srcs_rel})    
-else()
-    set(mod_srcs ${mod_srcs_debug})
-endif()
-
-
+FILE(GLOB mod_srcs *.cpp)
+set(COMMON_FILES ${COMMON_FILES})
 string(REPLACE " " ";" COMMON_FILES_LIST "${COMMON_FILES}")
 foreach(STRING ${COMMON_FILES_LIST})
   list(APPEND APPEND_FILE_LIST "${PROJECT_SOURCE_DIR}/${STRING}")
 endforeach()
 string(JOIN " " APPEND_FILES "${APPEND_FILE_LIST}")
 
-add_executable(simcc ${mod_srcs} ${APPEND_FILE_LIST})
+add_executable(simcc ${mod_srcs} ${CORE_FILES} ${APPEND_FILE_LIST})
 target_compile_definitions(simcc PRIVATE INITDEBUGGER)
 
 target_link_libraries(simcc code-gen)

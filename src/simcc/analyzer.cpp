@@ -1,9 +1,9 @@
 #include <tuple>
 #include <optional>
 #include <stack>
-#include "compiler/ast.h"
+#include "core/ast.h"
+#include "core/ast-ops.h"
 #include "compiler/scope.h"
-#include "compiler/ast-ops.h"
 #include "compiler/compile.h"
 #include "compiler/utils.h"
 #include "compiler/eval.h"

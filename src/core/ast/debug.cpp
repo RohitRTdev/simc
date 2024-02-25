@@ -1,7 +1,7 @@
 #include "spdlog/fmt/fmt.h"
 #include "debug-api.h"
-#include "compiler/token.h"
-#include "compiler/ast.h"
+#include "core/token.h"
+#include "core/ast.h"
 
 #define AST_PRINT( msg, ... ) (sim_log_debug(fmt::runtime(std::string(level_space, ' ') + std::string(msg)) __VA_OPT__(,) __VA_ARGS__))
 
@@ -77,6 +77,7 @@ void ast_token::print() {
     tok->print();
 }
 
+#ifdef MODSIMCC
 void ast_decl::print() {
     AST_PRINT("Node: decl");
     print_tokens({ ident });
@@ -105,6 +106,7 @@ void ast_array_spec::print() {
     constant->print();
 }
 
+#endif
 void ast::print_ast_list(std::string_view msg) {
     AST_PRINT(msg);
     level_space += level_increment;

@@ -1,7 +1,7 @@
 #include <vector>
 #include <list>
 #include <optional>
-#include "compiler/token.h"
+#include "core/token.h"
 #include "common/diag.h"
 #include "debug-api.h"
 
@@ -22,28 +22,6 @@ enum lexer_states {
     EXPECTING_TICK,
     LEXER_INVALID_TOKEN
 };
-
-#ifdef SIMDEBUG
-
-std::vector<std::string> keywords_debug = { "INT", "CHAR", "VOID", "LONGLONG", "LONG", "SHORT", "UNSIGNED", "SIGNED", 
-"CONST", "VOLATILE", "AUTO", "REGISTER", "EXTERN", "STATIC",
-"RETURN", "WHILE", "DO", "FOR", "IF", "ELSE_IF", "ELSE", "BREAK", "CONTINUE" };
-
-std::vector<std::string> op_debug = { "CLB", "CRB", "LB", "RB", "LSB", "RSB",
-    "POINTER_TO", "DOT", "INCREMENT", "DECREMENT", "NOT", "BIT_NOT",
-    "AMPER", "SIZEOF", "MUL", "DIV", "MODULO",
-    "PLUS", "MINUS", "SHIFT_LEFT", "SHIFT_RIGHT", "GT", 
-    "LT", "EQUAL_EQUAL", "NOT_EQUAL", "BIT_XOR", "BIT_OR",
-    "AND", "OR", "EQUAL", "COMMA", "SEMICOLON"};
-
-void print_token_list() {
-    sim_log_debug("Printing tokens...");
-    for(auto& tok: tokens) {
-        tok.print();
-    }
-}
-
-#endif
 
 static std::optional<keyword_type> fetch_keyword(const std::string& literal) {
     
@@ -442,7 +420,7 @@ void lex(const std::vector<char>& input) {
     }
 
 #ifdef SIMDEBUG
-    print_token_list();
+    print_token_list(tokens);
 #endif
     if(state != LEXER_START) {
         sim_log_error("Lexical analysis failed")

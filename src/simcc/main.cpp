@@ -46,6 +46,6 @@ int app_start(int argc, char** argv) {
         write_file(cmdline.get_output_files()[file_idx++], asm_code);
     }
 
-    std::cout << "Compilation successful" << std::endl;  
+    sim_log_debug("Compilation successful");
     return 0;
 }

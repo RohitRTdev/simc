@@ -1,10 +1,10 @@
 #include <functional>
 #include <stack>
 #include "debug-api.h"
-#include "compiler/token.h"
-#include "compiler/ast.h"
-#include "compiler/ast-ops.h"
-#include "compiler/state-machine.h"
+#include "core/token.h"
+#include "core/ast.h"
+#include "core/ast-ops.h"
+#include "core/state-machine.h"
 #include "compiler/type.h"
 #include "compiler/utils.h"
 

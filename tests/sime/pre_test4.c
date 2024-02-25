@@ -15,6 +15,7 @@
 #if 1
 #endif
 #endif
+"Good
 
 #define GREAT hehe choke hehe
 GREAT

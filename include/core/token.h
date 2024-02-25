@@ -80,36 +80,49 @@ enum operator_type {
     SEMICOLON
 };
 
+#ifdef MODSIMCC
 extern size_t global_token_pos;
+#endif
+
 struct token {
 private:
     token_type type;
     token_sub_type sub_type;
+#ifdef MODSIMCC
     size_t position;
+#endif
     bool is_keyword_data_type() const;
 
 public:
+#ifdef MODSIMCC
     static diag global_diag_inst;   
+#endif
     std::variant<char, std::string, operator_type, keyword_type> value;
     
     template<typename T>
     token(token_type _type, const T& val) : type(_type) {
         value = val;
+#ifdef MODSIMCC
         position = global_token_pos - 1;
+#endif
     }
 
     token(token_type _type, token_sub_type _sub_type, const std::string& num) {
         type = CONSTANT;
         sub_type = _sub_type;
         value = num;
+#ifdef MODSIMCC
         position = global_token_pos - 1;
+#endif
     }
 
     token(token_type _type, const char& val) {
         type = CONSTANT;
         sub_type = TOK_CHAR;
         value = val;
+#ifdef MODSIMCC
         position = global_token_pos - 1;
+#endif
     }
 
     bool is_keyword_else() const;
@@ -153,7 +166,9 @@ public:
     bool is_binary_operator() const; 
     bool is_postfix_operator() const; 
 
+#ifdef MODSIMCC
     void print_error() const;
+#endif
 
 #ifdef SIMDEBUG
     void print() const;
@@ -166,4 +181,5 @@ extern std::vector<token> tokens;
 #ifdef SIMDEBUG
 extern std::vector<std::string> keywords_debug;
 extern std::vector<std::string> op_debug;
+void print_token_list(const std::vector<token>& tokens);
 #endif

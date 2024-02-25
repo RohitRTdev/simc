@@ -3,8 +3,8 @@
 #include <vector>
 #include <memory>
 #include <stack>
-#include "compiler/token.h"
-#include "compiler/ast.h"
+#include "core/token.h"
+#include "core/ast.h"
 
 
 enum parser_states {

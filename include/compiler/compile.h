@@ -1,6 +1,6 @@
 #pragma once
 
-#include "compiler/ast.h"
+#include "core/ast.h"
 #include "common/diag.h"
 
 void lex(const std::vector<char>& input);
