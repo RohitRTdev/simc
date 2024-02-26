@@ -14,11 +14,6 @@ void state_machine::set_diag_inst(diag* inst, size_t dir_start_pos) {
     diag_inst = inst;
     dir_pos = dir_start_pos;
 }
-
-std::unique_ptr<ast> state_machine::fetch_exp_ast() {
-    return std::move(parser_stack.top());
-}
-
 #endif
 
 void state_machine::set_token_stream(std::vector<token>& tok_stream) {
@@ -175,7 +170,6 @@ void state_machine::start() {
 #endif
     advance_token = true;
     token_idx = 0;
-
     while ((advance_token == false || token_idx < token_stream->size()) && cur_state != PARSER_END) {
         sim_log_debug("In state:{}", state_path[cur_state].name);
         if(advance_token) {
@@ -215,4 +209,6 @@ void state_machine::start() {
         parse_success = false;
     }
 #endif
+
+    CRITICAL_ASSERT(state_stack.size() == 0, "state_stack is not balanced after parse step");
 }

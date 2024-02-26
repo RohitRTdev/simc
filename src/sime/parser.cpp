@@ -2,6 +2,7 @@
 #include "core/ast.h"
 #include "core/ast-ops.h"
 #include "core/state-machine.h"
+#include "preprocessor/parser.h"
 #include "debug-api.h"
 
 state_machine parser;
@@ -9,11 +10,6 @@ std::vector<token> tokens;
 diag* g_diag_inst;
 size_t g_dir_start_idx;
 std::unique_ptr<ast> g_ast;
-
-static void print_error() {
-    if(g_diag_inst)
-        g_diag_inst->print_error(g_dir_start_idx);
-}
 
 static void reduce_expr(state_machine* inst, bool stop_at_lb = false) {
     if(inst->parser_stack.empty() || !inst->parser_stack.top()->is_expr())
@@ -155,7 +151,6 @@ static void parse_expr() {
 }
 
 void parse_init() {
-    parser.set_token_stream(tokens);
     parse_expr();
 }
 
@@ -167,11 +162,14 @@ bool parse() {
         init_complete = true;
     }
     
+    parser.set_token_stream(tokens);
     parser.set_diag_inst(g_diag_inst, g_dir_start_idx);
     parser.start();
 
     reduce_expr(&parser);
-    g_ast = parser.fetch_exp_ast();
+    g_ast = parser.fetch_parser_stack();
+    CRITICAL_ASSERT(parser.parser_stack.size() == 0, "parser_stack should be empty after parse step");
+
 #ifdef SIMDEBUG
     sim_log_debug("Printing AST");
     g_ast->print();
@@ -498,9 +496,9 @@ bool check_if_invalid() {
     return false;
 }
 
-bool eval_expr(std::string_view exp, diag* diag_inst, size_t dir_start_idx) {
+bool evaluator(std::string_view exp, diag* diag_inst, size_t dir_start_idx) {
     g_diag_inst = diag_inst;
     g_dir_start_idx = dir_start_idx;
-    return lex(exp) && !check_if_invalid() && parse();
+    return lex(exp) && !check_if_invalid() && parse() && eval();
 }
 

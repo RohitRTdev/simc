@@ -92,6 +92,9 @@ foreach(i RANGE ${len})
     target_compile_definitions(${DIR} PRIVATE MODULENAME="${DIR}" ${MODNAME})
 endforeach()
 
+if(TEST_PARSER STREQUAL 1) 
+  target_compile_definitions(sime PRIVATE TEST_PARSER)
+endif()
 
 #If building in vs, this sets the startup project to simcc
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT sime)

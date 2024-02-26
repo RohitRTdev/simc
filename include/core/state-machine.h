@@ -172,7 +172,6 @@ public:
     void set_token_stream(std::vector<token>&);
 #ifdef MODSIME
     void set_diag_inst(diag* inst, size_t dir_start_pos); 
-    std::unique_ptr<ast> fetch_exp_ast();
 #endif
 
     token* fetch_token(); 
