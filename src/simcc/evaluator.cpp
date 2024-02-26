@@ -629,6 +629,11 @@ void eval_expr::handle_arithmetic_op(operator_type op) {
         res_id = code_gen::call_code_gen(fn_intf, op_vars, res1.expr_id, res2.expr_id);
     }
     else if(res1.is_constant && res2.is_constant) {
+        //Check for divide by zero errors
+        if((op == DIV || op == MODULO) && res2.constant == "0") {
+            expr->print_error();
+            sim_log_error("Division by zero encountered");
+        }
         res.is_constant = true;
         res.constant = constant_fold(res1.constant, res2.constant, op);
     }
