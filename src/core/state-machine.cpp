@@ -2,10 +2,24 @@
 #include "core/ast-ops.h"
 #include "debug-api.h"
 
-state_machine::state_machine(): cur_state(EXPECT_STOR_SPEC), token_stream(nullptr), advance_token(true), 
+state_machine::state_machine(): cur_state(EXPECT_EXPR_UOP), token_stream(nullptr), advance_token(true), 
 token_idx(0), num_states(0) {
-
+#ifdef MODSIME
+    parse_success = true;
+#endif
 }
+
+#ifdef MODSIME
+void state_machine::set_diag_inst(diag* inst, size_t dir_start_pos) {
+    diag_inst = inst;
+    dir_pos = dir_start_pos;
+}
+
+std::unique_ptr<ast> state_machine::fetch_exp_ast() {
+    return std::move(parser_stack.top());
+}
+
+#endif
 
 void state_machine::set_token_stream(std::vector<token>& tok_stream) {
     token_stream = &tok_stream;
@@ -73,13 +87,15 @@ void state_machine::start() {
     auto alternator = [&] {
         if (!state_path[cur_state].fail_to_error) {
             cur_state = state_path[cur_state].alt_state;
-            //sim_log_debug("Moving to alternate state:{}", state_path[cur_state].name);
             advance_token = false;
         }
         else {
 #ifdef MODSIMCC
             if(tok)
                 tok->print_error();
+#else 
+            if(diag_inst) 
+                diag_inst->print_error(dir_pos);
 #endif
             sim_log_error(state_path[cur_state].error_string);
         }
@@ -152,7 +168,11 @@ void state_machine::start() {
             alternator();
     };
 
+#ifdef MODSIMCC
     cur_state = EXPECT_STOR_SPEC;
+#else
+    cur_state = EXPECT_EXPR_UOP;
+#endif
     advance_token = true;
     token_idx = 0;
 
@@ -186,9 +206,13 @@ void state_machine::start() {
         
     }
 
+#ifdef MODSIMCC
     if(cur_state != EXPECT_STOR_SPEC) {
         sim_log_error("Program structured incorrectly");
     }
-
-
+#else 
+    if(cur_state != EXPECT_EXPR_BOP) {
+        parse_success = false;
+    }
+#endif
 }

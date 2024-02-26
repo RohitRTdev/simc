@@ -422,7 +422,5 @@ void lex(const std::vector<char>& input) {
 #ifdef SIMDEBUG
     print_token_list(tokens);
 #endif
-    if(state != LEXER_START) {
-        sim_log_error("Lexical analysis failed")
-    }
+    CRITICAL_ASSERT(state == LEXER_START, "Lexical analysis failed");
 }

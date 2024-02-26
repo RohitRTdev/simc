@@ -5,8 +5,9 @@
 #include <stack>
 #include "core/token.h"
 #include "core/ast.h"
+#include "common/diag.h"
 
-
+#ifdef MODSIMCC
 enum parser_states {
     //Base type
     EXPECT_STOR_SPEC,
@@ -109,6 +110,25 @@ enum parser_states {
     PARSER_END
 };
 
+#else 
+
+enum parser_states {
+    EXPECT_EXPR_UOP,
+    EXPECT_EXPR_CON,
+    EXPECT_EXPR_LB,
+    EXPECT_EXPR_BOP,
+    EXPECT_EXPR_RB,
+   
+    //Notification states
+    LB_EXPR_REDUCE,
+    
+    //misc
+    PARSER_INVALID,
+    PARSER_ERROR,   
+    PARSER_END
+};
+
+#endif
 class state_machine {
     parser_states cur_state;
     std::vector<token>* token_stream;
@@ -136,15 +156,24 @@ class state_machine {
     };
 
     std::vector<_state> state_path;
-
+#ifdef MODSIME
+    diag* diag_inst;
+    size_t dir_pos;
+#endif
 public:
+#ifdef MODSIME
+    bool parse_success;
+#endif
     std::stack<std::unique_ptr<ast>> parser_stack;
     std::stack<parser_states> state_stack;
     
     state_machine();
     
     void set_token_stream(std::vector<token>&);
-
+#ifdef MODSIME
+    void set_diag_inst(diag* inst, size_t dir_start_pos); 
+    std::unique_ptr<ast> fetch_exp_ast();
+#endif
 
     token* fetch_token(); 
     std::unique_ptr<ast> fetch_parser_stack(); 

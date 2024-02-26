@@ -174,6 +174,19 @@ public:
     void print() const;
 #endif
 
+#ifdef MODSIME
+    bool pre_transform() {
+        if(!((type == CONSTANT && (sub_type == TOK_INT || sub_type == TOK_CHAR)) || type == OPERATOR)) {
+            return true;    
+        }
+
+        if(type == CONSTANT && sub_type == TOK_CHAR) {
+            sub_type = TOK_INT;
+            value = std::to_string(std::get<char>(value));
+        }
+        return false;
+    }
+#endif
 };
 
 extern std::vector<token> tokens;
