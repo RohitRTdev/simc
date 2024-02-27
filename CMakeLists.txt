@@ -12,6 +12,10 @@ endmacro()
 
 default_to(CMAKE_BUILD_TYPE Debug)
 
+if(CMAKE_BUILD_TYPE STREQUAL Release)
+    set(CMAKE_CONFIGURATION_TYPES "Release" CACHE STRING "" FORCE)
+endif()
+
 project(simc VERSION 0.1 LANGUAGES C CXX)
 add_library(simc_options INTERFACE)
 
@@ -59,34 +63,38 @@ target_include_directories(simc_options INTERFACE ${INCLUDE_DIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 
-#Our cmake script automatically fetches and builds an executable for every subdirectory in the src directory
-# macro(subdirlist result curdir)
-#   file(GLOB children RELATIVE ${curdir} ${curdir}/*)
-#   set(dirlist "")
-#   foreach(child ${children})
-#     if(IS_DIRECTORY ${curdir}/${child})
-#       list(APPEND dirlist ${child})
-#     endif()
-#   endforeach()
-#   set(${result} ${dirlist})
-# endmacro()
-
-#subdirlist(SUBDIRS ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(SUBDIRS sime simcc)
+set(MODNAMES MODSIME MODSIMCC)
 set(COMMON_FILES src/entry.cpp src/options.cpp src/file-utils.cpp src/diagnostic.cpp)
 
-foreach(DIR ${SUBDIRS})
+#Remove core/ast/debug.cpp file for release build
+FILE(GLOB CORE_FILES src/core/*.cpp src/core/ast/*.cpp)
+string(REPLACE "${PROJECT_SOURCE_DIR}/src/core/ast/debug.cpp;" "" CORE_FILES_REL "${CORE_FILES}")
+if(CMAKE_BUILD_TYPE STREQUAL Release)
+    set(CORE_FILES ${CORE_FILES_REL})    
+endif()
+
+list(LENGTH SUBDIRS len)
+math(EXPR len "${len}-1")
+
+foreach(i RANGE ${len})
+    list(GET SUBDIRS ${i} DIR)
+    list(GET MODNAMES ${i} MODNAME)
     FILE(GLOB srcs src/${DIR}/*.cpp)
 
     if(DIR STREQUAL simcc)
       add_subdirectory(src/simcc)
     else()
-      add_executable(${DIR} ${srcs} ${COMMON_FILES})
+      add_executable(${DIR} ${srcs} ${COMMON_FILES} ${CORE_FILES})
     endif()
     
     target_link_libraries(${DIR} simc_options)
-    target_compile_definitions(${DIR} PRIVATE MODULENAME="${DIR}")
+    target_compile_definitions(${DIR} PRIVATE MODULENAME="${DIR}" ${MODNAME})
 endforeach()
+
+if(TEST_PARSER STREQUAL 1) 
+  target_compile_definitions(sime PRIVATE TEST_PARSER)
+endif()
 
 #If building in vs, this sets the startup project to simcc
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT sime)

@@ -1,8 +1,11 @@
 #pragma once
 #include <deque>
 #include <memory>
-#include "compiler/token.h"
+#include "core/token.h"
+
+#ifdef MODSIMCC
 #include "compiler/type.h"
+#endif
 
 enum class AST_TYPE {
     PROGRAM,
@@ -73,11 +76,14 @@ public:
     virtual void print();
 #endif 
 
+#ifdef MODSIMCC
     virtual bool print_error() const;
+#endif
     virtual ~ast() = default;
     const token* key_token = nullptr;
 };
 
+#ifdef MODSIMCC
 struct ast_base_type: ast {
     decl_spec base_type;
 
@@ -120,12 +126,15 @@ struct ast_decl : ast {
 #endif
 };
 
+#endif
+
 struct ast_token: ast {
     const token* tok;
     ast_token(const token*);
     ast_token(const token*, bool);
+#ifdef MODSIMCC
     bool print_error() const override;
-
+#endif
 #ifdef SIMDEBUG
     virtual void print() override;
 #endif
@@ -180,8 +189,9 @@ private:
 struct ast_fn_call : ast_expr {
     std::unique_ptr<ast> fn_designator;
     ast_fn_call();
-
+#ifdef MODSIMCC
     bool print_error() const override;
+#endif
 #ifdef SIMDEBUG
     void print() override;
 #endif

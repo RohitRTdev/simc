@@ -1,7 +1,7 @@
 #pragma once
 
 #include <deque>
-#include "compiler/token.h"
+#include "core/token.h"
 #include "lib/code-gen.h"
 
 struct decl_spec {

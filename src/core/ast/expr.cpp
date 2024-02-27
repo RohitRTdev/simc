@@ -1,5 +1,5 @@
-#include "compiler/ast.h"
-#include "compiler/ast-ops.h"
+#include "core/ast.h"
+#include "core/ast-ops.h"
 #include "debug-api.h"
 
 ast_expr::ast_expr(EXPR_TYPE _type) : ast_token(nullptr, true), type(_type)

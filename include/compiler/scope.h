@@ -3,9 +3,9 @@
 #include <variant>
 #include <vector>
 #include "lib/code-gen.h"
-#include "compiler/token.h"
+#include "core/token.h"
+#include "core/ast.h"
 #include "compiler/type.h"
-#include "compiler/ast.h"
 
 struct var_info {
     std::string_view name;

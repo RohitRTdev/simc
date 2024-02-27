@@ -1,12 +1,183 @@
-#include <vector>
-#include <list>
 #include <optional>
 #include "core/token.h"
-#include "common/diag.h"
+#include "core/ast.h"
+#include "core/ast-ops.h"
+#include "core/state-machine.h"
+#include "preprocessor/parser.h"
 #include "debug-api.h"
 
-std::vector<token> tokens;  
-size_t global_token_pos = 0;
+state_machine parser;
+std::vector<token> tokens;
+diag* g_diag_inst;
+size_t g_dir_start_idx;
+std::unique_ptr<ast> g_ast;
+
+static void reduce_expr(state_machine* inst, bool stop_at_lb = false) {
+    if(inst->parser_stack.empty() || !inst->parser_stack.top()->is_expr())
+        return;
+
+    sim_log_debug("Reducing expression");
+
+    auto reduced_expr = inst->fetch_parser_stack();
+    if(is_ast_pure_operator(reduced_expr)) {
+        print_error();
+        sim_log_error("Invalid expression");
+    }
+
+    auto expr_eval = [&] {
+        if(!inst->parser_stack.size()) {
+            return false;
+        }
+        auto& top = inst->parser_stack.top();
+        if(top->is_expr()) {
+            return !(top->is_token() && cast_to_ast_token(top)->tok->is_operator_rb())
+            && (stop_at_lb ? !is_ast_expr_lb(inst->parser_stack.top()) : true);
+        }
+        return false;
+    };
+
+    while(expr_eval()) {
+        auto op_expr = inst->fetch_parser_stack();
+        CRITICAL_ASSERT(is_ast_expr_operator(op_expr), "Non operator expression found after expression node");
+        
+        auto op = cast_to_ast_op(op_expr);
+        CRITICAL_ASSERT(!op->children.size(), "Found non operator expression node after expression node");
+        CRITICAL_ASSERT(!op->is_postfix, "Postfix operator found in unreduced state");
+        
+        if(op->is_unary) {
+            op_expr->attach_node(std::move(reduced_expr));
+        }
+        else {
+            auto left_expr = inst->fetch_parser_stack();
+            CRITICAL_ASSERT(left_expr->is_expr(), "Found non expression node in parser stack during binary op reduction");
+            op_expr->attach_node(std::move(reduced_expr));
+            op_expr->attach_node(std::move(left_expr));
+        }
+
+        reduced_expr = std::move(op_expr);
+    }
+
+    inst->parser_stack.push(std::move(reduced_expr));
+}
+
+static void reduce_expr_bop(state_machine* inst) {
+    sim_log_debug("Performing binary op reduction");
+    auto cur_op = create_ast_binary_op(inst->cur_token());
+    auto cur_op_ptr = cast_to_ast_op(cur_op);
+    
+    CRITICAL_ASSERT(is_ast_expr_operator(cur_op), "Non operator expression found during binary op evaluation");
+    auto reduced_expr = inst->fetch_parser_stack();
+    
+    while(inst->parser_stack.size() && inst->parser_stack.top()->is_expr() && 
+    !is_ast_expr_lb(inst->parser_stack.top())) {
+        auto expr = inst->fetch_parser_stack();
+        CRITICAL_ASSERT(is_ast_expr_operator(expr) && expr->children.size() == 0, "Unreduced expr operator found during binary op reduction"); 
+         
+        auto op = cast_to_ast_op(expr);
+        if(op->is_unary) {
+            expr->attach_node(std::move(reduced_expr));
+        }
+        else {
+            if(op->precedence > cur_op_ptr->precedence) {
+                auto left_expr = inst->fetch_parser_stack();
+                expr->attach_node(std::move(reduced_expr));
+                expr->attach_node(std::move(left_expr));
+            }
+            else if(op->precedence == cur_op_ptr->precedence) {
+                if(op->is_lr) {
+                    auto left_expr = inst->fetch_parser_stack();
+                    expr->attach_node(std::move(reduced_expr));
+                    expr->attach_node(std::move(left_expr));
+                }
+                else {
+                    inst->parser_stack.push(std::move(expr));
+                    inst->parser_stack.push(std::move(reduced_expr));
+                    inst->parser_stack.push(std::move(cur_op));
+                    break;
+                }
+            }
+            else {
+                //shift
+                inst->parser_stack.push(std::move(expr));
+                inst->parser_stack.push(std::move(reduced_expr));
+                inst->parser_stack.push(std::move(cur_op));
+                break;
+            }
+        }
+        reduced_expr = std::move(expr);
+    }
+    if(reduced_expr)
+        inst->parser_stack.push(std::move(reduced_expr));
+    
+    if(cur_op)
+        inst->parser_stack.push(std::move(cur_op));
+}
+
+static void reduce_expr_rb(state_machine* inst) {
+    switch(inst->state_stack.top()) {
+        case LB_EXPR_REDUCE: {
+            sim_log_debug("Performing lb reduction");
+            reduce_expr(inst, true);
+            if (is_ast_expr_lb(inst->parser_stack.top())) {
+                print_error();
+                sim_log_error("Found empty ()");
+            }
+            inst->switch_state(EXPECT_EXPR_BOP);
+            auto reduced_expr = inst->fetch_parser_stack();
+            inst->parser_stack.pop(); //Remove '('
+            inst->parser_stack.push(std::move(reduced_expr));
+            inst->state_stack.pop();
+            break;
+        }
+        default: {
+            print_error();
+            sim_log_error("Found ')' in invalid situation");
+        }
+    }
+}
+
+static void parse_expr() {
+    //At start of expression
+    parser.define_shift_state("EXPECT_EXPR_UOP", EXPECT_EXPR_UOP, &token::is_unary_operator, EXPECT_EXPR_CON, create_ast_unary_op);
+    parser.define_shift_state("EXPECT_EXPR_CON", EXPECT_EXPR_BOP, &token::is_constant, EXPECT_EXPR_LB, create_ast_expr_con);
+    parser.define_shift_state("EXPECT_EXPR_LB", EXPECT_EXPR_UOP, &token::is_operator_lb, PARSER_ERROR, create_ast_punctuator, 
+            "Expected expression to start with unary operator", LB_EXPR_REDUCE);
+    
+    //After an expression
+    parser.define_state("EXPECT_EXPR_BOP", EXPECT_EXPR_UOP, &token::is_binary_operator, EXPECT_EXPR_RB, false, reduce_expr_bop);
+
+    //Terminal components in an expression
+    parser.define_special_state("EXPECT_EXPR_RB", &token::is_operator_rb, reduce_expr_rb, PARSER_ERROR,  
+    "Expected binary operator");
+}
+
+void parse_init() {
+    parse_expr();
+}
+
+bool parse() {
+    static bool init_complete = false;
+
+    if (!init_complete) {
+        parse_init();
+        init_complete = true;
+    }
+    
+    parser.set_token_stream(tokens);
+    parser.set_diag_inst(g_diag_inst, g_dir_start_idx);
+    parser.start();
+
+    reduce_expr(&parser);
+    g_ast = parser.fetch_parser_stack();
+    CRITICAL_ASSERT(parser.parser_stack.size() == 0, "parser_stack should be empty after parse step");
+
+#ifdef SIMDEBUG
+    sim_log_debug("Printing AST");
+    g_ast->print();
+#endif
+    return parser.parse_success;
+}
+
 enum lexer_states {
     LEXER_START,
     EXTENDED_OPERATOR_TOKEN,
@@ -22,76 +193,6 @@ enum lexer_states {
     EXPECTING_TICK,
     LEXER_INVALID_TOKEN
 };
-
-static std::optional<keyword_type> fetch_keyword(const std::string& literal) {
-    
-    std::optional<keyword_type> keyword;
-    if(literal == "int") {
-        keyword = TYPE_INT;
-    }
-    else if(literal == "char") {
-        keyword = TYPE_CHAR;
-    }
-    else if(literal == "void") {
-        keyword = TYPE_VOID;
-    }
-    else if(literal == "long") {
-        keyword = TYPE_LONG;
-    }
-    else if(literal == "short") {
-        keyword = TYPE_SHORT;
-    }
-    else if(literal == "unsigned") {
-        keyword = TYPE_UNSIGNED;
-    }
-    else if(literal == "signed") {
-        keyword = TYPE_SIGNED;
-    }
-    else if(literal == "const") {
-        keyword = TYPE_CONST;
-    }
-    else if(literal == "volatile") {
-        keyword = TYPE_VOLATILE;
-    }
-    else if(literal == "static") {
-        keyword = TYPE_STATIC;
-    }
-    else if(literal == "auto") {
-        keyword = TYPE_AUTO;
-    }
-    else if(literal == "extern") {
-        keyword = TYPE_EXTERN;
-    }
-    else if(literal == "register") {
-        keyword = TYPE_REGISTER;
-    }
-    else if(literal == "return") {
-        keyword = RETURN;
-    }
-    else if(literal == "while") {
-        keyword = WHILE;
-    }
-    else if(literal == "do") {
-        keyword = DO;
-    }
-    else if(literal == "for") {
-        keyword = FOR;
-    }
-    else if(literal == "if") {
-        keyword = IF;
-    }
-    else if(literal == "else") {
-        keyword = ELSE;
-    }
-    else if(literal == "break") {
-        keyword = BREAK;
-    }
-    else if(literal == "continue") {
-        keyword = CONTINUE;
-    }
-
-    return keyword;
-}
 
 static std::optional<char> fetch_escape_character(char ch) {
     
@@ -124,16 +225,14 @@ static inline bool is_extended_operator(operator_type type) {
     return false;
 }
 
-
-void lex(const std::vector<char>& input) {
+bool lex(std::string_view input) {
     lexer_states state = LEXER_START;
     tokens.clear();
-        
+
     operator_type prev_op;
     size_t start_pos = 0, literal_count = 0;
     for(int i = 0; i < input.size(); i++) {
         char ch = input[i];
-        global_token_pos = i;
         operator_type op;
 
         if (state == EXPECTING_TICK) {
@@ -143,8 +242,8 @@ void lex(const std::vector<char>& input) {
                 continue;
             }
             else {
-                token::global_diag_inst.print_error(i);
-                sim_log_error("\' should be closed with just one character.");
+                sim_log_debug("Stopping further evaluation as we found invalid character constant");
+                return false;
             }
         }
 
@@ -156,8 +255,8 @@ void lex(const std::vector<char>& input) {
                 state = EXPECTING_TICK;
             }
             else {
-                token::global_diag_inst.print_error(i);
-                sim_log_error("Character {} is not a valid escape character", ch);
+                sim_log_debug("Stopping further evaluation as we found invalid escaped character constant");
+                return false;
             }
         }
 
@@ -196,8 +295,8 @@ void lex(const std::vector<char>& input) {
                 literal_count++;
             }
             else if(isalpha(ch) || ch == '_') {
-                token::global_diag_inst.print_error(i);
-                sim_log_error("Variable names are not supposed to start with a digit.");
+                sim_log_debug("Stopping further evaluation as we found invalid integer constant");
+                return false;
             }
             else {
                 std::string num_literal(input.begin()+start_pos, input.begin()+start_pos+literal_count);
@@ -216,36 +315,9 @@ void lex(const std::vector<char>& input) {
             else {
                 std::string literal(input.begin()+start_pos, input.begin()+start_pos+literal_count);
                 sim_log_debug("Identified literal:{} , literal_count:{}", literal, literal_count);
-                auto key_type = fetch_keyword(literal);
 
-                if(key_type) {
-                    if(key_type.value() == IF) {
-                        //This checks if previous token is an "else" and then combines it with the present "if" to create an "else_if" token
-                        if (tokens.size() != 0 && tokens.back().is_keyword_else()) {
-                            key_type = ELSE_IF;
-                            std::get<keyword_type>(tokens.back().value) = key_type.value();
-                        }
-                        else
-                            tokens.push_back(token(KEYWORD, key_type.value()));
-                    }
-                    else if(key_type.value() == TYPE_LONG) {
-                        //This check if previous token is "long" and combines the current "long" with it to create "long long"
-                        if (tokens.size() != 0 && tokens.back().is_keyword_long()) {
-                            key_type = TYPE_LONGLONG;
-                            std::get<keyword_type>(tokens.back().value) = key_type.value();
-                        }
-                        else
-                            tokens.push_back(token(KEYWORD, key_type.value()));
-                    }
-                    else 
-                        tokens.push_back(token(KEYWORD, key_type.value()));
-                    
-                    sim_log_debug("Pushing keyword token type:{}", keywords_debug[key_type.value()]);
-                } 
-                else {
-                    sim_log_debug("Pushing identifier token:{}", literal);
-                    tokens.push_back(token(IDENT, literal));
-                }
+                sim_log_debug("Pushing identifier token:{}", literal);
+                tokens.push_back(token(IDENT, literal));
                 state = LEXER_START;
             }
         }
@@ -304,9 +376,6 @@ void lex(const std::vector<char>& input) {
         if(state == LEXER_START) {
             sim_log_debug("In state LEXER_START. Searching for operator token.");
             switch(ch) {
-                case ';': op = SEMICOLON; break;
-                case '{': op = CLB; break;
-                case '}': op = CRB; break;
                 case '~': op = BIT_NOT; break;
                 case '*': op = MUL; break;
                 case '/': op = DIV; break;
@@ -314,9 +383,6 @@ void lex(const std::vector<char>& input) {
                 case '^': op = BIT_XOR; break;
                 case '(': op = LB; break;
                 case ')': op = RB; break;
-                case '[': op = LSB; break;
-                case ']': op = RSB; break;
-                case ',': op = COMMA; break;
                 case '!': {
                     state = EXTENDED_OPERATOR_TOKEN;
                     prev_op = NOT;
@@ -385,7 +451,7 @@ void lex(const std::vector<char>& input) {
                 state = LOOKAHEAD_FOR_TICK;
         }
 
-        if (state == LOOKAHEAD_FOR_TICK) {
+        if(state == LOOKAHEAD_FOR_TICK) {
             if (ch == '\'') {
                 sim_log_debug("Found single tick");
                 state = EXPECTING_CHARACTER;
@@ -406,7 +472,6 @@ void lex(const std::vector<char>& input) {
         }
 
         if (state == LOOKAHEAD_FOR_WHITE_SPACE) {
-            
             if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r')
                 state = LEXER_START;
             else
@@ -414,7 +479,7 @@ void lex(const std::vector<char>& input) {
         }
 
         if(state == LEXER_INVALID_TOKEN) {
-            token::global_diag_inst.print_error(i);
+            print_error();
             sim_log_error("Invalid token encountered:'{}'", ch);
         }
     }
@@ -423,4 +488,21 @@ void lex(const std::vector<char>& input) {
     print_token_list(tokens);
 #endif
     CRITICAL_ASSERT(state == LEXER_START, "Lexical analysis failed");
+    return true;
 }
+
+bool check_if_invalid() {
+    for(auto& tok: tokens) {
+        if (tok.pre_transform()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool evaluator(std::string_view exp, diag* diag_inst, size_t dir_start_idx) {
+    g_diag_inst = diag_inst;
+    g_dir_start_idx = dir_start_idx;
+    return lex(exp) && !check_if_invalid() && parse() && eval();
+}
+

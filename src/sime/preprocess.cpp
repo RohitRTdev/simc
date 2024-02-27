@@ -3,9 +3,22 @@
 
 sym_table preprocess::table;
 std::vector<std::string> preprocess::parents;
+std::vector<std::string> preprocess::ancestors;
 
-void preprocess::init_with_defaults() {
+void preprocess::init_with_defaults(const std::string& top_file_name) {
+    //This makes sure that we do not allow the compilation file to include itself
+    ancestors.clear();
+    ancestors.push_back(top_file_name);
 }
+
+void preprocess::insert_token_at_pos(size_t pos, std::string_view token) {
+    if (pos == output.size()) {
+        output += token;
+    }
+    else {
+        output.insert(pos, token);
+    }
+};
 
 //Replace line comments with a single space
 void preprocess::handle_line_comment() {
@@ -21,7 +34,8 @@ void preprocess::handle_line_comment() {
         }
     }
 
-    output += " ";
+    if(!context.passive_scan)
+        output += " ";
 }
 
 void preprocess::handle_block_comment() {    
@@ -60,7 +74,8 @@ void preprocess::handle_block_comment() {
         
     }
 
-    output += comment;
+    if(!context.passive_scan)
+        output += comment;
 }
 
 bool preprocess::handle_continued_line(bool only_check) {
@@ -76,6 +91,81 @@ bool preprocess::handle_continued_line(bool only_check) {
     }
 
     return false;
+}
+
+void preprocess::handle_operator_defined() {
+    size_t idx = buffer_index;
+    size_t debug_idx = buffer_index - 4;
+    //Syntax := defined macro OR defined ( macro )
+    
+    enum define_states {
+        EXPECTING_DEF_LB,
+        EXPECTING_DEF_MACRO,
+        EXPECTING_DEF_RB
+    } state = EXPECTING_DEF_LB;
+
+    sim_log_debug("Encountered defined operator");
+    std::string macro;
+    bool in_lb_context = false, parse_success = false;
+    while(idx < contents.size()) {
+        char ch = contents[idx];
+        if(state == EXPECTING_DEF_LB) {
+            if(is_alpha_num(ch)) {
+                state = EXPECTING_DEF_MACRO;
+                idx--;
+            }
+            else if(ch == '(') {
+                state = EXPECTING_DEF_MACRO;
+                in_lb_context = true;
+            }
+            else if(!is_white_space(ch)) {
+                print_error(debug_idx);
+                sim_log_error("Invalid syntax for defined operator");
+            }
+        }
+        else if(state == EXPECTING_DEF_MACRO) {
+            if(is_alpha_num(ch)) {
+                macro += ch;
+            }
+            else if(in_lb_context && ch == ')') {
+                idx++;
+                parse_success = true;
+                break;
+            }
+            else if(in_lb_context && is_white_space(ch)) {
+                state = EXPECTING_DEF_RB;
+            }
+            else if(!in_lb_context && is_white_space(ch)) {
+                parse_success = true;
+                break;
+            }
+            else {
+                print_error(debug_idx);
+                sim_log_error("Invalid syntax for defined operator");
+            }
+        }
+        else if(state == EXPECTING_DEF_RB) {
+            if(ch == ')') {
+                idx++;
+                parse_success = true;
+                break;
+            }
+            else if(!is_white_space(ch)) {
+                print_error(debug_idx);
+                sim_log_error("Invalid syntax for defined operator");
+            }
+        }
+        idx++;
+    }
+
+    if(!parse_success && state != EXPECTING_DEF_MACRO) {
+        print_error(debug_idx);
+        sim_log_error("Invalid syntax for defined operator");
+    }
+
+    sim_log_debug("Macro for operator defined found as:{}", macro);
+    output += table.has_symbol(macro).first ? "1" : "0";
+    buffer_index = idx;
 }
 
 std::string preprocess::expand_variadic_args() {
@@ -213,6 +303,15 @@ std::string preprocess::stringify_token(std::string_view token) {
     return res;
 }
 
+void preprocess::place_barrier() {
+    if(prev_token.size()) {
+        sim_log_debug("Placing barrier. Flushing previous token:{}", prev_token);
+        insert_token_at_pos(prev_token_pos, process_token(prev_token));
+    }
+    prev_token.clear();
+    context.prev_token_macro = false;
+}
+
 preprocess::preprocess(const std::vector<char>& input, bool handle_directives, 
 bool read_single_line, bool read_macro_arg) : contents(input), line_number(1), 
 buffer_index(0), state(PARSER_NORMAL), bracket_count(1), prev_idx(1), prev_token_pos(0) {
@@ -230,6 +329,9 @@ buffer_index(0), state(PARSER_NORMAL), bracket_count(1), prev_idx(1), prev_token
     context.in_token_expansion = false;
     context.no_hash_processing = false;
     context.is_last_token_fn_macro = false;
+    context.passive_scan = false;
+    context.consider_angle_as_str = false;
+    context.process_defined_token = false;
 }
 
 void preprocess::init_diag(std::string_view name, size_t line_num) {
@@ -249,23 +351,16 @@ void preprocess::parse() {
     std::string cur_token;
     bool triggered_whitespace = false;
     bool no_advance = false;
+    char delimiter = ' ';
+    size_t delimiter_start_pos = 0;
     auto setup_prev_token = [&](std::string_view token) {
         prev_token = token;
         prev_token_pos = output.size();
     };
 
-    auto insert_token_at_pos = [&](size_t pos, std::string_view token) {
-        if (pos == output.size()) {
-            output += token;
-        }
-        else {
-            output.insert(pos, token);
-        }
-    };
-
     auto flush_token = [&] (bool is_last_token = false) {
         if(prev_token.size()) {
-            if(is_last_token && !context.read_single_line && !context.read_macro_arg && !context.in_arg_prescan_mode && is_function_macro(prev_token)) {
+            if(is_last_token && !context.passive_scan && !context.read_single_line && !context.read_macro_arg && !context.in_arg_prescan_mode && is_function_macro(prev_token)) {
                 sim_log_debug("Last token:{} seems to be a function macro. Saving it...", prev_token);
 				context.is_last_token_fn_macro = true;
                 return;
@@ -274,6 +369,10 @@ void preprocess::parse() {
                 sim_log_debug("Macro expanding token:{} in prescan mode", prev_token);
                 auto new_token = macro_arg_expand(prev_token);
                 insert_token_at_pos(prev_token_pos, new_token);
+            }
+            else if(context.passive_scan) {
+                //We don't output the text
+                sim_log_debug("Ignoring token:{} in passive scan mode", prev_token);
             }
             else if (!is_alpha_numeric_token(prev_token) || context.prev_token_macro 
             || is_function_macro(prev_token) || context.no_complete_expansion 
@@ -310,8 +409,8 @@ void preprocess::parse() {
     auto handle_token = [&] {
         sim_log_debug("Found token:{}", cur_token);
         if(found_concat_op) {
-            auto first_token = macro_arg_expand(prev_token);
-            auto second_token = macro_arg_expand(cur_token); 
+            auto first_token = trim_whitespace(macro_arg_expand(prev_token));
+            auto second_token = trim_whitespace(macro_arg_expand(cur_token));
             first_token += second_token;
             found_concat_op = false;
             output.erase(prev_token_pos);
@@ -345,8 +444,7 @@ void preprocess::parse() {
                 output.erase(string_op_out_pos);
 
                 auto new_token = macro_arg_expand(cur_token);
-                trim_whitespace(new_token);
-                insert_token_at_pos(string_op_out_pos, stringify_token(new_token));
+                insert_token_at_pos(string_op_out_pos, stringify_token(trim_whitespace(new_token)));
                 flush_token();
             }
             
@@ -366,19 +464,19 @@ void preprocess::parse() {
         state = PARSER_NORMAL;
     };
 
-    auto reverse_continue_line = [&] {
-        if (context.read_macro_arg) {
-            context.actual_arg.erase(context.actual_arg.size()-1);
+
+    auto print_unterm_str_warn = [&] {
+        if(context.read_single_line || context.read_macro_arg || context.in_arg_prescan_mode) {
+            return;
         }
+        print_error(delimiter_start_pos);
+        sim_log_warn("Unterminated '{}'", delimiter == '>' ? '<' : delimiter);
     };
-     
-    if (contents.size() > 2 && contents[0] == ' ' && contents[1] == '#' && contents[2] == 'a') {
-        int stop = 1;
-    }
+    
     while (buffer_index < contents.size()) {
         char ch = contents[buffer_index];
         if(state == PARSER_NORMAL) {
-            if(!context.read_single_line && !context.read_macro_arg && !context.in_arg_prescan_mode && ch == '(') {
+            if(!context.passive_scan && !context.read_single_line && !context.read_macro_arg && !context.in_arg_prescan_mode && ch == '(') {
 				if(!is_function_macro(prev_token)) {
 					flush_token(); //Forcefully expand the previous token
 				}
@@ -424,8 +522,6 @@ void preprocess::parse() {
                     if(macro_incomplete) {
                         print_error(prev_token_pos);
                         sim_log_error("Incorrect invocation of function macro:{}", prev_token);
-                        //flush_token();
-                        //setup_prev_token("(");
                     }
                     else if((is_var && args.size() < macro.size()-1) || (!is_var && args.size() != macro.size() - 1)) {
                         print_error(buffer_index);
@@ -483,7 +579,7 @@ void preprocess::parse() {
                     setup_prev_token("(");
                 }
             }
-            else if(!context.no_hash_processing && !context.read_macro_arg && context.in_token_expansion && !context.read_single_line && ch == '#') {
+            else if(!context.passive_scan && !context.no_hash_processing && !context.read_macro_arg && context.in_token_expansion && !context.read_single_line && ch == '#') {
                 if (found_concat_op) {
                     print_error(string_op_pos);
                     sim_log_error("Concatenation operator must be followed by a valid token");
@@ -529,13 +625,16 @@ void preprocess::parse() {
             else if(ch == '/') {
                 state = PARSER_COMMENT;
             }
-            else if(ch == '\"') {
+            else if(ch == '\"' || ch == '\'' || (context.consider_angle_as_str && ch == '<')) {
                 check_string_op();     
                 sim_log_debug("Handling string");
                 state = PARSER_STRING;
-                output += ch;
+                delimiter = ch == '<' ? '>' : ch;
+                if(!context.passive_scan)
+                    output += ch;
                 start_of_line = false;
                 flush_token();
+                delimiter_start_pos = buffer_index;
             }
             else if(context.read_macro_arg && (ch == ',' || ch == '(' || ch == ')')) {
 				bool added_to_output = false;
@@ -563,7 +662,7 @@ void preprocess::parse() {
 					output += ch;
 				}
             }
-            else if(context.handle_directives && ch == '#' && start_of_line) {
+            else if((context.handle_directives || context.passive_scan) && ch == '#' && start_of_line) {
                 sim_log_debug("Preprocessor directive detected at line:{}", line_number);
                 handle_directive();
             }
@@ -585,7 +684,7 @@ void preprocess::parse() {
                         skip_newline(); 
                     } 
                     else {
-                        skip_newline(true);
+                        skip_newline(!context.passive_scan);
                     }
                     flush_token();
                     sim_log_debug("Processing line number:{}", line_number);
@@ -602,7 +701,8 @@ void preprocess::parse() {
                         no_advance = false;
                     }
                     else {
-                        output += ch;
+                        if(!context.passive_scan)
+                            output += ch;
                         if(found_string_op) {
                             triggered_whitespace = true;
                         }
@@ -639,11 +739,21 @@ void preprocess::parse() {
                 no_advance = false;
                 continue;
             }
-            else if(ch == '\"' || is_end_of_line(false)) {
+            else if(ch == delimiter) {
                 state = PARSER_NORMAL;
+                if(!context.passive_scan)
+                    output += ch;
             }
-
-            output += ch;
+            else if(is_end_of_line(false)) {
+                state = PARSER_NORMAL;
+                print_unterm_str_warn();
+                no_advance = true;
+            }
+            else {
+                if(!context.passive_scan)
+                    output += ch;
+            }
+          
         }
         else if(state == PARSER_TOKEN) {
             if(is_alpha_num()) {
@@ -655,7 +765,16 @@ void preprocess::parse() {
                 continue;
             }
             else {
-                handle_token();
+                if(context.process_defined_token && cur_token == "defined") {
+                    flush_token();
+                    handle_operator_defined();
+                    cur_token.clear();
+                    state = PARSER_NORMAL;
+                    no_advance = true;
+                }
+                else {
+                    handle_token();
+                }
             }
         }
 
@@ -663,13 +782,22 @@ void preprocess::parse() {
             buffer_index++;
         no_advance = false;
     }
+    if(state == PARSER_STRING) {
+        print_unterm_str_warn();
+    }
     
     if (context.read_macro_arg && buffer_index >= contents.size() && !context.args_complete) {
         context.arg_premature_term = true;
     }
 
     if(state == PARSER_COMMENT) {
-        output += "/";
+        if(!context.passive_scan)
+            output += '/';
+    }
+
+    if(context.handle_directives && ifdef_stack.size()) {
+        diag_inst.print_error(ifdef_stack.top().offset);
+        sim_log_error("Directive was not terminated"); 
     }
 
     if(prev_token.size() && cur_token.size()) {
@@ -704,7 +832,7 @@ void preprocess::parse() {
 }
 
 void preprocess::print_error(size_t pos) {
-    if(parents.size()) {
+    if(context.in_token_expansion) {
         //We're currently expanding a token
         std::cout << "In expansion of token:" << parents[parents.size()-1] << std::endl;
     }

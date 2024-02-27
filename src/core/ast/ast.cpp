@@ -1,4 +1,4 @@
-#include "compiler/ast.h"
+#include "core/ast.h"
 #include "debug-api.h"
 
 ast::ast(AST_TYPE _type) : type(_type) 
@@ -10,6 +10,7 @@ ast_token::ast_token(const token* _tok) : ast(AST_TYPE::TOKEN), tok(_tok)
 ast_token::ast_token(const token* _tok, bool is_expr) : ast(AST_TYPE::EXPR), tok(_tok)
 {}
 
+#ifdef MODSIMCC
 ast_base_type::ast_base_type(const token* storage_spec, const token* type_spec,
 const token* const_qual, const token* vol_qual, const token* sign_qual) : ast(AST_TYPE::BASE_TYPE),
 base_type{storage_spec, type_spec, const_qual, vol_qual, sign_qual} {
@@ -28,6 +29,7 @@ ast_decl::ast_decl(const token* _ident) : ast(AST_TYPE::DECL), ident(_ident) {
 
 }
 
+#endif
 void ast::attach_node(std::unique_ptr<ast> node) {
     children.push_front(std::move(node));
 }
@@ -139,6 +141,7 @@ bool ast::is_continue_stmt() const {
     return type == AST_TYPE::CONTINUE;
 }
 
+#ifdef MODSIMCC
 bool ast_ptr_spec::print_error() const {
     pointer->print_error();
     return true;
@@ -164,6 +167,11 @@ bool ast_decl::print_error() const {
     return false;
 }
 
+bool ast_base_type::print_error() const {
+    base_type.print_error();
+    return true;
+}
+
 bool ast_token::print_error() const {
     CRITICAL_ASSERT(tok, "ast_token::print_error() called on null token");
     tok->print_error();
@@ -172,11 +180,6 @@ bool ast_token::print_error() const {
 
 bool ast_fn_call::print_error() const {
     tok->print_error();
-    return true;
-}
-
-bool ast_base_type::print_error() const {
-    base_type.print_error();
     return true;
 }
 
@@ -199,3 +202,5 @@ bool ast::print_error() const {
 
     return true;
 }
+
+#endif

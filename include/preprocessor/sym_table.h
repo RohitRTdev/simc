@@ -3,6 +3,7 @@
 #include <string>
 #include <optional>
 #include <unordered_map>
+#include <vector>
 
 struct sym_table {
 

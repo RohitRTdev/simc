@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stack>
-#include "compiler/ast.h"
+#include "core/ast.h"
 #include "compiler/scope.h"
 #include "compiler/type.h"
 #include "debug-api.h"

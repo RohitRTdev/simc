@@ -1,10 +1,10 @@
 #include <stack>
-#include "compiler/ast.h"
+#include "core/ast.h"
+#include "core/ast-ops.h"
 #include "compiler/type.h"
 #include "compiler/scope.h"
 #include "compiler/eval.h"
 #include "compiler/utils.h"
-#include "compiler/ast-ops.h"
 
 std::vector<std::string> eval_expr::const_storage;
 int eval_expr::string_id = 0;
