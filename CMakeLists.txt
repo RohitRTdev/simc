@@ -16,7 +16,7 @@ if(CMAKE_BUILD_TYPE STREQUAL Release)
     set(CMAKE_CONFIGURATION_TYPES "Release" CACHE STRING "" FORCE)
 endif()
 
-project(simc VERSION 0.1 LANGUAGES C CXX)
+project(simc_proj VERSION 0.1 LANGUAGES C CXX)
 add_library(simc_options INTERFACE)
 
 default_to(LOG_DIR ${CMAKE_CURRENT_SOURCE_DIR}/log)
@@ -63,8 +63,8 @@ target_include_directories(simc_options INTERFACE ${INCLUDE_DIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 
-set(SUBDIRS sime simcc)
-set(MODNAMES MODSIME MODSIMCC)
+set(SUBDIRS sime simcc simc)
+set(MODNAMES MODSIME MODSIMCC MODSIMC)
 set(COMMON_FILES src/entry.cpp src/options.cpp src/file-utils.cpp src/diagnostic.cpp)
 
 #Remove core/ast/debug.cpp file for release build
@@ -84,8 +84,10 @@ foreach(i RANGE ${len})
 
     if(DIR STREQUAL simcc)
       add_subdirectory(src/simcc)
-    else()
+    elseif(DIR STREQUAL sime)
       add_executable(${DIR} ${srcs} ${COMMON_FILES} ${CORE_FILES})
+    elseif(DIR STREQUAL simc)
+      add_executable(${DIR} ${srcs} ${COMMON_FILES})
     endif()
     
     target_link_libraries(${DIR} simc_options)

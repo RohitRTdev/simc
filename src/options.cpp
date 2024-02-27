@@ -24,7 +24,11 @@ std::string argparser::generate_default_file_name(std::string_view file_path) {
 }
 
 argparser::argparser(int argc, char** argv, std::string_view extension) : m_argc(argc), m_argv(argv),
-m_extension(extension)
+m_extension(extension), gen_def(true)
+{}
+
+argparser::argparser(int argc, char** argv) : m_argc(argc), m_argv(argv),
+gen_def(false)
 {}
 
 void argparser::add_flag(char ch, flag_type type) {
@@ -85,8 +89,10 @@ void argparser::parse() {
         output_files.push_back(name_flag_store['o'][i]);
     }
 
-    for(i = user_op_files; i < input_files.size(); i++) {
-        output_files.push_back(generate_default_file_name(input_files[i]));
+    if(gen_def) {
+        for(i = user_op_files; i < input_files.size(); i++) {
+            output_files.push_back(generate_default_file_name(input_files[i]));
+        }
     }
 
     if(output_files.size() > input_files.size()) {
