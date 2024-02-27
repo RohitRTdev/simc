@@ -9,10 +9,10 @@ class argparser {
     int m_argc;
     char** m_argv;
     std::string m_extension;
-    std::unordered_map<char, bool> flag_store;
-    std::unordered_map<char, std::vector<std::string>> name_flag_store;
     std::string generate_default_file_name(std::string_view input_file);
 public:
+    std::unordered_map<char, bool> flag_store;
+    std::unordered_map<char, std::vector<std::string>> name_flag_store;
 
     enum flag_type {
         NORMAL,

@@ -281,14 +281,28 @@ void preprocess::handle_include(std::string_view dir_line) {
 
     file_contents = read_file(path, false);
     if(!file_contents.has_value()) {
-        //Checking if file is present in current working directory
-        sim_log_debug("Checking for file:{} in current working directory", file_path);
-        file_contents = read_file(file_path, false);
-        if(!file_contents.has_value()) {
-            diag_inst.print_error(dir_line_start_idx);
-            sim_log_error("File:{} not found", file_path);
+        //Check for files in the search directories provided by the user
+        bool found_dir = false;
+        for(const auto& dir: search_directories) {
+            path = (std::filesystem::path(dir) / std::filesystem::path(file_path)).string();
+            sim_log_debug("Searching for file in location:{}", path);
+            file_contents = read_file(path, false);
+            if(file_contents.has_value()) {
+                found_dir = true;
+                break;
+            }
         }
-        path = file_path;
+
+        if(!found_dir) {
+            //Checking if file is present in current working directory
+            sim_log_debug("Checking for file:{} in current working directory", file_path);
+            file_contents = read_file(file_path, false);
+            if(!file_contents.has_value()) {
+                diag_inst.print_error(dir_line_start_idx);
+                sim_log_error("File:{} not found", file_path);
+            }
+            path = file_path;
+        }
     }
 
     for(const auto& ancestor: ancestors) {
