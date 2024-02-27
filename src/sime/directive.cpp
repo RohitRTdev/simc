@@ -312,6 +312,28 @@ void preprocess::handle_include(std::string_view dir_line) {
     sim_log_debug("Preprocessed file:{}", file_path);
 }
 
+void preprocess::handle_undef(std::string_view dir_line) {
+    auto [macro, next_idx] = read_next_token(dir_line);
+    if(trim_whitespace(std::string(dir_line.substr(next_idx))).size()) {
+        diag_inst.print_error(dir_line_start_idx);
+        sim_log_error("Invalid syntax for undef statement");
+    }
+
+    if(!is_valid_macro(macro)) {
+        diag_inst.print_error(dir_line_start_idx);
+        sim_log_error("Invalid identifier name for macro:{}", macro);
+    }
+
+    if(table.has_symbol(macro).first) {
+        sim_log_debug("Removing symbol:{}", macro);
+        table.remove_symbol(macro);
+    }
+    else {
+        diag_inst.print_error(dir_line_start_idx);
+        sim_log_warn("Symbol:{} doesn't seem to be defined. Ignoring undef stmt...", macro);
+    }
+}
+
 void preprocess::handle_define(std::string_view dir_line) {
     auto [macro, next_idx] = read_next_token(dir_line);
 
@@ -378,10 +400,25 @@ void preprocess::handle_directive() {
         line_number += line_reader_inst.line_number - 1;
     }
 
+    auto check_bounds = [&] {
+        if(line_reader_inst.get_output().size() <= next_idx) {
+            diag_inst.print_error(dir_line_start_idx);
+            sim_log_error("Invalid syntax for {}", directive);
+        }
+    };
+    
     if(directive == "define") {
+        check_bounds();
         handle_define(line_reader_inst.get_output().substr(next_idx));
     }
+    else if(directive == "undef") {
+        check_bounds();
+        handle_undef(line_reader_inst.get_output().substr(next_idx));
+    }
     else if(directive == "if" || directive == "ifdef" ||  directive == "ifndef" || directive == "elif" || directive == "else" || directive == "endif") {
+        if(directive == "if" || directive == "ifdef" || directive == "ifndef" || directive == "elif")
+            check_bounds();
+        
         handle_ifdef(line_reader_inst.get_output().substr(next_idx), directive);
     }
     else {

@@ -86,6 +86,7 @@ Expression 3
  * There we go */
 Expression 4
 #endif
+#undef hehehe
 #ifdef hehehe
 It works!! //Hehe
 #endif

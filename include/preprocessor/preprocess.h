@@ -91,6 +91,7 @@ class preprocess {
     void handle_directive();
     void handle_include(std::string_view dir_line); 
     void handle_define(std::string_view dir_line);
+    void handle_undef(std::string_view dir_line);
     void handle_ifdef(std::string_view expression, std::string_view directive); 
 	void setup_prev_token_macro(const std::string& new_token); 
     void place_barrier();

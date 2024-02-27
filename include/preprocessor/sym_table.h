@@ -18,7 +18,7 @@ public:
     void add_symbol(std::string name, bool has_value = false, bool is_macro = false, 
     bool is_variadic = false, std::string value = "");
     void add_macro_args(const std::string& name, std::vector<std::string>& args);
-    void remove_symbol(std::string name);
+    void remove_symbol(const std::string& name);
     std::pair<bool, bool> has_symbol(const std::string& name);
     std::string& operator [](const std::string& name);
     std::vector<std::string>& fetch_macro_args(const std::string& name); 
