@@ -94,9 +94,11 @@ int app_start(int argc, char** argv) {
         }
     }
     const std::vector<std::string>& preprocessor_o_files = only_preprocess ? cmdline.get_output_files() : tmp_files; 
-    frontend(preprocessor_path, preprocessor_args, cmdline.get_input_files(), preprocessor_o_files).invoke();
+    sim_log_debug("Executing preprocessor");
+    bool should_continue = frontend(preprocessor_path, preprocessor_args, cmdline.get_input_files(), preprocessor_o_files).invoke();
 
-    if(!only_preprocess) {
+    if(!only_preprocess && should_continue) {
+        sim_log_debug("Executing compiler");
         frontend(compiler_path, compiler_args, tmp_files, cmdline.get_output_files()).invoke();
     }
 

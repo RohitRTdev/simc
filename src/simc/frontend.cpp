@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include "driver/frontend.h"
 #include "debug-api.h"
 
@@ -22,8 +23,9 @@ bool frontend::invoke() && {
     }
 
     sim_log_debug("Final cmdline string:{}", cmdline_str);
-
-    return true;
+    
+    int exit_code = std::system(cmdline_str.c_str());
+    return exit_code == 0;
 }
 
 
