@@ -16,11 +16,13 @@ open vs sln and build
 ```
 
 By default this does a debug build. Switch this by setting the CMAKE_BUILD_TYPE variable to "Release".<br>
-All the executables(simcc, sime, code-gen) will be created on the build/bin directory.
+All the executables(simcc, sime, code-gen, simc) will be created on the build/bin directory.
 
-### To run the compiler
+### To run
 ```
-./simcc <some-file-name>
+./simcc <some-file-name> //To run compiler
+./sime <some-file-name> //To run preprocessor
+./simc <some-file-name> //This is the frontend, executes both sime and simcc. Run this
 ```
 
 Currently, the compiler generates x64 code in att syntax and is made to be compatible only with gcc toolchain.<br>
@@ -29,22 +31,19 @@ The compiler is a long way from feature complete, but it is usable as of now.
 
 ### Example
 ```
-./simcc test.c
+./simc test.c -o test.s
 gcc test.s -o test
 ./test
 ```
 
 First command created an assembly file named "test.s" which is then assembled using <I>gcc</I> to elf executable <B>test</B> which you can then run.<br>
-You could also use the -o option to give a different name to the output.
-```
-./simcc test.c -o output.s
-```
+Because of certain implementation details, if you currently do not provide any output file names when invoking <I>simc</I>, the output file generated might have some weird name.<br>
+Use the -E option to only do preprocess step<br> 
 
-## Planned design
-The design involved three executables. <b>sime</b>, <b>simcc</b> and <b>simc</b>.<br>
+## Architecture
+The design involves three executables. <b>sime</b>, <b>simcc</b> and <b>simc</b>.<br>
 sime is the preprocessor, simcc is the compiler(generates assembly) and simc is a frontend executable which is what the user invokes.<br>
 simc knows the installation location for the compiler and preprocessor and invokes them approriately to generate the final assembly.<br>
-Although this is the planned design, the current state of the project is that we only have a compiler. Preprocessor work is ongoing, and without a complete preprocessor it doesn't make sense to write the frontend. So if you wish to use it, invoke the compiler directly (or the preprocessor, to debug it).
 
 ## Compiler design
 Unlike most toy compilers, we don't use a recursive descendent parser, instead simcc uses a state-machine based parser(like a very crude and specific bison clone). This makes simcc less prone to stack overflow errors on highly nested expressions or statements. Our code generator is written as a separate module which makes it easy to add support for another architecture if needed. Currently we only support the x64 variant(no support for 32 bit) which generates position independent att syntax assembly compatible with gcc toolchain.
