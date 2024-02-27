@@ -10,8 +10,15 @@
 
 std::string asm_code;
 
-static void start_compilation(std::string_view file_name, const std::vector<char>& file_input) {
+static void start_compilation(std::string_view file_name, std::vector<char>& file_input) {
     token::global_diag_inst.init(file_name, 1, file_input);
+   
+    //This is necessary to avoid lexer errors
+    if(!file_input.size() || (file_input[file_input.size()-1] != '\n' && file_input[file_input.size()-1] != '\r')) {
+        sim_log_warn("No newline found at file ending for file:{}. Adding newline..", file_name);
+        file_input.push_back('\n');
+    }
+    
     lex(file_input);    
     auto prog = parse();
     eval(std::move(prog));
@@ -40,12 +47,11 @@ int app_start(int argc, char** argv) {
     cmdline.parse();
     size_t file_idx = 0;
     for(const auto& file: cmdline.get_input_files()) {
-        auto file_info_buf = read_file(file);
-
+        auto file_info_buf = *read_file(file);
         start_compilation(file, file_info_buf);
         write_file(cmdline.get_output_files()[file_idx++], asm_code);
     }
 
-    std::cout << "Compilation successful" << std::endl;  
+    sim_log_debug("Compilation successful");
     return 0;
 }

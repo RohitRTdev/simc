@@ -22,6 +22,3 @@ void my_fun(int a, int b) {
     a -> b;
     a = a & b;
     a && b a&&ba&b  12333++-2
-}
-
-

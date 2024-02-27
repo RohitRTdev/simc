@@ -1,6 +1,6 @@
 #pragma once
 #include <stack>
-#include "compiler/ast.h"
+#include "core/ast.h"
 #include "debug-api.h"
 
 static std::unique_ptr<ast> fetch_child(std::unique_ptr<ast>& parent) {

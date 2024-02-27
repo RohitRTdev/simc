@@ -1,10 +1,10 @@
 #include <functional>
 #include <stack>
 #include "debug-api.h"
-#include "compiler/token.h"
-#include "compiler/ast.h"
-#include "compiler/ast-ops.h"
-#include "compiler/state-machine.h"
+#include "core/token.h"
+#include "core/ast.h"
+#include "core/ast-ops.h"
+#include "core/state-machine.h"
 #include "compiler/type.h"
 #include "compiler/utils.h"
 
@@ -1134,9 +1134,6 @@ static void parse_declaration() {
 }
 
 void parse_init() {
-
-    parser.set_token_stream(tokens);
-
     parse_declaration();
     parse_stmt_list();
     parse_compound_stmt();
@@ -1153,7 +1150,8 @@ std::unique_ptr<ast> parse() {
         parse_init();
         init_complete = true;
     }
-
+    
+    parser.set_token_stream(tokens);
     parser.start();
 
     auto prog = reduce_program(&parser);

@@ -1,12 +1,12 @@
 
 const int * d[2];
 
-int** new_fn(int,int val) {
+int** new_fn(int h,int val) {
     return val + val;
 }
 
 int main() {
-    int a, b, c;
+    int a = 5, b = 2, c;
 
     {
         int some;
@@ -16,9 +16,8 @@ int main() {
                 int four;
                 four = 5;
                 {
-                    return 2;
+                    2;
                 }
-                return four;
                 four++;
             }
             else {
@@ -27,18 +26,13 @@ int main() {
                 {
                     {
                         if(1) {
-                            return my+2;
                         }
-                        return my+1;
                     }
                     int my;
-                    return my;
                     my++;
                 }
-                return 5;
                 my++;
             }
-            return 1;
         }
 
         {
