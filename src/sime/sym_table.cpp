@@ -22,7 +22,7 @@ void sym_table::add_macro_args(const std::string& name, std::vector<std::string>
 
 }
 
-void sym_table::remove_symbol(std::string name) {
+void sym_table::remove_symbol(const std::string& name) {
     values.erase(name);
 }
 

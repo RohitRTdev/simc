@@ -4,6 +4,7 @@
 sym_table preprocess::table;
 std::vector<std::string> preprocess::parents;
 std::vector<std::string> preprocess::ancestors;
+std::vector<std::string> preprocess::search_directories; 
 
 void preprocess::init_with_defaults(const std::string& top_file_name) {
     //This makes sure that we do not allow the compilation file to include itself

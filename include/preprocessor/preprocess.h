@@ -91,6 +91,7 @@ class preprocess {
     void handle_directive();
     void handle_include(std::string_view dir_line); 
     void handle_define(std::string_view dir_line);
+    void handle_undef(std::string_view dir_line);
     void handle_ifdef(std::string_view expression, std::string_view directive); 
 	void setup_prev_token_macro(const std::string& new_token); 
     void place_barrier();
@@ -121,6 +122,8 @@ class preprocess {
     bool is_alpha_numeric_token(std::string_view token);
     void config_diag(const preprocess* inst);
 public:
+    static std::vector<std::string> search_directories; 
+   
     static void init_with_defaults(const std::string& top_file_name);
     preprocess(const std::vector<char>& input, bool handle_directives = true, 
     bool read_single_line = false, bool read_macro_arg = false);

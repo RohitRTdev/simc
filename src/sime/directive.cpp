@@ -281,14 +281,28 @@ void preprocess::handle_include(std::string_view dir_line) {
 
     file_contents = read_file(path, false);
     if(!file_contents.has_value()) {
-        //Checking if file is present in current working directory
-        sim_log_debug("Checking for file:{} in current working directory", file_path);
-        file_contents = read_file(file_path, false);
-        if(!file_contents.has_value()) {
-            diag_inst.print_error(dir_line_start_idx);
-            sim_log_error("File:{} not found", file_path);
+        //Check for files in the search directories provided by the user
+        bool found_dir = false;
+        for(const auto& dir: search_directories) {
+            path = (std::filesystem::path(dir) / std::filesystem::path(file_path)).string();
+            sim_log_debug("Searching for file in location:{}", path);
+            file_contents = read_file(path, false);
+            if(file_contents.has_value()) {
+                found_dir = true;
+                break;
+            }
         }
-        path = file_path;
+
+        if(!found_dir) {
+            //Checking if file is present in current working directory
+            sim_log_debug("Checking for file:{} in current working directory", file_path);
+            file_contents = read_file(file_path, false);
+            if(!file_contents.has_value()) {
+                diag_inst.print_error(dir_line_start_idx);
+                sim_log_error("File:{} not found", file_path);
+            }
+            path = file_path;
+        }
     }
 
     for(const auto& ancestor: ancestors) {
@@ -310,6 +324,28 @@ void preprocess::handle_include(std::string_view dir_line) {
 
     output += aux_preprocessor.get_output();
     sim_log_debug("Preprocessed file:{}", file_path);
+}
+
+void preprocess::handle_undef(std::string_view dir_line) {
+    auto [macro, next_idx] = read_next_token(dir_line);
+    if(trim_whitespace(std::string(dir_line.substr(next_idx))).size()) {
+        diag_inst.print_error(dir_line_start_idx);
+        sim_log_error("Invalid syntax for undef statement");
+    }
+
+    if(!is_valid_macro(macro)) {
+        diag_inst.print_error(dir_line_start_idx);
+        sim_log_error("Invalid identifier name for macro:{}", macro);
+    }
+
+    if(table.has_symbol(macro).first) {
+        sim_log_debug("Removing symbol:{}", macro);
+        table.remove_symbol(macro);
+    }
+    else {
+        diag_inst.print_error(dir_line_start_idx);
+        sim_log_warn("Symbol:{} doesn't seem to be defined. Ignoring undef stmt...", macro);
+    }
 }
 
 void preprocess::handle_define(std::string_view dir_line) {
@@ -378,10 +414,25 @@ void preprocess::handle_directive() {
         line_number += line_reader_inst.line_number - 1;
     }
 
+    auto check_bounds = [&] {
+        if(line_reader_inst.get_output().size() <= next_idx) {
+            diag_inst.print_error(dir_line_start_idx);
+            sim_log_error("Invalid syntax for {}", directive);
+        }
+    };
+    
     if(directive == "define") {
+        check_bounds();
         handle_define(line_reader_inst.get_output().substr(next_idx));
     }
+    else if(directive == "undef") {
+        check_bounds();
+        handle_undef(line_reader_inst.get_output().substr(next_idx));
+    }
     else if(directive == "if" || directive == "ifdef" ||  directive == "ifndef" || directive == "elif" || directive == "else" || directive == "endif") {
+        if(directive == "if" || directive == "ifdef" || directive == "ifndef" || directive == "elif")
+            check_bounds();
+        
         handle_ifdef(line_reader_inst.get_output().substr(next_idx), directive);
     }
     else {

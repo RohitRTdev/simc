@@ -33,7 +33,7 @@ static argparser init_argparser(int argc, char** argv, std::string ext) {
     argparser cmdline(argc, argv, ext);
 
     cmdline.add_flag('o', argparser::FILE);
-
+    cmdline.add_flag('I', argparser::FILE);
     return cmdline;
 }
 
@@ -46,6 +46,20 @@ int app_start(int argc, char** argv) {
     auto cmdline = init_argparser(argc, argv, ".i");
     cmdline.parse();
     size_t file_idx = 0;
+   
+
+    //Setup search directories provided by the user
+    if(cmdline.name_flag_store.contains('I')) {
+        preprocess::search_directories = cmdline.name_flag_store['I'];
+#ifdef SIMDEBUG
+        size_t idx = 0;
+        sim_log_debug("Listing user search directories...");
+        for(const auto& dir: preprocess::search_directories) {
+            sim_log_debug("Dir {}:{}", idx, dir);
+            idx++;
+        }
+#endif
+    }
 
     for(const auto& file: cmdline.get_input_files()) {
         preprocess::init_with_defaults(file);
