@@ -26,6 +26,15 @@ std::optional<std::vector<char>> read_file(std::string_view file_name, bool exit
 
         sim_log_debug("gcount()={}", file_intf.gcount());
         //We have more chunks to read
+
+        if (file_intf.gcount() == 0) {
+            //We're likely reading some non regular file(device file, tty, pipe, directory etc)
+            if (exit_on_error) {
+                sim_log_error("File open failed!");
+            }
+
+            return f_buf_wrap;
+        }
         if(file_intf.gcount() == FILE_READ_CHUNK_SIZE) {
             chunk++;
             f_buf.resize(chunk*FILE_READ_CHUNK_SIZE);

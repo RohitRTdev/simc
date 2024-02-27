@@ -1,3 +1,4 @@
+#include <optional>
 #include "core/token.h"
 #include "core/ast.h"
 #include "core/ast-ops.h"
