@@ -7,8 +7,8 @@
 
 #if defined(SIMDEBUG) && defined(TEST_PARSER)
 static int check_parser() {
-    std::vector<std::pair<bool, std::string>> test_cases = {{true, "2+3*17-9/(3&&3) == 46-2"},{true, "2+3*17-9/(3&&3)"},
-        {true, "3+9/(2-2)*5"}, {false, "55+ > ((5-23+100))"}};    
+    std::vector<std::pair<bool, std::string>> test_cases = {{true, "2+3*17-9/(3&&3) == 46-2"},{true, "2+'\n'+3*17-9/(3&&3)"},
+        {true, "3+'a'+9/(2-2)*5"}, {false, "55+'invalid' > ((5-23+100))"}};    
     int exit_code = 0; 
     for(auto& test: test_cases) {
         //Emulate terminal character addition to prevent lexer errors

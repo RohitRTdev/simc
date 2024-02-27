@@ -29,7 +29,7 @@ int calculate(operator_type op, int res1, int res2) {
         case DIV: {
             if(res2 == 0) {
                 print_error();
-                sim_log_warn("Division by zero encountered");
+                sim_log_error("Division by zero encountered");
                 res = 0;
             }
             else {
@@ -40,7 +40,7 @@ int calculate(operator_type op, int res1, int res2) {
         case MODULO: {
             if(res2 == 0) {
                 print_error();
-                sim_log_warn("Division by zero encountered");
+                sim_log_error("Division by zero encountered");
                 res = 0;
             }
             else {

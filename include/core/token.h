@@ -3,7 +3,7 @@
 #include <string>
 #include <variant>
 #include "common/diag.h"
-
+#include "debug-api.h"
 
 enum token_type{
     KEYWORD,
@@ -177,6 +177,7 @@ public:
 #ifdef MODSIME
     bool pre_transform() {
         if(!((type == CONSTANT && (sub_type == TOK_INT || sub_type == TOK_CHAR)) || type == OPERATOR)) {
+            sim_log_debug("Stopping further evaluation as invalid token type detected");
             return true;    
         }
 

@@ -227,7 +227,7 @@ static inline bool is_extended_operator(operator_type type) {
 bool lex(std::string_view input) {
     lexer_states state = LEXER_START;
     tokens.clear();
-        
+
     operator_type prev_op;
     size_t start_pos = 0, literal_count = 0;
     for(int i = 0; i < input.size(); i++) {
@@ -241,6 +241,7 @@ bool lex(std::string_view input) {
                 continue;
             }
             else {
+                sim_log_debug("Stopping further evaluation as we found invalid character constant");
                 return false;
             }
         }
@@ -253,6 +254,7 @@ bool lex(std::string_view input) {
                 state = EXPECTING_TICK;
             }
             else {
+                sim_log_debug("Stopping further evaluation as we found invalid escaped character constant");
                 return false;
             }
         }
@@ -292,6 +294,7 @@ bool lex(std::string_view input) {
                 literal_count++;
             }
             else if(isalpha(ch) || ch == '_') {
+                sim_log_debug("Stopping further evaluation as we found invalid integer constant");
                 return false;
             }
             else {

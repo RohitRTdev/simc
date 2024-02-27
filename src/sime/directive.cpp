@@ -1,6 +1,7 @@
 #include <unordered_set>
 #include <filesystem>
 #include "preprocessor/preprocess.h"
+#include "preprocessor/parser.h"
 #include "common/file-utils.h"
 #include "debug-api.h"
 
@@ -9,6 +10,8 @@ void preprocess::handle_ifdef(std::string_view expression, std::string_view dire
     bool expr_res = false;
     auto exp = trim_whitespace(std::string(expression));
 
+    //This is to help with the passive scan check only
+    auto type = (directive == "elif" || directive == "else" || directive == "endif") ? IFDEF::ELIF : IFDEF::IF;
     if(directive == "elif" || directive == "else" || directive == "endif") {
        if(!ifdef_stack.size()) {
             diag_inst.print_error(dir_line_start_idx);
@@ -16,16 +19,32 @@ void preprocess::handle_ifdef(std::string_view expression, std::string_view dire
        }
     }
     
-    if(!ifdef_stack.size() || !ifdef_stack.top().state) {
-        //This means passive_scan is not turned on within this context
+    if(!ifdef_stack.size() || (type != IFDEF::IF && !ifdef_stack.top().state) || 
+            (type == IFDEF::IF && !context.passive_scan)) {
+        //This means passive_scan is not turned on within this parent's context
         //Hence, check for valid syntax
-        
-        if(directive == "if" || directive == "elif") {
+        if(directive == "if" || directive == "ifdef" || directive == "ifndef" || directive == "elif") {
             if(!exp.size()) {
                 diag_inst.print_error(dir_line_start_idx);
-                sim_log_error("if/elif statements require an expression");
+                sim_log_error("{} statement require an expression", directive);
             }
-            expr_res = exp != "0";
+            if(directive == "ifdef" || directive == "ifndef") {
+                if(!is_valid_macro(exp)) {
+                    diag_inst.print_error(dir_line_start_idx);
+                    sim_log_error("{} statement requires a valid macro", directive);
+                }
+                auto [present, _] = table.has_symbol(exp);
+                expr_res = directive == "ifdef" ? present : !present;
+                sim_log_debug("Macro:{} is {}present", present ? "" : "not ");
+            }
+            else {
+                sim_log_debug("Calling evaluator on exp:{}", exp);
+                //Insert newline token to avoid lexer errors
+                if(exp[exp.size()-1] != '\n' || exp[exp.size()-1] != '\r') {
+                    exp.push_back('\n');
+                }
+                expr_res = evaluator(exp, &diag_inst, dir_line_start_idx);
+            }
         }
         else {
             if(exp.size()) {
@@ -35,7 +54,7 @@ void preprocess::handle_ifdef(std::string_view expression, std::string_view dire
         }
 
     }
-    if(directive == "if") {
+    if(directive == "if" || directive == "ifdef" || directive == "ifndef") {
         //Save the previous state, along with the eval result
         ifdef_stack.push(ifdef_info{IFDEF::IF, expr_res, context.passive_scan, dir_line_start_idx});
         
@@ -84,7 +103,7 @@ void preprocess::handle_ifdef(std::string_view expression, std::string_view dire
 
 std::tuple<bool, std::vector<std::string>, std::string_view, bool> 
 preprocess::parse_macro_args(std::string_view macro_line) {
-    if(macro_line[0] != '(') {
+    if(!macro_line.size() || macro_line[0] != '(') {
         return make_tuple(false, std::vector<std::string>(), std::string_view(), false);
     }
 
@@ -326,7 +345,7 @@ void preprocess::handle_directive() {
     auto [directive, next_idx] = read_next_token(line_reader_inst.get_output());
 
     if(context.passive_scan) {
-        if(directive != "if" && directive != "elif" && directive != "else" && directive != "endif") {
+        if(directive != "if" && directive != "ifdef" && directive != "ifndef" && directive != "elif" && directive != "else" && directive != "endif") {
             sim_log_debug("Ignoring directive as it is found during passive scan");
             return;
         }
@@ -352,7 +371,7 @@ void preprocess::handle_directive() {
     if(directive == "define") {
         handle_define(line_reader_inst.get_output().substr(next_idx));
     }
-    else if(directive == "if" || directive == "elif" || directive == "else" || directive == "endif") {
+    else if(directive == "if" || directive == "ifdef" ||  directive == "ifndef" || directive == "elif" || directive == "else" || directive == "endif") {
         handle_ifdef(line_reader_inst.get_output().substr(next_idx), directive);
     }
     else {
