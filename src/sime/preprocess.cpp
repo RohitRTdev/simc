@@ -93,6 +93,81 @@ bool preprocess::handle_continued_line(bool only_check) {
     return false;
 }
 
+void preprocess::handle_operator_defined() {
+    size_t idx = buffer_index;
+    size_t debug_idx = buffer_index - 4;
+    //Syntax := defined macro OR defined ( macro )
+    
+    enum define_states {
+        EXPECTING_DEF_LB,
+        EXPECTING_DEF_MACRO,
+        EXPECTING_DEF_RB
+    } state = EXPECTING_DEF_LB;
+
+    sim_log_debug("Encountered defined operator");
+    std::string macro;
+    bool in_lb_context = false, parse_success = false;
+    while(idx < contents.size()) {
+        char ch = contents[idx];
+        if(state == EXPECTING_DEF_LB) {
+            if(is_alpha_num(ch)) {
+                state = EXPECTING_DEF_MACRO;
+                idx--;
+            }
+            else if(ch == '(') {
+                state = EXPECTING_DEF_MACRO;
+                in_lb_context = true;
+            }
+            else if(!is_white_space(ch)) {
+                print_error(debug_idx);
+                sim_log_error("Invalid syntax for defined operator");
+            }
+        }
+        else if(state == EXPECTING_DEF_MACRO) {
+            if(is_alpha_num(ch)) {
+                macro += ch;
+            }
+            else if(in_lb_context && ch == ')') {
+                idx++;
+                parse_success = true;
+                break;
+            }
+            else if(in_lb_context && is_white_space(ch)) {
+                state = EXPECTING_DEF_RB;
+            }
+            else if(!in_lb_context && is_white_space(ch)) {
+                parse_success = true;
+                break;
+            }
+            else {
+                print_error(debug_idx);
+                sim_log_error("Invalid syntax for defined operator");
+            }
+        }
+        else if(state == EXPECTING_DEF_RB) {
+            if(ch == ')') {
+                idx++;
+                parse_success = true;
+                break;
+            }
+            else if(!is_white_space(ch)) {
+                print_error(debug_idx);
+                sim_log_error("Invalid syntax for defined operator");
+            }
+        }
+        idx++;
+    }
+
+    if(!parse_success && state != EXPECTING_DEF_MACRO) {
+        print_error(debug_idx);
+        sim_log_error("Invalid syntax for defined operator");
+    }
+
+    sim_log_debug("Macro for operator defined found as:{}", macro);
+    output += table.has_symbol(macro).first ? "1" : "0";
+    buffer_index = idx;
+}
+
 std::string preprocess::expand_variadic_args() {
     std::string final_token;
     CRITICAL_ASSERT(context.in_macro_expansion && context.in_macro_expansion
@@ -255,6 +330,8 @@ buffer_index(0), state(PARSER_NORMAL), bracket_count(1), prev_idx(1), prev_token
     context.no_hash_processing = false;
     context.is_last_token_fn_macro = false;
     context.passive_scan = false;
+    context.consider_angle_as_str = false;
+    context.process_defined_token = false;
 }
 
 void preprocess::init_diag(std::string_view name, size_t line_num) {
@@ -688,7 +765,16 @@ void preprocess::parse() {
                 continue;
             }
             else {
-                handle_token();
+                if(context.process_defined_token && cur_token == "defined") {
+                    flush_token();
+                    handle_operator_defined();
+                    cur_token.clear();
+                    state = PARSER_NORMAL;
+                    no_advance = true;
+                }
+                else {
+                    handle_token();
+                }
             }
         }
 

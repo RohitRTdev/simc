@@ -42,6 +42,12 @@ Processed 7
 Processed 8
 #endif
 
+
+#define NUM(a,b) a << b | a
+#define NUM1 3
+#define NUM2 4
+
+
 //Ifdef functionality check
 #ifdef choke
 choke is defined
@@ -54,8 +60,11 @@ Great is defined
 #endif
 #endif
 
+#define PRODUCE defined(should_not_work)
+
 //#if exp check
-#if 2+3+4*2 > 50
+#if (NUM1 + defined(choke) + NUM2 + NUM(NUM1,NUM2) + defined (hey)) < 50\
+   + defined (yo) + PRODUCE
 Expression 1
 #if 5+
 Should not fail
@@ -64,7 +73,7 @@ No fail
 #else agg
 No
 #endif
-#elif 2+3+4*3 == 14
+#elif 2+3+4*3 == 14 + defined m 
 Expression 2
 #elif 2+3+4*2 == 13
 Expression 3

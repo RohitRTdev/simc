@@ -58,6 +58,7 @@ class preprocess {
         bool no_hash_processing;    // Turned on when we don't want to treat string('#') and concat('##') operators
         bool is_last_token_fn_macro;
         bool consider_angle_as_str;
+        bool process_defined_token; // Tells if preprocessor should process the "defined()" operator
         bool passive_scan;
         std::vector<std::string> set_actual_args;
         std::vector<std::string> macro_args;
@@ -86,6 +87,7 @@ class preprocess {
     void handle_line_comment();
     void handle_block_comment();
     bool handle_continued_line(bool only_check = false);
+    void handle_operator_defined();
     void handle_directive();
     void handle_include(std::string_view dir_line); 
     void handle_define(std::string_view dir_line);

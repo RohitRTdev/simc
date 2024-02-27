@@ -35,9 +35,19 @@ void preprocess::handle_ifdef(std::string_view expression, std::string_view dire
                 }
                 auto [present, _] = table.has_symbol(exp);
                 expr_res = directive == "ifdef" ? present : !present;
-                sim_log_debug("Macro:{} is {}present", present ? "" : "not ");
+                sim_log_debug("Macro:{} is {}", exp, present ? "present" : "not present");
             }
             else {
+                sim_log_debug("Starting token expansion phase on exp:{}", exp);
+                std::vector<char> input(exp.begin(), exp.end());
+                preprocess aux_preprocessor(input);
+                aux_preprocessor.config_diag(this);
+                aux_preprocessor.context.no_hash_processing = true;
+                aux_preprocessor.context.process_defined_token = true;
+                aux_preprocessor.parse(); 
+                sim_log_debug("Token expanded output:{}", aux_preprocessor.get_output());
+                exp.assign(aux_preprocessor.get_output().begin(), aux_preprocessor.get_output().end());
+
                 sim_log_debug("Calling evaluator on exp:{}", exp);
                 //Insert newline token to avoid lexer errors
                 if(exp[exp.size()-1] != '\n' || exp[exp.size()-1] != '\r') {
