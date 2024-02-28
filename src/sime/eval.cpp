@@ -13,7 +13,7 @@ int calculate(operator_type op, int res) {
         case MINUS: ans = -res;
         case BIT_NOT: ans = ~res;
         case NOT: ans = !res;
-        default: CRITICAL_ASSERT_NOW("calculate() unary called with invalid op:{}", op);
+        default: CRITICAL_ASSERT_NOW("calculate() unary called with invalid op:{}", static_cast<int>(op));
     }
 
     return ans;
@@ -58,7 +58,7 @@ int calculate(operator_type op, int res1, int res2) {
         case GT: res = res1 > res2; break;
         case LT: res = res1 < res2; break;
         case EQUAL_EQUAL: res = res1 == res2; break;
-        default: CRITICAL_ASSERT_NOW("calculate() unary called with invalid op:{}", op);
+        default: CRITICAL_ASSERT_NOW("calculate() unary called with invalid op:{}", static_cast<int>(op));
     }
 
 
