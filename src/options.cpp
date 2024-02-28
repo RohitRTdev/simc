@@ -32,8 +32,7 @@ gen_def(false)
 {}
 
 void argparser::add_flag(char ch, flag_type type) {
-    CRITICAL_ASSERT(!flag_store.contains(ch) && !name_flag_store.contains(ch), "Flag -{} is already added");
-
+    CRITICAL_ASSERT(!flag_store.contains(ch) && !name_flag_store.contains(ch), "Flag -{} is already added", ch);
     if(type == NORMAL) {
         flag_store.insert(std::make_pair(ch, false));   
     }
