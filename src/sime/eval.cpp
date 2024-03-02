@@ -9,10 +9,10 @@
 int calculate(operator_type op, int res) {
     int ans = 0;
     switch(op) {
-        case PLUS: ans = res;
-        case MINUS: ans = -res;
-        case BIT_NOT: ans = ~res;
-        case NOT: ans = !res;
+        case PLUS: ans = res; break;
+        case MINUS: ans = -res; break;
+        case BIT_NOT: ans = ~res; break;
+        case NOT: ans = !res; break;
         default: CRITICAL_ASSERT_NOW("calculate() unary called with invalid op:{}", static_cast<int>(op));
     }
 
