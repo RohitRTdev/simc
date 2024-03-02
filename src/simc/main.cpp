@@ -29,6 +29,27 @@ static argparser init_argparser(int argc, char** argv) {
     return cmdline;
 }
 
+static std::string stringify(std::string_view arg) {
+    CRITICAL_ASSERT(arg.size(), "stringify called with empty argument");
+    std::string str(arg);
+
+    if (str[0] != '\"' && str[str.size() - 1] != '\"') {
+        str.insert(0, "\"");
+        str.push_back('\"');
+    }
+
+    return str;
+}
+
+static bool has_whitespace(std::string_view arg) {
+    for (const auto ch : arg) {
+        if (ch == ' ' || ch == '\t') {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 int app_start(int argc, char** argv) {
     auto cmdline = init_argparser(argc, argv);
@@ -62,11 +83,14 @@ int app_start(int argc, char** argv) {
         }
     }
 
-    for(const auto& [flag, val]: cmdline.name_flag_store) {
+    for(auto& [flag, val]: cmdline.name_flag_store) {
         if(val.size() && flag != 'o') {
            if(v_preprocessor_args.contains(flag)) {
                std::string arg;
-               for(const auto& v: val) {
+               for(auto& v: val) {
+                   if(has_whitespace(v)) {
+                       v = stringify(v);
+                   }
                     arg += std::string(" -") + flag + std::string(" ") + v; 
                }
                preprocessor_args.push_back(arg);
@@ -74,7 +98,10 @@ int app_start(int argc, char** argv) {
            }
            else if(v_compiler_args.contains(flag)) {
                std::string arg;
-               for(const auto& v: val) {
+               for(auto& v: val) {
+                    if(has_whitespace(v)) {
+                        v = stringify(v);
+                    }
                     arg += std::string(" -") + flag + std::string(" ") + v; 
                }
                compiler_args.push_back(arg);

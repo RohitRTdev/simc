@@ -136,7 +136,7 @@ void preprocess::handle_operator_defined() {
             else if(in_lb_context && is_white_space(ch)) {
                 state = EXPECTING_DEF_RB;
             }
-            else if(!in_lb_context && is_white_space(ch)) {
+            else if(!in_lb_context) {
                 parse_success = true;
                 break;
             }
