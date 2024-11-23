@@ -88,7 +88,6 @@ bool eval_expr::is_rank_higher(const type_spec& type_1, const type_spec& type_2)
 
 void eval_expr::perform_integer_promotion(expr_result& res) {    
     if(res.type.base_type < C_INT) {
-        expr->print_error();
         sim_log_debug("Performing integer promotion from type:{} to int", res.type.base_type);
         if(!res.is_constant)
             res.expr_id = code_gen::call_code_gen(fn_intf, &Ifunc_translation::type_cast, res.expr_id, C_INT, true);
