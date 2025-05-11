@@ -153,7 +153,7 @@ int x64_func::assign_global_var(int id, std::string_view constant) {
 int x64_func::get_address_of(std::string_view constant) {
     std::string function_name = fmt::format("{}@GOTPCREL", constant);
     int reg = choose_free_reg(C_LONG, false);
-    insert_code("mov{} {}(%rip), %{}", C_LONG, function_name, reg);
+    insert_code("lea{} {}(%rip), %{}", C_LONG, function_name, reg);
 
     return reg_status_list[reg];
 }
