@@ -1,5 +1,5 @@
 //Signature (Need this type of signature since we don't support variable arg functions)
-int printf(char* fstr, char* ustr);
+int printf(char* fstr, char* ustr, int d);
 
 int main()
 {
@@ -15,7 +15,7 @@ int main()
 
     char*** p = ptr;
 
-    printf("%s", *--*++p+2);
+    printf("%s %d\n", *--*++p+2, 3);
 
     return 0;
 }

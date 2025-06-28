@@ -107,7 +107,7 @@ class x64_func : public Ifunc_translation {
     size_t call_index;
     size_t bytes_moved;
     size_t param_offset;
-    constexpr static const std::array<registers, NUM_CALL_REGS> reg_call_list = {RDI, RSI, RCX, RDX, R8, R9};
+    constexpr static const std::array<registers, NUM_CALL_REGS> reg_call_list = {RDI, RSI, RDX, RCX, R8, R9};
     std::array<int, NUM_REGS - NUM_CALL_REGS> reg_non_call_list;
     constexpr static const std::array<char, NUM_TYPES> inst_suffix = {'b', 'w', 'l', 'q', 'q'};
 
