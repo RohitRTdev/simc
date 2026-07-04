@@ -46,20 +46,8 @@ sime is the preprocessor, simcc is the compiler(generates assembly) and simc is 
 simc knows the installation location for the compiler and preprocessor and invokes them approriately to generate the final assembly.<br>
 
 ## Compiler design
-Unlike most toy compilers, we don't use a recursive descendent parser, instead simcc uses a state-machine based parser(like a very crude and specific bison clone). This makes simcc less prone to stack overflow errors on highly nested expressions or statements. Our code generator is written as a separate module which makes it easy to add support for another architecture if needed. Currently we only support the x64 variant(no support for 32 bit) which generates position independent att syntax assembly compatible with gcc toolchain.
+simcc uses a state-machine based parser (like a very crude and specific bison clone) instead of a recursive descendent parser. This makes simcc less prone to stack overflow errors on highly nested expressions or statements. Our code generator is written as a separate module which makes it easy to add support for another architecture if needed. Currently we only support the x64 variant (no support for 32 bit) which generates position independent att syntax assembly compatible with gcc toolchain.
 
-### What the compiler lacks
-We're not feature complete by a long shot. But it's easier for me to state the features that simcc(the compiler) doesn't support.<br>
-This could also be considered a TODO list:)
-<ol>
-  <li>Explicit type cast</li>
-  <li>struct, union and enum(This one's huge and I probably would never add support for this)</li>
-  <li>Floating point support(Adding this feature is debatable)</li>
-  <li>for and do-while loop</li>
-  <li>ternary expression</li>
-  <li>variadic functions</li>
-  <li>goto statements</li>
-  <li>compound literal and array/struct type initialization(This is dependent on feature no:2, but could just be used for array initialization also)</li>
-  <li>Array with no size specified(This is a consequence of lack of the previous feature, as arrays with no size requires an array initializer to be present)</li>
-  <li>_Generic, _atomic, _complex specifiers</li>
-</ol>
+### Features
+The goal was never to build a full C compiler (simple C compiler) and only supports a small subset of features from the language. Features such as loops, conditional statements, a preprocessor, static/volatile keyword support, arrays, function pointers, most kinds of C expressions you can think of, etc are supported
+
