@@ -48,6 +48,5 @@ simc knows the installation location for the compiler and preprocessor and invok
 ## Compiler design
 simcc uses a state-machine based parser (like a very crude and specific bison clone) instead of a recursive descendent parser. This makes simcc less prone to stack overflow errors on highly nested expressions or statements. Our code generator is written as a separate module which makes it easy to add support for another architecture if needed. Currently we only support the x64 variant (no support for 32 bit) which generates position independent att syntax assembly compatible with gcc toolchain.
 
-### Features
 The goal was never to build a full C compiler (simple C compiler) and only supports a small subset of features from the language. Features such as loops, conditional statements, a preprocessor, static/volatile keyword support, arrays, function pointers, most kinds of C expressions you can think of, etc are supported
 
